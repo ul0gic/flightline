@@ -1,0 +1,42 @@
+{
+  "data": [
+    {
+      "type": "appStoreVersions",
+      "id": "8000000001",
+      "attributes": {
+        "platform": "IOS",
+        "versionString": "1.0.1",
+        "appStoreState": "REJECTED",
+        "appVersionState": "REJECTED",
+        "copyright": "(c) 2025 CoreLift LLC",
+        "reviewType": "APP_STORE",
+        "releaseType": "MANUAL",
+        "downloadable": true,
+        "createdDate": "2025-04-15T12:00:00-07:00"
+      },
+      "relationships": {
+        "build": {
+          "data": {
+            "type": "builds",
+            "id": "9000000001"
+          }
+        },
+        "appStoreVersionSubmission": {
+          "data": null
+        }
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appStoreVersions/8000000001"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps/1234567890/appStoreVersions?filter%5BversionString%5D=1.0.1&filter%5Bplatform%5D=IOS&limit=1"
+  },
+  "meta": {
+    "paging": {
+      "total": 1,
+      "limit": 1
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "data": [],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps/1234567890/appStoreVersions?filter%5BversionString%5D=9.9.9&filter%5Bplatform%5D=IOS&limit=1"
+  },
+  "meta": {
+    "paging": {
+      "total": 0,
+      "limit": 1
+    }
+  }
+}

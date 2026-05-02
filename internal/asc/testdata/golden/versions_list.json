@@ -1,0 +1,49 @@
+{
+  "data": [
+    {
+      "type": "appStoreVersions",
+      "id": "8000000001",
+      "attributes": {
+        "platform": "IOS",
+        "versionString": "1.0.1",
+        "appStoreState": "PREPARE_FOR_SUBMISSION",
+        "appVersionState": "PREPARE_FOR_SUBMISSION",
+        "copyright": "(c) 2025 CoreLift LLC",
+        "reviewType": "APP_STORE",
+        "releaseType": "MANUAL",
+        "downloadable": true,
+        "createdDate": "2025-04-15T12:00:00-07:00"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appStoreVersions/8000000001"
+      }
+    },
+    {
+      "type": "appStoreVersions",
+      "id": "8000000000",
+      "attributes": {
+        "platform": "IOS",
+        "versionString": "1.0.0",
+        "appStoreState": "READY_FOR_SALE",
+        "appVersionState": "READY_FOR_DISTRIBUTION",
+        "copyright": "(c) 2025 CoreLift LLC",
+        "reviewType": "APP_STORE",
+        "releaseType": "AFTER_APPROVAL",
+        "downloadable": true,
+        "createdDate": "2025-03-01T10:00:00-08:00"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appStoreVersions/8000000000"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps/1234567890/appStoreVersions?limit=200"
+  },
+  "meta": {
+    "paging": {
+      "total": 2,
+      "limit": 200
+    }
+  }
+}
