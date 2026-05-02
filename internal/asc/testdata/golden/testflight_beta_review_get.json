@@ -1,0 +1,18 @@
+{
+  "data": {
+    "type": "betaAppReviewSubmissions",
+    "id": "BARS-42",
+    "attributes": {
+      "betaReviewState": "WAITING_FOR_REVIEW",
+      "submittedDate": "2024-09-12T08:15:00Z"
+    },
+    "relationships": {
+      "build": {
+        "data": { "type": "builds", "id": "BUILD-42" }
+      }
+    },
+    "links": {
+      "self": "https://api.appstoreconnect.apple.com/v1/betaAppReviewSubmissions/BARS-42"
+    }
+  }
+}

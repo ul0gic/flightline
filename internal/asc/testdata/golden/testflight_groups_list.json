@@ -1,0 +1,47 @@
+{
+  "data": [
+    {
+      "type": "betaGroups",
+      "id": "BG-INTERNAL-1",
+      "attributes": {
+        "name": "Internal Team",
+        "createdDate": "2024-01-15T12:00:00Z",
+        "isInternalGroup": true,
+        "hasAccessToAllBuilds": true,
+        "publicLinkEnabled": false,
+        "publicLink": "",
+        "feedbackEnabled": true
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/betaGroups/BG-INTERNAL-1"
+      }
+    },
+    {
+      "type": "betaGroups",
+      "id": "BG-EXTERNAL-1",
+      "attributes": {
+        "name": "Public Beta",
+        "createdDate": "2024-02-01T09:30:00Z",
+        "isInternalGroup": false,
+        "hasAccessToAllBuilds": false,
+        "publicLinkEnabled": true,
+        "publicLinkLimitEnabled": true,
+        "publicLinkLimit": 10000,
+        "publicLink": "https://testflight.apple.com/join/EXAMPLE",
+        "feedbackEnabled": true
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/betaGroups/BG-EXTERNAL-1"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps/1234567890/betaGroups?limit=200"
+  },
+  "meta": {
+    "paging": {
+      "total": 2,
+      "limit": 200
+    }
+  }
+}

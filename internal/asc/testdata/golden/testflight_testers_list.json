@@ -1,0 +1,55 @@
+{
+  "data": [
+    {
+      "type": "betaTesters",
+      "id": "BT-1",
+      "attributes": {
+        "firstName": "Ada",
+        "lastName": "Lovelace",
+        "email": "ada@example.com",
+        "inviteType": "EMAIL",
+        "state": "INSTALLED"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/betaTesters/BT-1"
+      }
+    },
+    {
+      "type": "betaTesters",
+      "id": "BT-2",
+      "attributes": {
+        "firstName": "Grace",
+        "lastName": "Hopper",
+        "email": "grace@example.com",
+        "inviteType": "PUBLIC_LINK",
+        "state": "INVITED"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/betaTesters/BT-2"
+      }
+    },
+    {
+      "type": "betaTesters",
+      "id": "BT-3",
+      "attributes": {
+        "firstName": "",
+        "lastName": "",
+        "email": "anon@example.com",
+        "inviteType": "PUBLIC_LINK",
+        "state": "ACCEPTED"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/betaTesters/BT-3"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps/1234567890/betaTesters?limit=200"
+  },
+  "meta": {
+    "paging": {
+      "total": 3,
+      "limit": 200
+    }
+  }
+}

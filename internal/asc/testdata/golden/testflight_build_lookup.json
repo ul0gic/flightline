@@ -1,0 +1,29 @@
+{
+  "data": [
+    {
+      "type": "builds",
+      "id": "BUILD-42",
+      "attributes": {
+        "version": "42",
+        "processingState": "VALID",
+        "uploadedDate": "2024-09-10T18:00:00Z",
+        "expirationDate": "2024-12-09T18:00:00Z",
+        "expired": false,
+        "minOsVersion": "16.0",
+        "buildAudienceType": "APP_STORE_ELIGIBLE"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/builds/BUILD-42"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps/1234567890/builds?filter%5Bversion%5D=42&limit=1"
+  },
+  "meta": {
+    "paging": {
+      "total": 1,
+      "limit": 1
+    }
+  }
+}
