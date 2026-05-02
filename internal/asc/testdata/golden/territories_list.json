@@ -1,0 +1,53 @@
+{
+  "data": [
+    {
+      "type": "territories",
+      "id": "USA",
+      "attributes": {
+        "currency": "USD"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/territories/USA"
+      }
+    },
+    {
+      "type": "territories",
+      "id": "GBR",
+      "attributes": {
+        "currency": "GBP"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/territories/GBR"
+      }
+    },
+    {
+      "type": "territories",
+      "id": "JPN",
+      "attributes": {
+        "currency": "JPY"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/territories/JPN"
+      }
+    },
+    {
+      "type": "territories",
+      "id": "DEU",
+      "attributes": {
+        "currency": "EUR"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/territories/DEU"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/territories?limit=200"
+  },
+  "meta": {
+    "paging": {
+      "total": 4,
+      "limit": 200
+    }
+  }
+}
