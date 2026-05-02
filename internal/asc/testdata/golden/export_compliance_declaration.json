@@ -1,0 +1,32 @@
+{
+  "data": [
+    {
+      "type": "appEncryptionDeclarations",
+      "id": "BBBB0000-0000-0000-0000-000000000001",
+      "attributes": {
+        "appDescription": "Uses HTTPS for all network traffic via URLSession.",
+        "createdDate": "2025-03-01T10:00:00-08:00",
+        "exempt": true,
+        "containsProprietaryCryptography": false,
+        "containsThirdPartyCryptography": false,
+        "availableOnFrenchStore": true,
+        "platform": "IOS",
+        "uploadedDate": "2025-03-01T10:00:00-08:00",
+        "appEncryptionDeclarationState": "APPROVED",
+        "codeValue": "5D002"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appEncryptionDeclarations/BBBB0000-0000-0000-0000-000000000001"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps/1234567890/appEncryptionDeclarations?limit=50"
+  },
+  "meta": {
+    "paging": {
+      "total": 1,
+      "limit": 50
+    }
+  }
+}
