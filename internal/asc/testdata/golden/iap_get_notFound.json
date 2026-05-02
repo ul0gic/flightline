@@ -1,0 +1,12 @@
+{
+  "data": [],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps/1234567890/inAppPurchasesV2?filter%5BproductId%5D=com.unknown.iap&limit=1"
+  },
+  "meta": {
+    "paging": {
+      "total": 0,
+      "limit": 1
+    }
+  }
+}

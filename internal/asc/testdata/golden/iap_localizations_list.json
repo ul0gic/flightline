@@ -1,0 +1,39 @@
+{
+  "data": [
+    {
+      "type": "inAppPurchaseLocalizations",
+      "id": "8500000001",
+      "attributes": {
+        "name": "Lifetime Pro",
+        "locale": "en-US",
+        "description": "Unlock every feature, forever. One purchase, all platforms.",
+        "state": "APPROVED"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/inAppPurchaseLocalizations/8500000001"
+      }
+    },
+    {
+      "type": "inAppPurchaseLocalizations",
+      "id": "8500000002",
+      "attributes": {
+        "name": "Lifetime Pro",
+        "locale": "fr-FR",
+        "description": "Débloquez chaque fonctionnalité pour toujours.",
+        "state": "PREPARE_FOR_SUBMISSION"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/inAppPurchaseLocalizations/8500000002"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v2/inAppPurchases/6500000001/inAppPurchaseLocalizations?limit=200"
+  },
+  "meta": {
+    "paging": {
+      "total": 2,
+      "limit": 200
+    }
+  }
+}

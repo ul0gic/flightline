@@ -1,0 +1,45 @@
+{
+  "data": [
+    {
+      "type": "inAppPurchases",
+      "id": "6500000001",
+      "attributes": {
+        "name": "Lifetime Pro",
+        "productId": "com.example.testapp.lifetime",
+        "inAppPurchaseType": "NON_CONSUMABLE",
+        "state": "APPROVED",
+        "reviewNote": "One-time purchase that unlocks all premium features.",
+        "familySharable": true,
+        "contentHosting": false
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v2/inAppPurchases/6500000001"
+      }
+    },
+    {
+      "type": "inAppPurchases",
+      "id": "6500000002",
+      "attributes": {
+        "name": "100 Coins",
+        "productId": "com.example.testapp.coins100",
+        "inAppPurchaseType": "CONSUMABLE",
+        "state": "READY_TO_SUBMIT",
+        "reviewNote": "",
+        "familySharable": false,
+        "contentHosting": false
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v2/inAppPurchases/6500000002"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps/1234567890/inAppPurchasesV2?limit=200"
+  },
+  "meta": {
+    "paging": {
+      "total": 2,
+      "limit": 200
+    }
+  }
+}
