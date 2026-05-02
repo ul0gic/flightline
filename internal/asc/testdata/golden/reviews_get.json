@@ -1,0 +1,42 @@
+{
+  "data": {
+    "type": "customerReviews",
+    "id": "REVIEW-001",
+    "attributes": {
+      "rating": 5,
+      "title": "Excellent app, great UX",
+      "body": "Smooth onboarding, fast launch, no crashes in two weeks of daily use.",
+      "reviewerNickname": "alpha_user",
+      "createdDate": "2026-04-22T14:33:00Z",
+      "territory": "USA"
+    },
+    "relationships": {
+      "response": {
+        "data": {
+          "type": "customerReviewResponses",
+          "id": "RESP-001"
+        }
+      }
+    },
+    "links": {
+      "self": "https://api.appstoreconnect.apple.com/v1/customerReviews/REVIEW-001"
+    }
+  },
+  "included": [
+    {
+      "type": "customerReviewResponses",
+      "id": "RESP-001",
+      "attributes": {
+        "responseBody": "Thanks for the kind words — glad you're enjoying it!",
+        "lastModifiedDate": "2026-04-23T08:00:00Z",
+        "state": "PUBLISHED"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/customerReviewResponses/RESP-001"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/customerReviews/REVIEW-001"
+  }
+}

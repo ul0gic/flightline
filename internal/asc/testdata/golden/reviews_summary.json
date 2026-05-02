@@ -1,0 +1,39 @@
+{
+  "data": [
+    {
+      "type": "customerReviewSummarizations",
+      "id": "SUMMARY-IOS-EN",
+      "attributes": {
+        "createdDate": "2026-04-30T00:00:00Z",
+        "locale": "en-US",
+        "platform": "IOS",
+        "text": "Reviewers consistently praise the smooth onboarding and fast launch performance. Several mention the new dark mode positively. A recurring complaint is that sync between devices broke for some users after the 2.4 update; a few users requested a home-screen widget."
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/customerReviewSummarizations/SUMMARY-IOS-EN"
+      }
+    },
+    {
+      "type": "customerReviewSummarizations",
+      "id": "SUMMARY-IOS-DE",
+      "attributes": {
+        "createdDate": "2026-04-30T00:00:00Z",
+        "locale": "de-DE",
+        "platform": "IOS",
+        "text": "Nutzer loben die schnelle Startzeit und den neuen Dunkelmodus. Einige Rezensenten kritisieren Sync-Probleme nach dem letzten Update."
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/customerReviewSummarizations/SUMMARY-IOS-DE"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps/1234567890/customerReviewSummarizations?limit=200"
+  },
+  "meta": {
+    "paging": {
+      "total": 2,
+      "limit": 200
+    }
+  }
+}
