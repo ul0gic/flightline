@@ -1,0 +1,11 @@
+{
+  "errors": [
+    {
+      "id": "00000000-0000-0000-0000-000000000403",
+      "status": "403",
+      "code": "FORBIDDEN_ERROR",
+      "title": "This request is forbidden for security reasons",
+      "detail": "The provided API key does not have permission to access this resource. Verify the key role and scopes in App Store Connect → Users and Access → Integrations."
+    }
+  ]
+}

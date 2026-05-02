@@ -1,0 +1,11 @@
+{
+  "errors": [
+    {
+      "id": "00000000-0000-0000-0000-000000000500",
+      "status": "500",
+      "code": "INTERNAL_ERROR",
+      "title": "An unexpected error occurred.",
+      "detail": "The server encountered an internal error while processing the request. Try again; if the failure persists, check the App Store Connect status page."
+    }
+  ]
+}

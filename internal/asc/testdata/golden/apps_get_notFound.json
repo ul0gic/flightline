@@ -1,0 +1,12 @@
+{
+  "data": [],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps?filter%5BbundleId%5D=com.unknown.app&limit=1"
+  },
+  "meta": {
+    "paging": {
+      "total": 0,
+      "limit": 1
+    }
+  }
+}

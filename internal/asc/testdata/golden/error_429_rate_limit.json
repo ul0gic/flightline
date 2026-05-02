@@ -1,0 +1,11 @@
+{
+  "errors": [
+    {
+      "id": "00000000-0000-0000-0000-000000000429",
+      "status": "429",
+      "code": "RATE_LIMIT_EXCEEDED",
+      "title": "The request was throttled.",
+      "detail": "Per-team API request quota exceeded. Retry after the window indicated by the Retry-After response header."
+    }
+  ]
+}

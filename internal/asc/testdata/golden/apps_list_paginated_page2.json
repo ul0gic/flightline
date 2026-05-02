@@ -1,0 +1,26 @@
+{
+  "data": [
+    {
+      "type": "apps",
+      "id": "1234567892",
+      "attributes": {
+        "name": "Example Gamma",
+        "bundleId": "com.example.gamma",
+        "sku": "EXAMPLE_GAMMA",
+        "primaryLocale": "en-US"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/apps/1234567892"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps?cursor=PAGE2_CURSOR&limit=2"
+  },
+  "meta": {
+    "paging": {
+      "total": 3,
+      "limit": 2
+    }
+  }
+}
