@@ -157,55 +157,107 @@ func init() {
 	rootCmd.AddCommand(screenshotsCmd)
 }
 
-func runScreenshotsUpload(cmd *cobra.Command, args []string) error {
-	bundleID := args[0]
-	files := args[1:]
-	versionStr := strings.TrimSpace(screenshotsUploadVersion)
-	platform := strings.TrimSpace(screenshotsUploadPlatform)
-	locale := strings.TrimSpace(screenshotsUploadLocale)
-	deviceSet := strings.TrimSpace(screenshotsUploadDeviceSet)
-	if versionStr == "" {
-		return fmt.Errorf("screenshots: --version is required")
+// screenshotsUploadInput is the validated, normalized form of the flag
+// state plus positional args. Pulled out so the run loop reads top-down.
+type screenshotsUploadInput struct {
+	bundleID, versionStr, platform, locale, deviceSet string
+	files                                             []string
+}
+
+// validateScreenshotsUploadFlags collapses every input-shape check into
+// one place. Returns a typed error on the first failure.
+func validateScreenshotsUploadFlags(args []string) (screenshotsUploadInput, error) {
+	in := screenshotsUploadInput{
+		bundleID:   args[0],
+		files:      args[1:],
+		versionStr: strings.TrimSpace(screenshotsUploadVersion),
+		platform:   strings.TrimSpace(screenshotsUploadPlatform),
+		locale:     strings.TrimSpace(screenshotsUploadLocale),
+		deviceSet:  strings.TrimSpace(screenshotsUploadDeviceSet),
 	}
-	if locale == "" {
-		return fmt.Errorf("screenshots: --locale is required")
+	if in.versionStr == "" {
+		return in, fmt.Errorf("screenshots: --version is required")
 	}
-	if !isValidDeviceSet(deviceSet) {
-		return fmt.Errorf("screenshots: --device-set %q is not a recognised ScreenshotDisplayType (see `skipper screenshots upload --help`)", deviceSet)
+	if in.locale == "" {
+		return in, fmt.Errorf("screenshots: --locale is required")
 	}
-	if len(files) == 0 {
-		return fmt.Errorf("screenshots: at least one file path is required")
+	if !isValidDeviceSet(in.deviceSet) {
+		return in, fmt.Errorf("screenshots: --device-set %q is not a recognised ScreenshotDisplayType (see `skipper screenshots upload --help`)", in.deviceSet)
 	}
-	for _, p := range files {
+	if len(in.files) == 0 {
+		return in, fmt.Errorf("screenshots: at least one file path is required")
+	}
+	for _, p := range in.files {
 		if err := validateScreenshotFile(p); err != nil {
-			return err
+			return in, err
 		}
+	}
+	return in, nil
+}
+
+// resolveScreenshotTarget walks bundleId -> appId -> versionId ->
+// versionLocId -> setId for the upload destination. Centralized so the
+// runner stays linear.
+func resolveScreenshotTarget(ctx context.Context, c *asc.Client, in screenshotsUploadInput) (string, error) {
+	appID, err := resolveAppID(ctx, c, in.bundleID)
+	if err != nil {
+		return "", err
+	}
+	versionView, err := lookupVersion(ctx, c, appID, in.versionStr, in.platform)
+	if err != nil {
+		return "", err
+	}
+	if versionView == nil {
+		return "", fmt.Errorf("screenshots: no version %q found for %q (platform=%s)", in.versionStr, in.bundleID, in.platform)
+	}
+	versionLocID, _, err := getVersionLocalization(ctx, c, versionView.ID, in.locale)
+	if err != nil {
+		return "", err
+	}
+	if versionLocID == "" {
+		return "", fmt.Errorf("screenshots: no appStoreVersionLocalization for locale %q under version %s; create it via the locale picker first", in.locale, in.versionStr)
+	}
+	return findOrCreateScreenshotSet(ctx, c, versionLocID, in.deviceSet)
+}
+
+// uploadOrSkipFiles iterates the local files and runs each one through
+// processOneScreenshot.
+func uploadOrSkipFiles(
+	ctx context.Context,
+	c *asc.Client,
+	setID string,
+	files []string,
+	existing map[string]existingScreenshotEntry,
+) (entries []ScreenshotUploadResultEntry, uploaded, skipped int, err error) {
+	entries = make([]ScreenshotUploadResultEntry, 0, len(files))
+	for _, p := range files {
+		var entry ScreenshotUploadResultEntry
+		entry, err = processOneScreenshot(ctx, c, setID, p, existing)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		switch entry.Action {
+		case "uploaded":
+			uploaded++
+		case "skipped":
+			skipped++
+		}
+		entries = append(entries, entry)
+	}
+	return entries, uploaded, skipped, nil
+}
+
+func runScreenshotsUpload(cmd *cobra.Command, args []string) error {
+	in, err := validateScreenshotsUploadFlags(args)
+	if err != nil {
+		return err
 	}
 
 	c, err := newClient()
 	if err != nil {
 		return err
 	}
-	appID, err := resolveAppID(cmd.Context(), c, bundleID)
-	if err != nil {
-		return err
-	}
-	versionView, err := lookupVersion(cmd.Context(), c, appID, versionStr, platform)
-	if err != nil {
-		return err
-	}
-	if versionView == nil {
-		return fmt.Errorf("screenshots: no version %q found for %q (platform=%s)", versionStr, bundleID, platform)
-	}
-	versionLocID, _, err := getVersionLocalization(cmd.Context(), c, versionView.ID, locale)
-	if err != nil {
-		return err
-	}
-	if versionLocID == "" {
-		return fmt.Errorf("screenshots: no appStoreVersionLocalization for locale %q under version %s; create it via the locale picker first", locale, versionStr)
-	}
-
-	setID, err := findOrCreateScreenshotSet(cmd.Context(), c, versionLocID, deviceSet)
+	setID, err := resolveScreenshotTarget(cmd.Context(), c, in)
 	if err != nil {
 		return err
 	}
@@ -214,30 +266,18 @@ func runScreenshotsUpload(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-
-	entries := make([]ScreenshotUploadResultEntry, 0, len(files))
-	uploadedCount, skippedCount := 0, 0
-	for _, p := range files {
-		entry, err := processOneScreenshot(cmd.Context(), c, setID, p, existing)
-		if err != nil {
-			return err
-		}
-		switch entry.Action {
-		case "uploaded":
-			uploadedCount++
-		case "skipped":
-			skippedCount++
-		}
-		entries = append(entries, entry)
+	entries, uploadedCount, skippedCount, err := uploadOrSkipFiles(cmd.Context(), c, setID, in.files, existing)
+	if err != nil {
+		return err
 	}
 
 	result := &ScreenshotUploadResult{
 		Action:        actionForUpload(uploadedCount),
 		Changed:       uploadedCount > 0,
-		BundleID:      bundleID,
-		Version:       versionStr,
-		Locale:        locale,
-		DeviceSet:     deviceSet,
+		BundleID:      in.bundleID,
+		Version:       in.versionStr,
+		Locale:        in.locale,
+		DeviceSet:     in.deviceSet,
 		SetID:         setID,
 		UploadedCount: uploadedCount,
 		SkippedCount:  skippedCount,
