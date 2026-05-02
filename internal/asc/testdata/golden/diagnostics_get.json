@@ -1,0 +1,50 @@
+{
+  "version": "1.0",
+  "productData": [
+    {
+      "signatureId": "DIAG-SIG-001",
+      "diagnosticInsights": [
+        {
+          "insightsURL": "https://example/insights/DIAG-SIG-001",
+          "insightsCategory": "REGRESSION",
+          "insightsString": "This signature regressed in version 2.4.0. Hang frequency increased 3x compared to 2.3.0."
+        }
+      ],
+      "diagnosticLogs": [
+        {
+          "callStackTree": [
+            {
+              "callStackPerThread": true,
+              "callStacks": [
+                {
+                  "callStackRootFrames": [
+                    {
+                      "binaryName": "ExampleAlpha",
+                      "address": 4296196608,
+                      "subFrames": [
+                        {
+                          "binaryName": "UIKitCore",
+                          "address": 6624321280
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "diagnosticMetaData": {
+            "bundleId": "com.example.alpha",
+            "event": "hang",
+            "osVersion": "iOS 19.0",
+            "appVersion": "2.4.0",
+            "deviceType": "iPhone15,3",
+            "platformArchitecture": "arm64",
+            "eventDetail": "main thread blocked",
+            "buildVersion": "42"
+          }
+        }
+      ]
+    }
+  ]
+}
