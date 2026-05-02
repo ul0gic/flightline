@@ -1,0 +1,35 @@
+{
+  "data": [
+    {
+      "type": "subscriptionPrices",
+      "id": "PRICE-001",
+      "attributes": {
+        "startDate": "2026-01-01",
+        "preserved": false
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/subscriptionPrices/PRICE-001"
+      }
+    },
+    {
+      "type": "subscriptionPrices",
+      "id": "PRICE-002",
+      "attributes": {
+        "startDate": "2026-04-01",
+        "preserved": true
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/subscriptionPrices/PRICE-002"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/subscriptions/SUB-PRO-MONTHLY/prices?limit=200"
+  },
+  "meta": {
+    "paging": {
+      "total": 2,
+      "limit": 200
+    }
+  }
+}

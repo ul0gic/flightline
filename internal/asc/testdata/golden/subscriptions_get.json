@@ -1,0 +1,29 @@
+{
+  "data": [
+    {
+      "type": "subscriptions",
+      "id": "SUB-PRO-MONTHLY",
+      "attributes": {
+        "name": "Pro Monthly",
+        "productId": "com.example.alpha.pro.monthly",
+        "familySharable": false,
+        "state": "APPROVED",
+        "subscriptionPeriod": "ONE_MONTH",
+        "reviewNote": "Standard auto-renewing monthly subscription. No restrictions.",
+        "groupLevel": 1
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/subscriptions/SUB-PRO-MONTHLY"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/subscriptionGroups/GROUP-PRO/subscriptions?filter%5BproductId%5D=com.example.alpha.pro.monthly&limit=1"
+  },
+  "meta": {
+    "paging": {
+      "total": 1,
+      "limit": 1
+    }
+  }
+}

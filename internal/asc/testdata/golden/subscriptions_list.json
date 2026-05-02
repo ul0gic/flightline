@@ -1,0 +1,48 @@
+{
+  "data": [
+    {
+      "type": "subscriptionGroups",
+      "id": "GROUP-PRO",
+      "attributes": {
+        "referenceName": "Pro Tiers"
+      },
+      "relationships": {
+        "subscriptions": {
+          "data": [
+            { "type": "subscriptions", "id": "SUB-PRO-MONTHLY" },
+            { "type": "subscriptions", "id": "SUB-PRO-YEARLY" }
+          ]
+        }
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/subscriptionGroups/GROUP-PRO"
+      }
+    },
+    {
+      "type": "subscriptionGroups",
+      "id": "GROUP-TEAM",
+      "attributes": {
+        "referenceName": "Team Tiers"
+      },
+      "relationships": {
+        "subscriptions": {
+          "data": [
+            { "type": "subscriptions", "id": "SUB-TEAM-MONTHLY" }
+          ]
+        }
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/subscriptionGroups/GROUP-TEAM"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps/1234567890/subscriptionGroups?limit=200"
+  },
+  "meta": {
+    "paging": {
+      "total": 2,
+      "limit": 200
+    }
+  }
+}

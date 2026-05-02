@@ -1,0 +1,27 @@
+{
+  "data": [
+    {
+      "type": "subscriptionIntroductoryOffers",
+      "id": "INTRO-001",
+      "attributes": {
+        "startDate": "2026-01-01",
+        "endDate": "2026-12-31",
+        "duration": "ONE_WEEK",
+        "offerMode": "FREE_TRIAL",
+        "numberOfPeriods": 1
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/subscriptionIntroductoryOffers/INTRO-001"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/subscriptions/SUB-PRO-MONTHLY/introductoryOffers?limit=200"
+  },
+  "meta": {
+    "paging": {
+      "total": 1,
+      "limit": 200
+    }
+  }
+}

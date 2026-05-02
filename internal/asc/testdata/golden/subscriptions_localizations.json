@@ -1,0 +1,39 @@
+{
+  "data": [
+    {
+      "type": "subscriptionLocalizations",
+      "id": "SUB-LOC-EN",
+      "attributes": {
+        "name": "Pro",
+        "locale": "en-US",
+        "description": "Unlock all Pro features.",
+        "state": "APPROVED"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/subscriptionLocalizations/SUB-LOC-EN"
+      }
+    },
+    {
+      "type": "subscriptionLocalizations",
+      "id": "SUB-LOC-DE",
+      "attributes": {
+        "name": "Pro",
+        "locale": "de-DE",
+        "description": "Alle Pro-Funktionen freischalten.",
+        "state": "APPROVED"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/subscriptionLocalizations/SUB-LOC-DE"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/subscriptions/SUB-PRO-MONTHLY/subscriptionLocalizations?limit=200"
+  },
+  "meta": {
+    "paging": {
+      "total": 2,
+      "limit": 200
+    }
+  }
+}
