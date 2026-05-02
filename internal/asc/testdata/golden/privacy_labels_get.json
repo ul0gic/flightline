@@ -1,0 +1,6 @@
+{
+  "bundleId": "com.example.testapp",
+  "supported": false,
+  "reason": "App Store Connect API v4.3 does not expose appPrivacyDetails. Manage privacy nutrition labels via App Store Connect web UI.",
+  "reference": "https://developer.apple.com/app-store/app-privacy-details/"
+}
