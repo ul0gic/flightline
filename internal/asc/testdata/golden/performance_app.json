@@ -1,0 +1,88 @@
+{
+  "version": "1.0",
+  "insights": {
+    "trendingUp": [
+      {
+        "metricCategory": "MEMORY",
+        "latestVersion": "2.4.0",
+        "metric": "memory.peak",
+        "summaryString": "Peak memory usage trending upward across iPhone 15 Pro devices.",
+        "referenceVersions": "2.3.0",
+        "maxLatestVersionValue": 312.4,
+        "subSystemLabel": "Foundation",
+        "highImpact": false,
+        "populations": [
+          {
+            "deltaPercentage": 8.5,
+            "percentile": "P90",
+            "summaryString": "P90 +8.5% vs 2.3.0",
+            "referenceAverageValue": 287.8,
+            "latestVersionValue": 312.4,
+            "device": "iPhone15,3"
+          }
+        ]
+      }
+    ],
+    "regressions": [
+      {
+        "metricCategory": "HANG",
+        "latestVersion": "2.4.0",
+        "metric": "hangs.duration",
+        "summaryString": "Hang duration regressed; main thread blocked during launch.",
+        "referenceVersions": "2.3.0",
+        "maxLatestVersionValue": 1850,
+        "subSystemLabel": "AppKit",
+        "highImpact": true,
+        "populations": [
+          {
+            "deltaPercentage": 32.0,
+            "percentile": "P95",
+            "summaryString": "P95 hang +32% vs 2.3.0",
+            "referenceAverageValue": 1400,
+            "latestVersionValue": 1850,
+            "device": "iPhone14,5"
+          }
+        ]
+      }
+    ]
+  },
+  "productData": [
+    {
+      "platform": "IOS",
+      "metricCategories": [
+        {
+          "identifier": "HANG",
+          "metrics": [
+            {
+              "identifier": "hangs.duration",
+              "goalKeys": [
+                { "goalKey": "GOOD", "lowerBound": 0, "upperBound": 250 },
+                { "goalKey": "OK", "lowerBound": 251, "upperBound": 1000 },
+                { "goalKey": "BAD", "lowerBound": 1001, "upperBound": 100000 }
+              ],
+              "unit": { "identifier": "ms", "displayName": "milliseconds" },
+              "datasets": [
+                { "filterCriteria": { "device": "iPhone15,3", "percentile": "P50" }, "dataPoints": [{ "value": 120 }] }
+              ]
+            }
+          ]
+        },
+        {
+          "identifier": "MEMORY",
+          "metrics": [
+            {
+              "identifier": "memory.peak",
+              "goalKeys": [
+                { "goalKey": "GOOD", "lowerBound": 0, "upperBound": 200 },
+                { "goalKey": "OK", "lowerBound": 201, "upperBound": 350 },
+                { "goalKey": "BAD", "lowerBound": 351, "upperBound": 2048 }
+              ],
+              "unit": { "identifier": "MB", "displayName": "megabytes" },
+              "datasets": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

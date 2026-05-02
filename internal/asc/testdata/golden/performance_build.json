@@ -1,0 +1,40 @@
+{
+  "version": "1.0",
+  "insights": null,
+  "productData": [
+    {
+      "platform": "IOS",
+      "metricCategories": [
+        {
+          "identifier": "LAUNCH",
+          "metrics": [
+            {
+              "identifier": "launch.coldStart",
+              "goalKeys": [
+                { "goalKey": "GOOD", "lowerBound": 0, "upperBound": 800 },
+                { "goalKey": "OK", "lowerBound": 801, "upperBound": 1500 },
+                { "goalKey": "BAD", "lowerBound": 1501, "upperBound": 10000 }
+              ],
+              "unit": { "identifier": "ms", "displayName": "milliseconds" },
+              "datasets": [
+                { "filterCriteria": { "device": "iPhone15,3", "percentile": "P50" }, "dataPoints": [{ "value": 920 }] },
+                { "filterCriteria": { "device": "iPhone14,5", "percentile": "P50" }, "dataPoints": [{ "value": 1140 }] }
+              ]
+            }
+          ]
+        },
+        {
+          "identifier": "BATTERY",
+          "metrics": [
+            {
+              "identifier": "battery.background",
+              "goalKeys": [],
+              "unit": { "identifier": "mAh/hr", "displayName": "milliamp-hours per hour" },
+              "datasets": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
