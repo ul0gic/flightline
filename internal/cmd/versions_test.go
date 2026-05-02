@@ -268,3 +268,308 @@ func TestVersions_FixtureReplay_BundleNotFound(t *testing.T) {
 		}
 	}
 }
+
+// ----- versions create / update tests -----
+
+func TestVersionsCreate_RegisteredWithRequiredFlag(t *testing.T) {
+	subs := versionsCmd.Commands()
+	var create, update *cobra.Command
+	for _, c := range subs {
+		switch c.Name() {
+		case "create":
+			create = c
+		case "update":
+			update = c
+		}
+	}
+	if create == nil {
+		t.Fatal("versions create not registered")
+	}
+	if update == nil {
+		t.Fatal("versions update not registered")
+	}
+	if create.Flag("version") == nil {
+		t.Errorf("versions create: missing --version flag")
+	}
+	if update.Flag("version") == nil {
+		t.Errorf("versions update: missing --version flag")
+	}
+	if create.Flag("release-type") == nil {
+		t.Errorf("versions create: missing --release-type flag")
+	}
+}
+
+// TestVersions_LookupVersion_Found exercises the idempotency probe.
+func TestVersions_LookupVersion_Found(t *testing.T) {
+	srv := startFixtureServer(t, map[string]fixtureRoute{
+		"GET /v1/apps/1234567890/appStoreVersions": {File: "versions_lookup_existing"},
+	})
+	c := fixtureASCClient(t, srv)
+	got, err := lookupVersion(context.Background(), c, "1234567890", "1.0.1", "IOS")
+	if err != nil {
+		t.Fatalf("lookupVersion: %v", err)
+	}
+	if got == nil {
+		t.Fatal("lookupVersion: got nil, want a record")
+	}
+	if got.ID != "8000000001" {
+		t.Errorf("id = %q, want 8000000001", got.ID)
+	}
+	if got.Attributes.ReleaseType != "MANUAL" {
+		t.Errorf("releaseType = %q, want MANUAL", got.Attributes.ReleaseType)
+	}
+}
+
+func TestVersions_LookupVersion_NotFound(t *testing.T) {
+	srv := startFixtureServer(t, map[string]fixtureRoute{
+		"GET /v1/apps/1234567890/appStoreVersions": {File: "versions_lookup_empty"},
+	})
+	c := fixtureASCClient(t, srv)
+	got, err := lookupVersion(context.Background(), c, "1234567890", "2.0.0", "IOS")
+	if err != nil {
+		t.Fatalf("lookupVersion: %v", err)
+	}
+	if got != nil {
+		t.Errorf("lookupVersion: got %+v, want nil for missing version", got)
+	}
+}
+
+// TestVersions_DiffAttrs_NoChangeWhenFlagsUnset locks the rule that flags the
+// user did not pass do not enter the diff. Critical for idempotency: a bare
+// `versions update --version X` against a version that already exists must
+// be a no-op.
+func TestVersions_DiffAttrs_NoChangeWhenFlagsUnset(t *testing.T) {
+	cmd := &cobra.Command{}
+	cmd.Flags().String("copyright", "", "")
+	cmd.Flags().String("release-type", "", "")
+	cmd.Flags().String("review-type", "", "")
+	cmd.Flags().String("earliest-release-date", "", "")
+	cur := asc.VersionAttributes{
+		Copyright:   "(c) 2025 Example LLC",
+		ReleaseType: "MANUAL",
+		ReviewType:  "APP_STORE",
+	}
+	_, changed := diffVersionAttrs(cmd, cur, "", "", "", "")
+	if changed {
+		t.Error("diffVersionAttrs: changed=true with no flags set; want false")
+	}
+}
+
+// TestVersions_DiffAttrs_NoChangeWhenIdentical asserts that a flag whose
+// value matches the current resource produces no diff.
+func TestVersions_DiffAttrs_NoChangeWhenIdentical(t *testing.T) {
+	cmd := &cobra.Command{}
+	cmd.Flags().String("release-type", "", "")
+	if err := cmd.Flags().Set("release-type", "MANUAL"); err != nil {
+		t.Fatalf("set flag: %v", err)
+	}
+	cmd.Flags().String("copyright", "", "")
+	cmd.Flags().String("review-type", "", "")
+	cmd.Flags().String("earliest-release-date", "", "")
+
+	cur := asc.VersionAttributes{ReleaseType: "MANUAL"}
+	out, changed := diffVersionAttrs(cmd, cur, "", "MANUAL", "", "")
+	if changed {
+		t.Errorf("diffVersionAttrs: changed=true for identical value; want false. attrs=%+v", out)
+	}
+}
+
+// TestVersions_DiffAttrs_ChangeWhenDiffers asserts that a Changed flag with
+// a different value produces a diff carrying that one field.
+func TestVersions_DiffAttrs_ChangeWhenDiffers(t *testing.T) {
+	cmd := &cobra.Command{}
+	cmd.Flags().String("release-type", "", "")
+	if err := cmd.Flags().Set("release-type", "AFTER_APPROVAL"); err != nil {
+		t.Fatalf("set flag: %v", err)
+	}
+	cmd.Flags().String("copyright", "", "")
+	cmd.Flags().String("review-type", "", "")
+	cmd.Flags().String("earliest-release-date", "", "")
+
+	cur := asc.VersionAttributes{ReleaseType: "MANUAL"}
+	out, changed := diffVersionAttrs(cmd, cur, "", "AFTER_APPROVAL", "", "")
+	if !changed {
+		t.Error("diffVersionAttrs: changed=false; want true")
+	}
+	if out.ReleaseType == nil || *out.ReleaseType != "AFTER_APPROVAL" {
+		t.Errorf("out.ReleaseType = %v, want pointer to 'AFTER_APPROVAL'", out.ReleaseType)
+	}
+	if out.Copyright != nil {
+		t.Errorf("out.Copyright = %v, want nil (unset flag)", out.Copyright)
+	}
+}
+
+// TestVersionWriteResult_JSONShape locks the write-result envelope contract.
+func TestVersionWriteResult_JSONShape(t *testing.T) {
+	r := VersionWriteResult{
+		Action:  "updated",
+		Changed: true,
+		Version: VersionView{
+			ID:   "8000000001",
+			Type: "appStoreVersions",
+			Attributes: asc.VersionAttributes{
+				Platform:      "IOS",
+				VersionString: "1.0.1",
+				ReleaseType:   "AFTER_APPROVAL",
+			},
+		},
+	}
+	b, err := json.Marshal(r)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	out := string(b)
+	for _, want := range []string{
+		`"action":"updated"`,
+		`"changed":true`,
+		`"version":`,
+		`"id":"8000000001"`,
+		`"versionString":"1.0.1"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("json missing %q: %q", want, out)
+		}
+	}
+}
+
+// TestVersionWriteResult_TableRows confirms the action / changed columns
+// surface in the table output.
+func TestVersionWriteResult_TableRows(t *testing.T) {
+	r := &VersionWriteResult{Action: "noop", Changed: false, Version: VersionView{ID: "8000000001"}}
+	headers, rows := r.TableRows()
+	if len(headers) != 2 {
+		t.Errorf("headers = %v, want 2 columns", headers)
+	}
+	if rows[0][0] != "ACTION" || rows[0][1] != "noop" {
+		t.Errorf("rows[0] = %v, want ACTION/noop", rows[0])
+	}
+	if rows[1][0] != "CHANGED" || rows[1][1] != "false" {
+		t.Errorf("rows[1] = %v, want CHANGED/false", rows[1])
+	}
+}
+
+// TestVersions_FixtureReplay_CreateNew exercises the create path end-to-end
+// against the fixture server: lookup misses → POST returns the created
+// resource → render emits action=created.
+func TestVersions_FixtureReplay_CreateNew(t *testing.T) {
+	// The lookup-then-POST flow goes:
+	//   GET /v1/apps           (resolveAppID)
+	//   GET /v1/apps/{id}/appStoreVersions  (lookup)
+	//   POST /v1/appStoreVersions           (create)
+	srv := startFixtureServer(t, map[string]fixtureRoute{
+		"GET /v1/apps": {File: "apps_get_byBundleId"},
+		"GET /v1/apps/1234567890/appStoreVersions": {File: "versions_lookup_empty"},
+		"POST /v1/appStoreVersions":                {File: "versions_create", Status: 201},
+	})
+	c := fixtureASCClient(t, srv)
+
+	// Drive the wire calls directly — we can't shell `runVersionsCreate`
+	// because it reads viper. The test mirrors the runV*Create wire path.
+	appID, err := resolveAppID(context.Background(), c, "com.example.alpha")
+	if err != nil {
+		t.Fatalf("resolveAppID: %v", err)
+	}
+	got, err := lookupVersion(context.Background(), c, appID, "2.0.0", "IOS")
+	if err != nil {
+		t.Fatalf("lookupVersion: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("lookupVersion: got %+v, want nil", got)
+	}
+	body := versionWriteEnvelope{
+		Data: versionWriteData{
+			Type: "appStoreVersions",
+			Attributes: versionWriteAttributes{
+				Platform:      strPtr("IOS"),
+				VersionString: strPtr("2.0.0"),
+				Copyright:     strPtr("(c) 2025 Example LLC"),
+				ReleaseType:   strPtr("MANUAL"),
+			},
+			Relationships: &versionWriteRels{
+				App: &versionWriteRel{Data: versionWriteRelRef{Type: "apps", ID: appID}},
+			},
+		},
+	}
+	resp, err := asc.Post[asc.Single[asc.VersionAttributes]](
+		context.Background(), c, "/v1/appStoreVersions", nil, body,
+	)
+	if err != nil {
+		t.Fatalf("create POST: %v", err)
+	}
+	if resp.Data.ID != "8000000099" {
+		t.Errorf("created id = %q, want 8000000099", resp.Data.ID)
+	}
+	if resp.Data.Attributes.VersionString != "2.0.0" {
+		t.Errorf("created versionString = %q, want 2.0.0", resp.Data.Attributes.VersionString)
+	}
+}
+
+// TestVersions_FixtureReplay_UpdateChange exercises a PATCH that flips the
+// release type. Confirms wire path and attribute decode.
+func TestVersions_FixtureReplay_UpdateChange(t *testing.T) {
+	srv := startFixtureServer(t, map[string]fixtureRoute{
+		"GET /v1/apps": {File: "apps_get_byBundleId"},
+		"GET /v1/apps/1234567890/appStoreVersions": {File: "versions_lookup_existing"},
+		"PATCH /v1/appStoreVersions/8000000001":    {File: "versions_update"},
+	})
+	c := fixtureASCClient(t, srv)
+
+	appID, err := resolveAppID(context.Background(), c, "com.example.alpha")
+	if err != nil {
+		t.Fatalf("resolveAppID: %v", err)
+	}
+	existing, err := lookupVersion(context.Background(), c, appID, "1.0.1", "IOS")
+	if err != nil {
+		t.Fatalf("lookupVersion: %v", err)
+	}
+	if existing == nil {
+		t.Fatal("lookupVersion: nil, want a record")
+	}
+	body := versionWriteEnvelope{
+		Data: versionWriteData{
+			Type: "appStoreVersions",
+			ID:   existing.ID,
+			Attributes: versionWriteAttributes{
+				ReleaseType: strPtr("AFTER_APPROVAL"),
+			},
+		},
+	}
+	resp, err := asc.Patch[asc.Single[asc.VersionAttributes]](
+		context.Background(), c, "/v1/appStoreVersions/"+existing.ID, nil, body,
+	)
+	if err != nil {
+		t.Fatalf("update PATCH: %v", err)
+	}
+	if resp.Data.Attributes.ReleaseType != "AFTER_APPROVAL" {
+		t.Errorf("updated releaseType = %q, want AFTER_APPROVAL", resp.Data.Attributes.ReleaseType)
+	}
+}
+
+// TestVersions_WireBody_OmitsUnsetFields locks the JSON shape of a write
+// envelope: pointer-to-string + omitempty means flags the user didn't pass
+// stay out of the wire body. Catches accidental "" defaults that would clear
+// fields server-side.
+func TestVersions_WireBody_OmitsUnsetFields(t *testing.T) {
+	body := versionWriteEnvelope{
+		Data: versionWriteData{
+			Type: "appStoreVersions",
+			ID:   "8000000001",
+			Attributes: versionWriteAttributes{
+				ReleaseType: strPtr("AFTER_APPROVAL"),
+			},
+		},
+	}
+	b, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	out := string(b)
+	if !strings.Contains(out, `"releaseType":"AFTER_APPROVAL"`) {
+		t.Errorf("missing releaseType in body: %s", out)
+	}
+	for _, leak := range []string{`"copyright"`, `"reviewType"`, `"earliestReleaseDate"`, `"versionString"`, `"platform"`} {
+		if strings.Contains(out, leak) {
+			t.Errorf("body leaks unset field %s: %s", leak, out)
+		}
+	}
+}

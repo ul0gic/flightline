@@ -1,0 +1,29 @@
+{
+  "data": [
+    {
+      "type": "appStoreVersions",
+      "id": "8000000001",
+      "attributes": {
+        "platform": "IOS",
+        "versionString": "1.0.1",
+        "appStoreState": "PREPARE_FOR_SUBMISSION",
+        "appVersionState": "PREPARE_FOR_SUBMISSION",
+        "copyright": "(c) 2025 Example LLC",
+        "releaseType": "MANUAL",
+        "reviewType": "APP_STORE"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appStoreVersions/8000000001"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps/1234567890/appStoreVersions?filter%5BversionString%5D=1.0.1&filter%5Bplatform%5D=IOS&limit=1"
+  },
+  "meta": {
+    "paging": {
+      "total": 1,
+      "limit": 1
+    }
+  }
+}

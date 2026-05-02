@@ -1,0 +1,22 @@
+{
+  "data": {
+    "type": "appStoreVersions",
+    "id": "8000000099",
+    "attributes": {
+      "platform": "IOS",
+      "versionString": "2.0.0",
+      "appStoreState": "PREPARE_FOR_SUBMISSION",
+      "appVersionState": "PREPARE_FOR_SUBMISSION",
+      "copyright": "(c) 2025 Example LLC",
+      "releaseType": "MANUAL",
+      "reviewType": "APP_STORE",
+      "createdDate": "2025-05-01T08:00:00-07:00"
+    },
+    "links": {
+      "self": "https://api.appstoreconnect.apple.com/v1/appStoreVersions/8000000099"
+    }
+  },
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/appStoreVersions/8000000099"
+  }
+}
