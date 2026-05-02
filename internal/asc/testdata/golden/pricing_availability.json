@@ -1,0 +1,62 @@
+{
+  "data": {
+    "type": "appAvailabilities",
+    "id": "AVAIL-1234567890",
+    "attributes": {
+      "availableInNewTerritories": true
+    },
+    "relationships": {
+      "territoryAvailabilities": {
+        "data": [
+          { "type": "territoryAvailabilities", "id": "AVAIL-USA" },
+          { "type": "territoryAvailabilities", "id": "AVAIL-GBR" },
+          { "type": "territoryAvailabilities", "id": "AVAIL-DEU" },
+          { "type": "territoryAvailabilities", "id": "AVAIL-NOT" }
+        ]
+      }
+    },
+    "links": {
+      "self": "https://api.appstoreconnect.apple.com/v1/apps/1234567890/appAvailabilityV2"
+    }
+  },
+  "included": [
+    {
+      "type": "territoryAvailabilities",
+      "id": "AVAIL-USA",
+      "attributes": {
+        "available": true,
+        "releaseDate": "2020-01-01",
+        "preOrderEnabled": false,
+        "contentStatuses": ["AVAILABLE"]
+      }
+    },
+    {
+      "type": "territoryAvailabilities",
+      "id": "AVAIL-GBR",
+      "attributes": {
+        "available": true,
+        "releaseDate": "2020-01-01",
+        "preOrderEnabled": false,
+        "contentStatuses": ["AVAILABLE"]
+      }
+    },
+    {
+      "type": "territoryAvailabilities",
+      "id": "AVAIL-DEU",
+      "attributes": {
+        "available": true,
+        "releaseDate": "2020-01-01",
+        "preOrderEnabled": false,
+        "contentStatuses": ["AVAILABLE"]
+      }
+    },
+    {
+      "type": "territoryAvailabilities",
+      "id": "AVAIL-NOT",
+      "attributes": {
+        "available": false,
+        "contentStatuses": ["MISSING_RATING"]
+      }
+    }
+  ]
+}

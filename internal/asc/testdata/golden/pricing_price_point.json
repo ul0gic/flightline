@@ -1,0 +1,13 @@
+{
+  "data": {
+    "type": "appPricePoints",
+    "id": "PP-USA-999",
+    "attributes": {
+      "customerPrice": "9.99",
+      "proceeds": "6.99"
+    },
+    "links": {
+      "self": "https://api.appstoreconnect.apple.com/v3/appPricePoints/PP-USA-999"
+    }
+  }
+}

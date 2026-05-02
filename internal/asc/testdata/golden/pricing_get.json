@@ -1,0 +1,78 @@
+{
+  "data": {
+    "type": "appPriceSchedules",
+    "id": "1234567890",
+    "relationships": {
+      "app": {
+        "data": { "type": "apps", "id": "1234567890" }
+      },
+      "baseTerritory": {
+        "data": { "type": "territories", "id": "USA" }
+      },
+      "manualPrices": {
+        "data": [
+          { "type": "appPrices", "id": "MP-USA-1" },
+          { "type": "appPrices", "id": "MP-USA-2" }
+        ]
+      },
+      "automaticPrices": {
+        "data": [
+          { "type": "appPrices", "id": "AP-GBR-1" },
+          { "type": "appPrices", "id": "AP-DEU-1" },
+          { "type": "appPrices", "id": "AP-JPN-1" }
+        ]
+      }
+    },
+    "links": {
+      "self": "https://api.appstoreconnect.apple.com/v1/appPriceSchedules/1234567890"
+    }
+  },
+  "included": [
+    {
+      "type": "territories",
+      "id": "USA",
+      "attributes": { "currency": "USD" }
+    },
+    {
+      "type": "appPrices",
+      "id": "MP-USA-1",
+      "attributes": {
+        "manual": true,
+        "startDate": "2020-01-01",
+        "endDate": "2099-12-31"
+      },
+      "relationships": {
+        "territory": { "data": { "type": "territories", "id": "USA" } },
+        "appPricePoint": { "data": { "type": "appPricePoints", "id": "PP-USA-999" } }
+      }
+    },
+    {
+      "type": "appPrices",
+      "id": "MP-USA-2",
+      "attributes": {
+        "manual": true,
+        "startDate": "2099-12-31",
+        "endDate": ""
+      },
+      "relationships": {
+        "territory": { "data": { "type": "territories", "id": "USA" } },
+        "appPricePoint": { "data": { "type": "appPricePoints", "id": "PP-USA-1099" } }
+      }
+    },
+    {
+      "type": "appPrices",
+      "id": "AP-GBR-1",
+      "attributes": {
+        "manual": false,
+        "startDate": "2020-01-01"
+      },
+      "relationships": {
+        "territory": { "data": { "type": "territories", "id": "GBR" } },
+        "appPricePoint": { "data": { "type": "appPricePoints", "id": "PP-GBR-799" } }
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps/1234567890/appPriceSchedule"
+  }
+}
