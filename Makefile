@@ -12,7 +12,7 @@ help:
 	@echo "  vet      go vet"
 	@echo "  lint     golangci-lint run"
 	@echo "  fmt      gofmt + goimports"
-	@echo "  gen      Regenerate internal/api/api.gen.go from openapi.oas.json"
+	@echo "  gen      Reserved (codegen rejected — see .project/issues/closed/ISSUE-001)"
 	@echo "  verify   vet + test + lint (what the verify hook runs at gates)"
 	@echo "  clean    Remove build artifacts"
 
@@ -35,18 +35,16 @@ fmt:
 	gofmt -s -w .
 	goimports -w .
 
-# Codegen status: PENDING Phase 1.0 (see .project/build-plan.md).
-# Apple's ASC OpenAPI spec has many type-name collisions (BuildBundleType,
-# CertificateType, ActorType vs constant ActorType, PlatformSchema redeclared,
-# etc.) that oapi-codegen cannot auto-resolve. Phase 1.0 evaluates:
-#   1. Aggressive jq patching of x-go-name across the spec
-#   2. ogen (alternative generator with different naming)
-#   3. Hand-rolled thin client over net/http (Skipper uses ~30-50 endpoints,
-#      writing them by hand may be cheaper than fixing codegen)
-# Until Phase 1.0 lands, this target is a no-op so the scaffold builds clean.
+# Codegen rejected — Apple's ASC OpenAPI spec hits cascading type-name and
+# enum-constant collisions in every Go OpenAPI generator we evaluated. The ASC
+# client at internal/asc/ is hand-rolled instead, with openapi.oas.json as
+# authoritative reference (queried via jq during command authoring).
+# See .project/issues/closed/ISSUE-001-oapi-codegen-collisions.md.
 gen:
-	@echo "skipper: codegen pending Phase 1.0 — see .project/build-plan.md"
-	@echo "skipper: spec has $$(jq '.paths | keys | length' openapi.oas.json) paths and $$(jq '.components.schemas | keys | length' openapi.oas.json) schemas."
+	@echo "skipper: codegen is intentionally not used — internal/asc/ is hand-rolled."
+	@echo "skipper: spec is authoritative reference. Query via jq:"
+	@echo "  jq '.paths | keys[]' openapi.oas.json | grep -i <resource>"
+	@echo "  jq '.components.schemas.<Name>' openapi.oas.json"
 
 verify: vet test lint
 
