@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -133,8 +134,47 @@ var pricingGetCmd = &cobra.Command{
   skipper pricing get com.example.myapp --output json | jq '.availability.availableCount'`,
 }
 
+// pricingSetCmd publishes a single-base-territory price schedule via POST
+// /v1/appPriceSchedules. The L1 verb keeps the surface narrow (one manual
+// price = base territory + appPricePoint id). Multi-territory manual price
+// schedules will live in L2 state-as-code.
+var pricingSetCmd = &cobra.Command{
+	Use:          "set <bundleId>",
+	Short:        "Apply a base-territory price schedule (idempotent against current schedule)",
+	SilenceUsage: true,
+	Args:         cobra.ExactArgs(1),
+	RunE:         runPricingSet,
+	Long: `pricing set creates a new AppPriceSchedule for the app. Apple's pricing
+model is replace-by-create: the new schedule supersedes any prior one.
+
+L1 supports a single base-territory + appPricePoint pairing. Pass:
+  --base-territory <code>   ISO-3 territory code (e.g. USA, GBR, JPN)
+  --tier <pricePointId>     AppPricePointV3 id
+
+Idempotent: if the current schedule already has the requested
+(baseTerritory, appPricePoint) pairing, no POST is issued and the
+result reports changed=false.`,
+	Example: `  skipper pricing set com.example.myapp --base-territory USA --tier PP-USA-999
+  skipper pricing set com.example.myapp --base-territory USA --tier PP-USA-999 --output json`,
+}
+
+var (
+	pricingSetBaseTerritory string
+	pricingSetTier          string
+	pricingSetStartDate     string
+	pricingSetEndDate       string
+)
+
 func init() {
+	pricingSetCmd.Flags().StringVar(&pricingSetBaseTerritory, "base-territory", "", "ISO-3 territory code (e.g. USA)")
+	pricingSetCmd.Flags().StringVar(&pricingSetTier, "tier", "", "AppPricePointV3 id")
+	pricingSetCmd.Flags().StringVar(&pricingSetStartDate, "start-date", "", "manual-price start date (YYYY-MM-DD); empty = no lower bound")
+	pricingSetCmd.Flags().StringVar(&pricingSetEndDate, "end-date", "", "manual-price end date (YYYY-MM-DD); empty = indefinite")
+	_ = pricingSetCmd.MarkFlagRequired("base-territory")
+	_ = pricingSetCmd.MarkFlagRequired("tier")
+
 	pricingCmd.AddCommand(pricingGetCmd)
+	pricingCmd.AddCommand(pricingSetCmd)
 	rootCmd.AddCommand(pricingCmd)
 }
 
@@ -447,4 +487,201 @@ func decodeIncluded(raw []json.RawMessage) includedSet {
 		}
 	}
 	return out
+}
+
+// PricingSetResult is the structured outcome of `pricing set`. Surfaces
+// whether a POST was issued vs idempotent no-op so plan/apply consumers
+// can detect zero-cost runs without re-querying.
+type PricingSetResult struct {
+	BundleID           string `json:"bundleId"`
+	AppID              string `json:"appId"`
+	Changed            bool   `json:"changed"`
+	BaseTerritory      string `json:"baseTerritory"`
+	PricePointID       string `json:"pricePointId"`
+	ScheduleID         string `json:"scheduleId,omitempty"`
+	PreviousScheduleID string `json:"previousScheduleId,omitempty"`
+	Note               string `json:"note,omitempty"`
+}
+
+// TableRows for a pricing set result.
+func (r *PricingSetResult) TableRows() (headers []string, rows [][]string) {
+	headers = []string{"FIELD", "VALUE"}
+	rows = [][]string{
+		{"BUNDLE_ID", r.BundleID},
+		{"APP_ID", r.AppID},
+		{"CHANGED", boolStrPricing(r.Changed)},
+		{"BASE_TERRITORY", r.BaseTerritory},
+		{"PRICE_POINT_ID", r.PricePointID},
+		{"SCHEDULE_ID", r.ScheduleID},
+		{"PREVIOUS_SCHEDULE_ID", r.PreviousScheduleID},
+	}
+	if r.Note != "" {
+		rows = append(rows, []string{"NOTE", r.Note})
+	}
+	return headers, rows
+}
+
+// boolStrPricing renders a bool as "true"/"false". Local to this file to
+// dodge cross-file helper collisions.
+func boolStrPricing(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
+}
+
+// runPricingSet implements the `pricing set` write. Pattern: resolve app,
+// fetch current (baseTerritory, basePricePoint) from the live schedule,
+// short-circuit when the requested pairing matches, otherwise POST a new
+// schedule with one inline manual appPrice.
+func runPricingSet(cmd *cobra.Command, args []string) error {
+	bundleID := args[0]
+	baseTerr := strings.TrimSpace(pricingSetBaseTerritory)
+	tier := strings.TrimSpace(pricingSetTier)
+	if baseTerr == "" || tier == "" {
+		return fmt.Errorf("pricing: --base-territory and --tier are required")
+	}
+
+	c, err := newClient()
+	if err != nil {
+		return err
+	}
+
+	appID, err := resolveAppID(cmd.Context(), c, bundleID)
+	if err != nil {
+		return err
+	}
+
+	curSchedID, curBaseTerr, curPricePoint, err := fetchCurrentBaseSchedule(cmd.Context(), c, appID)
+	if err != nil {
+		return err
+	}
+
+	if curBaseTerr == baseTerr && curPricePoint == tier {
+		return Render(&PricingSetResult{
+			BundleID:           bundleID,
+			AppID:              appID,
+			Changed:            false,
+			BaseTerritory:      baseTerr,
+			PricePointID:       tier,
+			ScheduleID:         curSchedID,
+			PreviousScheduleID: curSchedID,
+			Note:               "no change (idempotent) — current schedule already matches",
+		}, outputMode())
+	}
+
+	body := buildPricingScheduleCreate(appID, baseTerr, tier, pricingSetStartDate, pricingSetEndDate)
+	resp, err := asc.Post[asc.Single[asc.AppPriceScheduleAttributes]](
+		cmd.Context(), c, "/v1/appPriceSchedules", nil, body,
+	)
+	if err != nil {
+		return err
+	}
+
+	return Render(&PricingSetResult{
+		BundleID:           bundleID,
+		AppID:              appID,
+		Changed:            true,
+		BaseTerritory:      baseTerr,
+		PricePointID:       tier,
+		ScheduleID:         resp.Data.ID,
+		PreviousScheduleID: curSchedID,
+	}, outputMode())
+}
+
+// fetchCurrentBaseSchedule pulls the app's current schedule and returns
+// (scheduleID, baseTerritoryID, baseAppPricePointID). 404 = no schedule
+// yet (free app, freshly created); empty strings + nil error.
+func fetchCurrentBaseSchedule(ctx context.Context, c *asc.Client, appID string) (schedID, baseTerritory, basePricePoint string, err error) {
+	q := url.Values{
+		"include":                   {"manualPrices,baseTerritory"},
+		"fields[appPriceSchedules]": {"baseTerritory,manualPrices"},
+		"fields[appPrices]":         {"manual,startDate,endDate,territory,appPricePoint"},
+		"limit[manualPrices]":       {"50"},
+	}
+	resp, err := asc.Get[priceScheduleSingle](ctx, c, "/v1/apps/"+appID+"/appPriceSchedule", q)
+	if err != nil {
+		var apiErr *asc.APIError
+		if errors.As(err, &apiErr) && apiErr.HTTPStatus == 404 {
+			return "", "", "", nil
+		}
+		return "", "", "", err
+	}
+
+	schedID = resp.Data.ID
+	if resp.Data.Relationships.BaseTerritory != nil && resp.Data.Relationships.BaseTerritory.Data != nil {
+		baseTerritory = resp.Data.Relationships.BaseTerritory.Data.ID
+	}
+	included := decodeIncluded(resp.Included)
+	today := time.Now().UTC().Format("2006-01-02")
+	for _, p := range included.appPrices {
+		if p.territoryID != baseTerritory {
+			continue
+		}
+		if p.manual == nil || !*p.manual {
+			continue
+		}
+		if windowCovers(today, p.startDate, p.endDate) {
+			basePricePoint = p.appPricePointID
+			return schedID, baseTerritory, basePricePoint, nil
+		}
+		if basePricePoint == "" {
+			basePricePoint = p.appPricePointID
+		}
+	}
+	return schedID, baseTerritory, basePricePoint, nil
+}
+
+// buildPricingScheduleCreate crafts the JSON:API POST body for
+// /v1/appPriceSchedules carrying one inline manual appPrice for the base
+// territory. Apple matches the inline appPrice's local id against the
+// schedule's manualPrices linkage; we use a deterministic literal so the
+// body shape stays readable in fixture diffs.
+//
+// startDate / endDate are optional; empty omits the field (Apple defaults
+// to "now" / "indefinite").
+func buildPricingScheduleCreate(appID, baseTerritory, pricePointID, startDate, endDate string) map[string]any {
+	const localPriceID = "${TIER}"
+
+	priceAttrs := map[string]any{"manual": true}
+	if startDate != "" {
+		priceAttrs["startDate"] = startDate
+	}
+	if endDate != "" {
+		priceAttrs["endDate"] = endDate
+	}
+
+	inlinePrice := map[string]any{
+		"type":       "appPrices",
+		"id":         localPriceID,
+		"attributes": priceAttrs,
+		"relationships": map[string]any{
+			"territory": map[string]any{
+				"data": map[string]any{"type": "territories", "id": baseTerritory},
+			},
+			"appPricePoint": map[string]any{
+				"data": map[string]any{"type": "appPricePoints", "id": pricePointID},
+			},
+		},
+	}
+
+	return map[string]any{
+		"data": map[string]any{
+			"type": "appPriceSchedules",
+			"relationships": map[string]any{
+				"app": map[string]any{
+					"data": map[string]any{"type": "apps", "id": appID},
+				},
+				"baseTerritory": map[string]any{
+					"data": map[string]any{"type": "territories", "id": baseTerritory},
+				},
+				"manualPrices": map[string]any{
+					"data": []map[string]any{
+						{"type": "appPrices", "id": localPriceID},
+					},
+				},
+			},
+		},
+		"included": []map[string]any{inlinePrice},
+	}
 }

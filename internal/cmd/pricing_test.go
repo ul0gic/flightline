@@ -287,3 +287,145 @@ func TestPricing_FixtureReplay_AppNotFound(t *testing.T) {
 		t.Errorf("error %q does not name the bundleId", err.Error())
 	}
 }
+
+// TestPricingSet_RegisteredOnGroup confirms the cobra subcommand wiring.
+func TestPricingSet_RegisteredOnGroup(t *testing.T) {
+	var pcmd *cobra.Command
+	for _, c := range rootCmd.Commands() {
+		if c.Name() == "pricing" {
+			pcmd = c
+			break
+		}
+	}
+	if pcmd == nil {
+		t.Fatal("pricing not on root")
+	}
+	var set *cobra.Command
+	for _, sc := range pcmd.Commands() {
+		if sc.Name() == "set" {
+			set = sc
+			break
+		}
+	}
+	if set == nil {
+		t.Fatal("pricing set not registered")
+	}
+	for _, want := range []string{"base-territory", "tier", "start-date", "end-date"} {
+		if set.Flags().Lookup(want) == nil {
+			t.Errorf("pricing set missing --%s", want)
+		}
+	}
+}
+
+// TestBuildPricingScheduleCreate_Shape locks the JSON:API shape Apple
+// expects. The local id "${TIER}" wires the manualPrices linkage to the
+// inline appPrice; territory + appPricePoint relationships sit on the
+// inline price.
+func TestBuildPricingScheduleCreate_Shape(t *testing.T) {
+	body := buildPricingScheduleCreate("APP-1", "USA", "PP-USA-999", "2025-01-01", "")
+	raw, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	out := string(raw)
+	for _, want := range []string{
+		`"type":"appPriceSchedules"`,
+		`"app":{"data":{"id":"APP-1","type":"apps"}}`,
+		`"baseTerritory":{"data":{"id":"USA","type":"territories"}}`,
+		`"manualPrices":{"data":[{"id":"${TIER}","type":"appPrices"}]}`,
+		`"included":[{`,
+		`"id":"${TIER}","relationships":{"appPricePoint":{"data":{"id":"PP-USA-999","type":"appPricePoints"}}`,
+		`"territory":{"data":{"id":"USA","type":"territories"}}`,
+		`"startDate":"2025-01-01"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("body missing %q\nfull body: %s", want, out)
+		}
+	}
+	if strings.Contains(out, `"endDate"`) {
+		t.Errorf("body should omit endDate when empty: %s", out)
+	}
+}
+
+// TestBuildPricingScheduleCreate_OmitsEmptyDates asserts both date fields
+// are omitted when neither flag was supplied — Apple defaults them.
+func TestBuildPricingScheduleCreate_OmitsEmptyDates(t *testing.T) {
+	body := buildPricingScheduleCreate("APP-1", "USA", "PP-USA-999", "", "")
+	raw, _ := json.Marshal(body)
+	out := string(raw)
+	for _, leak := range []string{`"startDate"`, `"endDate"`} {
+		if strings.Contains(out, leak) {
+			t.Errorf("body should omit %s when not provided: %s", leak, out)
+		}
+	}
+}
+
+// TestPricingSetResult_TableRows_NoChange asserts the no-change NOTE row
+// renders for idempotent runs.
+func TestPricingSetResult_TableRows_NoChange(t *testing.T) {
+	r := &PricingSetResult{
+		BundleID:      "com.example.alpha",
+		AppID:         "1234567890",
+		Changed:       false,
+		BaseTerritory: "USA",
+		PricePointID:  "PP-USA-999",
+		ScheduleID:    "1234567890",
+		Note:          "no change (idempotent) — current schedule already matches",
+	}
+	_, rows := r.TableRows()
+	foundNote := false
+	for _, row := range rows {
+		if row[0] == "NOTE" {
+			foundNote = true
+		}
+	}
+	if !foundNote {
+		t.Errorf("expected NOTE row, rows=%v", rows)
+	}
+}
+
+// TestPricingSetResult_JSONShape locks the JSON contract for `pricing set`.
+func TestPricingSetResult_JSONShape(t *testing.T) {
+	r := &PricingSetResult{
+		BundleID: "com.example.alpha", AppID: "1234567890",
+		Changed: true, BaseTerritory: "USA", PricePointID: "PP-USA-999",
+		ScheduleID: "9999999999", PreviousScheduleID: "1234567890",
+	}
+	var buf bytes.Buffer
+	if err := renderTo(&buf, r, "json", true); err != nil {
+		t.Fatalf("renderTo: %v", err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &decoded); err != nil {
+		t.Fatalf("decode: %v\nraw: %s", err, buf.String())
+	}
+	for _, key := range []string{"bundleId", "appId", "changed", "baseTerritory", "pricePointId", "scheduleId", "previousScheduleId"} {
+		if _, ok := decoded[key]; !ok {
+			t.Errorf("missing key %q. Got: %v", key, mapKeys(decoded))
+		}
+	}
+}
+
+// TestFetchCurrentBaseSchedule_FixtureReplay walks the read path against
+// the existing pricing_get fixture and confirms (schedID, baseTerritory,
+// basePricePoint) is extracted as expected — the active manual price
+// covering today is MP-USA-1 → PP-USA-999.
+func TestFetchCurrentBaseSchedule_FixtureReplay(t *testing.T) {
+	srv := startFixtureServer(t, map[string]fixtureRoute{
+		"GET /v1/apps/1234567890/appPriceSchedule": {File: "pricing_get"},
+	})
+	c := fixtureASCClient(t, srv)
+	schedID, baseTerr, pricePoint, err := fetchCurrentBaseSchedule(context.Background(), c, "1234567890")
+	if err != nil {
+		t.Fatalf("fetchCurrentBaseSchedule: %v", err)
+	}
+	if schedID != "1234567890" {
+		t.Errorf("schedID = %q, want 1234567890", schedID)
+	}
+	if baseTerr != "USA" {
+		t.Errorf("baseTerr = %q, want USA", baseTerr)
+	}
+	if pricePoint != "PP-USA-999" {
+		t.Errorf("pricePoint = %q, want PP-USA-999 (active 2020 → 2099)", pricePoint)
+	}
+}
