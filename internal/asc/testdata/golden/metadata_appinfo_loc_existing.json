@@ -1,0 +1,25 @@
+{
+  "data": [
+    {
+      "type": "appInfoLocalizations",
+      "id": "AI000000001",
+      "attributes": {
+        "locale": "en-US",
+        "name": "MyApp",
+        "subtitle": "Original subtitle"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appInfoLocalizations/AI000000001"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/appInfos/AP000000001/appInfoLocalizations?filter%5Blocale%5D=en-US&limit=1"
+  },
+  "meta": {
+    "paging": {
+      "total": 1,
+      "limit": 1
+    }
+  }
+}

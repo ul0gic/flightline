@@ -1,0 +1,12 @@
+{
+  "data": [],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/appStoreVersions/8000000001/appStoreVersionLocalizations?filter%5Blocale%5D=de-DE&limit=1"
+  },
+  "meta": {
+    "paging": {
+      "total": 0,
+      "limit": 1
+    }
+  }
+}

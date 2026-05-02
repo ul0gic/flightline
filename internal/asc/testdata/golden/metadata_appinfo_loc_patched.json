@@ -1,0 +1,17 @@
+{
+  "data": {
+    "type": "appInfoLocalizations",
+    "id": "AI000000001",
+    "attributes": {
+      "locale": "en-US",
+      "name": "MyApp",
+      "subtitle": "New tagline"
+    },
+    "links": {
+      "self": "https://api.appstoreconnect.apple.com/v1/appInfoLocalizations/AI000000001"
+    }
+  },
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/appInfoLocalizations/AI000000001"
+  }
+}

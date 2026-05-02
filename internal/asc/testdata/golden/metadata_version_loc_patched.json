@@ -1,0 +1,21 @@
+{
+  "data": {
+    "type": "appStoreVersionLocalizations",
+    "id": "AC000000001",
+    "attributes": {
+      "locale": "en-US",
+      "description": "Updated description for the app.",
+      "keywords": "alpha,beta,gamma",
+      "whatsNew": "Bug fixes and performance improvements.",
+      "promotionalText": "Try it today!",
+      "marketingUrl": "https://example.com/marketing",
+      "supportUrl": "https://example.com/support"
+    },
+    "links": {
+      "self": "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/AC000000001"
+    }
+  },
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/AC000000001"
+  }
+}

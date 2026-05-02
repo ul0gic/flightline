@@ -1,0 +1,29 @@
+{
+  "data": [
+    {
+      "type": "appStoreVersionLocalizations",
+      "id": "AC000000001",
+      "attributes": {
+        "locale": "en-US",
+        "description": "Original description for the app.",
+        "keywords": "alpha,beta,gamma",
+        "whatsNew": "Initial release.",
+        "promotionalText": "Try it today!",
+        "marketingUrl": "https://example.com/marketing",
+        "supportUrl": "https://example.com/support"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/AC000000001"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/appStoreVersions/8000000001/appStoreVersionLocalizations?filter%5Blocale%5D=en-US&limit=1"
+  },
+  "meta": {
+    "paging": {
+      "total": 1,
+      "limit": 1
+    }
+  }
+}
