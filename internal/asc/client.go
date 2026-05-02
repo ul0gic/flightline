@@ -51,6 +51,11 @@ type Options struct {
 	// HTTPClient overrides the default 60s-timeout client. Tests inject this
 	// to point at httptest.NewServer.
 	HTTPClient *http.Client
+	// BaseURL overrides the production ASC base URL. Test-only — leave empty
+	// in production callers; defaults to the hardcoded
+	// "https://api.appstoreconnect.apple.com" when empty. Cross-package tests
+	// in internal/cmd/ use this to point the client at an httptest.Server.
+	BaseURL string
 }
 
 // Client is the concurrency-safe ASC API client.
@@ -91,6 +96,10 @@ func New(opts Options) (*Client, error) {
 	if ua == "" {
 		ua = defaultUserAgent
 	}
+	base := opts.BaseURL
+	if base == "" {
+		base = baseURL
+	}
 
 	return &Client{
 		keyID:     opts.KeyID,
@@ -98,7 +107,7 @@ func New(opts Options) (*Client, error) {
 		keyPath:   opts.KeyPath,
 		userAgent: ua,
 		http:      httpClient,
-		baseURL:   baseURL,
+		baseURL:   base,
 	}, nil
 }
 

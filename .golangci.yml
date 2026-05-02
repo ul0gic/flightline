@@ -34,6 +34,10 @@ linters:
         - diagnostic
         - performance
         - style
+      disabled-checks:
+        # hugeParam fires at 80 bytes; config structs (e.g., asc.Options) routinely
+        # exceed that. Pass-by-value is idiomatic for config; tolerate the size.
+        - hugeParam
     revive:
       severity: warning
     gosec:
