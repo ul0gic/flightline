@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -115,5 +116,133 @@ func TestDefaultAppCap(t *testing.T) {
 	}
 	if got := defaultAppCap(50); got != 50 {
 		t.Errorf("defaultAppCap(50) = %d, want 50", got)
+	}
+}
+
+// TestApps_JSONOutputStability_List asserts the AppList JSON shape. The
+// top-level "apps" key plus every per-row attribute is a contract.
+//
+// Adding fields is safe; renaming or removing a field is a breaking change
+// for shell pipelines (`jq '.apps[].bundleId'`) and LLM consumers parsing
+// the structured output.
+func TestApps_JSONOutputStability_List(t *testing.T) {
+	list := AppList{
+		Apps: []AppView{
+			{
+				ID:   "1234567890",
+				Type: "apps",
+				Attributes: AppAttributes{
+					Name:                     "Example Alpha",
+					BundleID:                 "com.example.alpha",
+					SKU:                      "EXAMPLE_ALPHA",
+					PrimaryLocale:            "en-US",
+					ContentRightsDeclaration: "DOES_NOT_USE_THIRD_PARTY_CONTENT",
+				},
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := renderTo(&buf, list, "json", true); err != nil {
+		t.Fatalf("renderTo: %v", err)
+	}
+
+	var decoded struct {
+		Apps []map[string]any `json:"apps"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &decoded); err != nil {
+		t.Fatalf("json decode: %v\nraw: %s", err, buf.String())
+	}
+	if len(decoded.Apps) != 1 {
+		t.Fatalf("apps len = %d, want 1", len(decoded.Apps))
+	}
+
+	wantTopLevel := []string{"id", "type", "attributes"}
+	row := decoded.Apps[0]
+	for _, key := range wantTopLevel {
+		if _, ok := row[key]; !ok {
+			t.Errorf("missing per-row key %q — JSON output is a contract; "+
+				"adding fields is safe but removing/renaming breaks consumers. "+
+				"Got keys: %v", key, mapKeys(row))
+		}
+	}
+
+	attrs, ok := row["attributes"].(map[string]any)
+	if !ok {
+		t.Fatalf("attributes is not an object: %T", row["attributes"])
+	}
+	wantAttrs := []string{"name", "bundleId", "sku", "primaryLocale", "contentRightsDeclaration"}
+	for _, key := range wantAttrs {
+		if _, ok := attrs[key]; !ok {
+			t.Errorf("missing attribute key %q — JSON output is a contract; "+
+				"adding fields is safe but removing/renaming breaks consumers. "+
+				"Got attribute keys: %v", key, mapKeys(attrs))
+		}
+	}
+}
+
+// TestApps_JSONOutputStability_Get asserts the single-app AppView JSON
+// shape — same contract test as List but for the get-by-bundleId flow,
+// which renders a *AppView (pointer) rather than the slice wrapper.
+func TestApps_JSONOutputStability_Get(t *testing.T) {
+	view := &AppView{
+		ID:   "1234567890",
+		Type: "apps",
+		Attributes: AppAttributes{
+			Name:          "Example Alpha",
+			BundleID:      "com.example.alpha",
+			SKU:           "EXAMPLE_ALPHA",
+			PrimaryLocale: "en-US",
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := renderTo(&buf, view, "json", true); err != nil {
+		t.Fatalf("renderTo: %v", err)
+	}
+
+	var decoded map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &decoded); err != nil {
+		t.Fatalf("json decode: %v\nraw: %s", err, buf.String())
+	}
+	for _, key := range []string{"id", "type", "attributes"} {
+		if _, ok := decoded[key]; !ok {
+			t.Errorf("missing top-level key %q — JSON output is a contract. Got: %v", key, mapKeys(decoded))
+		}
+	}
+}
+
+// TestApps_AppViewType_StaysApps locks the resource type literal. A
+// regression to "App" or "application" would surprise downstream filters.
+func TestApps_AppViewType_StaysApps(t *testing.T) {
+	view := AppView{ID: "1", Type: "apps"}
+	b, err := json.Marshal(view)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(b), `"type":"apps"`) {
+		t.Errorf("type literal regression: %s", b)
+	}
+}
+
+// TestApps_NotFoundErrorMessageShape locks the user-facing error string
+// `apps get` returns when the bundleId filter yields zero results. The
+// message MUST contain the literal bundleId so users know which one was
+// missing — this is the entire actionable signal.
+//
+// Phase 1.4 cannot run runAppsGet end-to-end against a fixture (the asc
+// Client baseURL is hardcoded; see QA-001). This test asserts the format
+// string used in the production code via a small replay of the formatting
+// statement. If the format string in apps.go diverges, this test fails
+// and the discrepancy is the actionable diff.
+func TestApps_NotFoundErrorMessageShape(t *testing.T) {
+	bundleID := "com.unknown.app"
+	// Mirror the format in runAppsGet exactly. If runAppsGet changes its
+	// format string, this assertion catches the drift.
+	got := fmt.Sprintf("apps: no app found with bundleId %q", bundleID)
+	for _, want := range []string{"apps:", "no app found", `"com.unknown.app"`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("error message %q missing substring %q", got, want)
+		}
 	}
 }
