@@ -1,0 +1,53 @@
+{
+  "data": [
+    {
+      "type": "reviewSubmissions",
+      "id": "rs-7700000001",
+      "attributes": {
+        "platform": "IOS",
+        "submittedDate": "2025-04-22T16:45:00-07:00",
+        "state": "UNRESOLVED_ISSUES"
+      },
+      "relationships": {
+        "app": {
+          "data": {
+            "type": "apps",
+            "id": "1234567890"
+          }
+        }
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/reviewSubmissions/rs-7700000001"
+      }
+    },
+    {
+      "type": "reviewSubmissions",
+      "id": "rs-7700000000",
+      "attributes": {
+        "platform": "IOS",
+        "submittedDate": "2025-03-05T10:00:00-08:00",
+        "state": "COMPLETE"
+      },
+      "relationships": {
+        "app": {
+          "data": {
+            "type": "apps",
+            "id": "1234567890"
+          }
+        }
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/reviewSubmissions/rs-7700000000"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/reviewSubmissions?filter%5Bapp%5D=1234567890&limit=200"
+  },
+  "meta": {
+    "paging": {
+      "total": 2,
+      "limit": 200
+    }
+  }
+}
