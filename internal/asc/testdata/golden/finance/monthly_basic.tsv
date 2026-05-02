@@ -1,0 +1,5 @@
+Start Date	End Date	UPC	ISRC	Vendor Identifier	Quantity	Partner Share	Extended Partner Share	Partner Share Currency	Sales or Return	Apple Identifier	Artist/Show/Developer/Author	Title	Label/Studio/Network/Developer/Publisher	Grid	Product Type Identifier	ISAN/Other Identifier	Country Of Sale	Pre-order Flag	Promo Code	Customer Price	Customer Currency	Asset/Content Flavor	Vendor Offer Code	Grace Period	Standard Subscription Type
+04/01/2026	04/30/2026			com.example.testapp.sku1	42	2.10	88.20	USD	S	1234567890	Test Developer	Test App	Test Developer		1F		US			2.99	USD
+04/01/2026	04/30/2026			com.example.testapp.sku1	5	1.26	6.30	USD	R	1234567890	Test Developer	Test App	Test Developer		1F		GB			2.49	USD
+04/01/2026	04/30/2026			com.example.testapp.sku2	18	6.99	125.82	USD	S	1234567890	Test Developer	Test App Pro	Test Developer		IA1		US			9.99	USD
+04/01/2026	04/30/2026			com.example.testapp.subscription	120	3.49	418.80	USD	S	1234567890	Test Developer	Pro Subscription	Test Developer		IAY		US			4.99	USD			0	1 Month

@@ -1,0 +1,5 @@
+Provider	Provider Country	SKU	Developer	Title	Version	Product Type Identifier	Units	Developer Proceeds	Begin Date	End Date	Customer Currency	Country Code	Currency of Proceeds	Apple Identifier	Customer Price	Promo Code	Parent Identifier	Subscription	Period	Category	CMB	Device	Supported Platforms	Proceeds Reason	Preserved Pricing	Client	Order Type
+APPLE	US	com.example.testapp.sku1	Test Developer	Test App	1.0	1F	5	2.10	05/01/2026	05/01/2026	USD	US	USD	1234567890	2.99				Lifestyle		iPhone	iOS
+APPLE	US	com.example.testapp.sku1	Test Developer	Test App	1.0	1F	3	1.26	05/01/2026	05/01/2026	GBP	GB	USD	1234567890	2.49				Lifestyle		iPhone	iOS
+APPLE	US	com.example.testapp.sku2	Test Developer	Test App Pro	1.0	IA1	2	6.99	05/01/2026	05/01/2026	USD	US	USD	1234567890	9.99			com.example.testapp					iPhone	iOS
+APPLE	US	com.example.testapp.subscription	Test Developer	Pro Subscription	1.0	IAY	1	3.49	05/01/2026	05/01/2026	USD	US	USD	1234567890	4.99			com.example.testapp	1 Month		iPhone	iOS
