@@ -266,3 +266,195 @@ func TestCategories_FixtureReplay_AppNotFound(t *testing.T) {
 		t.Errorf("error message %q does not name the bundleId", err.Error())
 	}
 }
+
+// TestCategoriesDiff_UnchangedYieldsZeroChanges asserts the diff returns no
+// rows when current and desired are identical — the idempotency invariant.
+func TestCategoriesDiff_UnchangedYieldsZeroChanges(t *testing.T) {
+	cur := categoryRelationships{
+		primary:       "PRODUCTIVITY",
+		primarySubOne: "BUSINESS",
+		secondary:     "UTILITIES",
+	}
+	if got := categoriesDiff(cur, cur); len(got) != 0 {
+		t.Errorf("diff(same, same) = %d, want 0", len(got))
+	}
+}
+
+// TestCategoriesDiff_ReportsChangedFields locks the diff output: each moved
+// slot becomes one CategoriesFieldChange row with the right from/to.
+func TestCategoriesDiff_ReportsChangedFields(t *testing.T) {
+	cur := categoryRelationships{
+		primary:   "PRODUCTIVITY",
+		secondary: "UTILITIES",
+	}
+	desired := categoryRelationships{
+		primary:       "GAMES",
+		primarySubOne: "ACTION",
+		secondary:     "", // cleared
+	}
+	got := categoriesDiff(cur, desired)
+	if len(got) != 3 {
+		t.Fatalf("changes len = %d, want 3 (primary, primarySubOne, secondary cleared); got = %+v", len(got), got)
+	}
+	want := map[string][2]string{
+		"primaryCategory":       {"PRODUCTIVITY", "GAMES"},
+		"primarySubcategoryOne": {"", "ACTION"},
+		"secondaryCategory":     {"UTILITIES", ""},
+	}
+	for _, ch := range got {
+		w, ok := want[ch.Field]
+		if !ok {
+			t.Errorf("unexpected change field %q", ch.Field)
+			continue
+		}
+		if ch.From != w[0] || ch.To != w[1] {
+			t.Errorf("%s: from=%q to=%q, want from=%q to=%q", ch.Field, ch.From, ch.To, w[0], w[1])
+		}
+	}
+}
+
+// TestBuildAppInfoCategoriesPatch_OnlyChangedFieldsEmitted asserts the PATCH
+// body skeleton: relationships block contains exactly the fields named in
+// `changes`, with cleared slots emitted as { "data": null } and assigned
+// slots as { "data": {type, id} }. Untouched slots must NOT appear (else
+// Apple sees PATCHes for unobserved state and idempotency suffers).
+func TestBuildAppInfoCategoriesPatch_OnlyChangedFieldsEmitted(t *testing.T) {
+	current := categoryRelationships{primary: "PRODUCTIVITY", secondary: "UTILITIES"}
+	desired := categoryRelationships{primary: "GAMES", secondary: ""}
+	changes := categoriesDiff(current, desired)
+
+	body := buildAppInfoCategoriesPatch("9000000001", desired, changes)
+	raw, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	out := string(raw)
+	for _, want := range []string{
+		`"type":"appInfos"`,
+		`"id":"9000000001"`,
+		`"primaryCategory":{"data":{"id":"GAMES","type":"appCategories"}}`,
+		`"secondaryCategory":{"data":null}`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("body missing %q, got: %s", want, out)
+		}
+	}
+	for _, leak := range []string{
+		`"primarySubcategoryOne"`,
+		`"secondarySubcategoryOne"`,
+		`"primarySubcategoryTwo"`,
+	} {
+		if strings.Contains(out, leak) {
+			t.Errorf("body unexpectedly contains untouched slot %q: %s", leak, out)
+		}
+	}
+}
+
+// TestCategoriesSetCmd_RegisteredOnGroup verifies cobra wiring for the new
+// write verb.
+func TestCategoriesSetCmd_RegisteredOnGroup(t *testing.T) {
+	var cat *cobra.Command
+	for _, c := range rootCmd.Commands() {
+		if c.Name() == "categories" {
+			cat = c
+			break
+		}
+	}
+	if cat == nil {
+		t.Fatal("categories not on root")
+	}
+	var set *cobra.Command
+	for _, sc := range cat.Commands() {
+		if sc.Name() == "set" {
+			set = sc
+			break
+		}
+	}
+	if set == nil {
+		t.Fatal("categories set subcommand not registered")
+	}
+	for _, want := range []string{"primary", "secondary", "primary-subcat", "secondary-subcat", "clear-secondary"} {
+		if set.Flags().Lookup(want) == nil {
+			t.Errorf("categories set missing --%s flag", want)
+		}
+	}
+}
+
+// TestCategoriesSetResult_TableRows_NoChange asserts the no-change row is
+// rendered when Changed=false.
+func TestCategoriesSetResult_TableRows_NoChange(t *testing.T) {
+	r := &CategoriesSetResult{BundleID: "com.example.alpha", AppInfoID: "9000000001", AppInfoState: "PREPARE_FOR_SUBMISSION", Changed: false}
+	_, rows := r.TableRows()
+	foundNote := false
+	for _, row := range rows {
+		if row[0] == "NOTE" && strings.Contains(row[1], "no change") {
+			foundNote = true
+		}
+	}
+	if !foundNote {
+		t.Errorf("expected NOTE row for idempotent no-op, rows=%v", rows)
+	}
+}
+
+// TestCategoriesSetResult_JSONShape locks the JSON contract for the write
+// result so consumers parsing `changed`, `changes[]`, and `result.*` aren't
+// broken later.
+func TestCategoriesSetResult_JSONShape(t *testing.T) {
+	r := &CategoriesSetResult{
+		BundleID:     "com.example.alpha",
+		AppInfoID:    "9000000001",
+		AppInfoState: "PREPARE_FOR_SUBMISSION",
+		Changed:      true,
+		Changes: []CategoriesFieldChange{
+			{Field: "primaryCategory", From: "PRODUCTIVITY", To: "GAMES"},
+		},
+		Result: &CategoryAssignmentView{
+			BundleID: "com.example.alpha", AppInfoID: "9000000001",
+			AppInfoState: "PREPARE_FOR_SUBMISSION", PrimaryCategory: "GAMES",
+		},
+	}
+	var buf bytes.Buffer
+	if err := renderTo(&buf, r, "json", true); err != nil {
+		t.Fatalf("renderTo: %v", err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &decoded); err != nil {
+		t.Fatalf("decode: %v\nraw: %s", err, buf.String())
+	}
+	for _, key := range []string{"bundleId", "appInfoId", "appInfoState", "changed", "changes", "result"} {
+		if _, ok := decoded[key]; !ok {
+			t.Errorf("missing top-level key %q. Got: %v", key, mapKeys(decoded))
+		}
+	}
+}
+
+// TestCategoriesSet_FixtureReplay_Idempotent walks the full read+diff path
+// against a fixture where current == desired. Asserts: no PATCH route is
+// hit (the route map deliberately omits the PATCH endpoint, so any attempt
+// would 404 and fail the test).
+func TestCategoriesSet_FixtureReplay_Idempotent(t *testing.T) {
+	srv := startFixtureServer(t, map[string]fixtureRoute{
+		"GET /v1/apps":                     {File: "apps_get_byBundleId"},
+		"GET /v1/apps/1234567890/appInfos": {File: "age_rating_app_infos"},
+
+		"GET /v1/appInfos/9000000001/relationships/primaryCategory":         {File: "categories_get_primary"},
+		"GET /v1/appInfos/9000000001/relationships/primarySubcategoryOne":   {File: "categories_get_unassigned"},
+		"GET /v1/appInfos/9000000001/relationships/primarySubcategoryTwo":   {File: "categories_get_unassigned"},
+		"GET /v1/appInfos/9000000001/relationships/secondaryCategory":       {File: "categories_get_secondary"},
+		"GET /v1/appInfos/9000000001/relationships/secondarySubcategoryOne": {File: "categories_get_unassigned"},
+		"GET /v1/appInfos/9000000001/relationships/secondarySubcategoryTwo": {File: "categories_get_unassigned"},
+	})
+	c := fixtureASCClient(t, srv)
+
+	current, err := fetchAllCategoryRelationships(context.Background(), c, "9000000001")
+	if err != nil {
+		t.Fatalf("fetchAllCategoryRelationships: %v", err)
+	}
+	if current.primary != "PRODUCTIVITY" || current.secondary != "UTILITIES" {
+		t.Errorf("current = %+v, want primary=PRODUCTIVITY secondary=UTILITIES", current)
+	}
+	// desired == current means no diff means no PATCH.
+	if got := categoriesDiff(current, current); len(got) != 0 {
+		t.Errorf("diff(current, current) = %d, want 0", len(got))
+	}
+}
