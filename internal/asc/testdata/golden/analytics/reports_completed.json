@@ -1,0 +1,46 @@
+{
+  "data": [
+    {
+      "type": "analyticsReports",
+      "id": "RPT-A",
+      "attributes": {
+        "name": "App Usage",
+        "category": "APP_USAGE"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/analyticsReports/RPT-A"
+      }
+    },
+    {
+      "type": "analyticsReports",
+      "id": "RPT-B",
+      "attributes": {
+        "name": "Commerce Daily",
+        "category": "COMMERCE"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/analyticsReports/RPT-B"
+      }
+    },
+    {
+      "type": "analyticsReports",
+      "id": "RPT-C",
+      "attributes": {
+        "name": "App Store Engagement",
+        "category": "APP_STORE_ENGAGEMENT"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/analyticsReports/RPT-C"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/analyticsReportRequests/REQ-CMD-1/reports"
+  },
+  "meta": {
+    "paging": {
+      "total": 3,
+      "limit": 50
+    }
+  }
+}

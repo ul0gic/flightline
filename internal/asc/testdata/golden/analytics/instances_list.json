@@ -1,0 +1,35 @@
+{
+  "data": [
+    {
+      "type": "analyticsReportInstances",
+      "id": "INST-1",
+      "attributes": {
+        "granularity": "DAILY",
+        "processingDate": "2026-05-01"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/analyticsReportInstances/INST-1"
+      }
+    },
+    {
+      "type": "analyticsReportInstances",
+      "id": "INST-2",
+      "attributes": {
+        "granularity": "WEEKLY",
+        "processingDate": "2026-05-08"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/analyticsReportInstances/INST-2"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/analyticsReports/RPT-A/instances"
+  },
+  "meta": {
+    "paging": {
+      "total": 2,
+      "limit": 50
+    }
+  }
+}

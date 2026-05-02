@@ -1,0 +1,12 @@
+{
+  "data": [],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/analyticsReportRequests/REQ-CMD-1/reports"
+  },
+  "meta": {
+    "paging": {
+      "total": 0,
+      "limit": 50
+    }
+  }
+}

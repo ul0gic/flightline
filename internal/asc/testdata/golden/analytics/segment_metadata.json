@@ -1,0 +1,17 @@
+{
+  "data": {
+    "type": "analyticsReportSegments",
+    "id": "SEG-1",
+    "attributes": {
+      "url": "https://example-cdn.invalid/cdn/segments/SEG-1?signature=REDACTED&expires=1735689600",
+      "checksum": "deadbeefcafef00d",
+      "sizeInBytes": 8192
+    },
+    "links": {
+      "self": "https://api.appstoreconnect.apple.com/v1/analyticsReportSegments/SEG-1"
+    }
+  },
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/analyticsReportSegments/SEG-1"
+  }
+}

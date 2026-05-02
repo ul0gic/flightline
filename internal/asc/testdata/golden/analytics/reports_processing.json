@@ -1,0 +1,24 @@
+{
+  "data": [
+    {
+      "type": "analyticsReports",
+      "id": "RPT-A",
+      "attributes": {
+        "name": "App Usage",
+        "category": "APP_USAGE"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/analyticsReports/RPT-A"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/analyticsReportRequests/REQ-CMD-1/reports"
+  },
+  "meta": {
+    "paging": {
+      "total": 1,
+      "limit": 50
+    }
+  }
+}

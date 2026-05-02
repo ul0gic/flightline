@@ -1,0 +1,29 @@
+{
+  "data": {
+    "type": "analyticsReportRequests",
+    "id": "REQ-CMD-1",
+    "attributes": {
+      "accessType": "ONE_TIME_SNAPSHOT",
+      "stoppedDueToInactivity": false
+    },
+    "relationships": {
+      "app": {
+        "data": {
+          "type": "apps",
+          "id": "1234567890"
+        }
+      },
+      "reports": {
+        "links": {
+          "related": "https://api.appstoreconnect.apple.com/v1/analyticsReportRequests/REQ-CMD-1/reports"
+        }
+      }
+    },
+    "links": {
+      "self": "https://api.appstoreconnect.apple.com/v1/analyticsReportRequests/REQ-CMD-1"
+    }
+  },
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/analyticsReportRequests"
+  }
+}
