@@ -1,0 +1,14 @@
+{
+  "data": {
+    "type": "appScreenshots",
+    "id": "upload-asset-test-1",
+    "attributes": {
+      "fileSize": 16,
+      "fileName": "screenshot.png",
+      "sourceFileChecksum": "00112233445566778899aabbccddeeff",
+      "assetDeliveryState": {"state": "UPLOAD_COMPLETE"}
+    },
+    "links": {"self": "https://api.appstoreconnect.apple.com/v1/appScreenshots/upload-asset-test-1"}
+  },
+  "links": {"self": "https://api.appstoreconnect.apple.com/v1/appScreenshots/upload-asset-test-1"}
+}

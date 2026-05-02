@@ -1,0 +1,35 @@
+{
+  "data": {
+    "type": "appScreenshots",
+    "id": "upload-asset-test-1",
+    "attributes": {
+      "fileSize": 16,
+      "fileName": "screenshot.png",
+      "uploadOperations": [
+        {
+          "method": "PUT",
+          "url": "__SIGNED_URL_BASE__/chunks/0",
+          "length": 8,
+          "offset": 0,
+          "requestHeaders": [
+            {"name": "Content-Type", "value": "application/octet-stream"},
+            {"name": "X-Apple-Upload-Chunk", "value": "0"}
+          ]
+        },
+        {
+          "method": "PUT",
+          "url": "__SIGNED_URL_BASE__/chunks/1",
+          "length": 8,
+          "offset": 8,
+          "requestHeaders": [
+            {"name": "Content-Type", "value": "application/octet-stream"},
+            {"name": "X-Apple-Upload-Chunk", "value": "1"}
+          ]
+        }
+      ],
+      "assetDeliveryState": {"state": "AWAITING_UPLOAD"}
+    },
+    "links": {"self": "https://api.appstoreconnect.apple.com/v1/appScreenshots/upload-asset-test-1"}
+  },
+  "links": {"self": "https://api.appstoreconnect.apple.com/v1/appScreenshots/upload-asset-test-1"}
+}
