@@ -1,0 +1,64 @@
+{
+  "data": [
+    {
+      "type": "builds",
+      "id": "9000000002",
+      "attributes": {
+        "version": "43",
+        "uploadedDate": "2025-04-20T14:32:11-07:00",
+        "expirationDate": "2025-07-19T14:32:11-07:00",
+        "expired": false,
+        "minOsVersion": "16.0",
+        "processingState": "VALID",
+        "usesNonExemptEncryption": false,
+        "buildAudienceType": "INTERNAL_ONLY"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/builds/9000000002"
+      }
+    },
+    {
+      "type": "builds",
+      "id": "9000000001",
+      "attributes": {
+        "version": "42",
+        "uploadedDate": "2025-04-15T10:00:00-07:00",
+        "expirationDate": "2025-07-14T10:00:00-07:00",
+        "expired": false,
+        "minOsVersion": "16.0",
+        "processingState": "VALID",
+        "usesNonExemptEncryption": false,
+        "buildAudienceType": "APP_STORE_ELIGIBLE"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/builds/9000000001"
+      }
+    },
+    {
+      "type": "builds",
+      "id": "9000000000",
+      "attributes": {
+        "version": "41",
+        "uploadedDate": "2025-01-10T08:00:00-08:00",
+        "expirationDate": "2025-04-10T08:00:00-07:00",
+        "expired": true,
+        "minOsVersion": "16.0",
+        "processingState": "VALID",
+        "usesNonExemptEncryption": false,
+        "buildAudienceType": "APP_STORE_ELIGIBLE"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/builds/9000000000"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps/1234567890/builds?limit=200"
+  },
+  "meta": {
+    "paging": {
+      "total": 3,
+      "limit": 200
+    }
+  }
+}
