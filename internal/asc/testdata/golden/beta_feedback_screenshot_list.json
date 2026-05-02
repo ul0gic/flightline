@@ -1,0 +1,79 @@
+{
+  "data": [
+    {
+      "type": "betaFeedbackScreenshotSubmissions",
+      "id": "SHOT-001",
+      "attributes": {
+        "createdDate": "2026-04-22T14:40:00Z",
+        "comment": "The save button is cut off on small screens.",
+        "email": "tester1@example.com",
+        "deviceModel": "iPhone15,3",
+        "osVersion": "iOS 19.0",
+        "locale": "en_US",
+        "timeZone": "America/Los_Angeles",
+        "architecture": "arm64",
+        "connectionType": "WIFI",
+        "appPlatform": "IOS",
+        "devicePlatform": "IOS",
+        "deviceFamily": "PHONE",
+        "buildBundleId": "com.example.alpha",
+        "screenshots": [
+          {
+            "url": "https://example-cdn.appstoreconnect.apple.com/screenshots/SHOT-001-a.png",
+            "width": 1170,
+            "height": 2532,
+            "expirationDate": "2026-04-23T14:40:00Z"
+          }
+        ]
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/betaFeedbackScreenshotSubmissions/SHOT-001"
+      }
+    },
+    {
+      "type": "betaFeedbackScreenshotSubmissions",
+      "id": "SHOT-002",
+      "attributes": {
+        "createdDate": "2026-04-15T09:20:00Z",
+        "comment": "Two screenshots: one before and one after I tapped Submit.",
+        "email": "tester2@example.com",
+        "deviceModel": "iPad13,11",
+        "osVersion": "iPadOS 19.0",
+        "locale": "en_GB",
+        "timeZone": "Europe/London",
+        "architecture": "arm64",
+        "connectionType": "CELL",
+        "appPlatform": "IOS",
+        "devicePlatform": "IOS",
+        "deviceFamily": "PAD",
+        "buildBundleId": "com.example.alpha",
+        "screenshots": [
+          {
+            "url": "https://example-cdn.appstoreconnect.apple.com/screenshots/SHOT-002-a.png",
+            "width": 2048,
+            "height": 2732,
+            "expirationDate": "2026-04-16T09:20:00Z"
+          },
+          {
+            "url": "https://example-cdn.appstoreconnect.apple.com/screenshots/SHOT-002-b.png",
+            "width": 2048,
+            "height": 2732,
+            "expirationDate": "2026-04-16T09:20:00Z"
+          }
+        ]
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/betaFeedbackScreenshotSubmissions/SHOT-002"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps/1234567890/betaFeedbackScreenshotSubmissions?limit=200"
+  },
+  "meta": {
+    "paging": {
+      "total": 2,
+      "limit": 200
+    }
+  }
+}

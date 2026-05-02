@@ -1,0 +1,15 @@
+{
+  "data": {
+    "type": "betaCrashLogs",
+    "id": "CRASH-001-LOG",
+    "attributes": {
+      "logText": "Incident Identifier: CRASH-001-LOG\nHardware Model:      iPhone15,3\nProcess:             ExampleAlpha [12345]\nException Type:      EXC_BAD_ACCESS (SIGSEGV)\nException Subtype:   KERN_INVALID_ADDRESS\n\nThread 0 Crashed:\n0   ExampleAlpha    0x0000000100123456 -[SettingsViewController viewDidLoad]\n1   UIKitCore       0x000000018abcdef0 -[UIViewController _sendViewDidLoadWithAppearanceProxyObjectTaggingEnabled]\n2   UIKitCore       0x000000018abcef00 -[UIViewController loadViewIfRequired]\n"
+    },
+    "links": {
+      "self": "https://api.appstoreconnect.apple.com/v1/betaFeedbackCrashSubmissions/CRASH-001/crashLog"
+    }
+  },
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/betaFeedbackCrashSubmissions/CRASH-001/crashLog"
+  }
+}

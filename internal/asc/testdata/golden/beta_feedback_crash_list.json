@@ -1,0 +1,64 @@
+{
+  "data": [
+    {
+      "type": "betaFeedbackCrashSubmissions",
+      "id": "CRASH-001",
+      "attributes": {
+        "createdDate": "2026-04-22T14:33:00Z",
+        "comment": "App crashed when I tapped the Settings tab.",
+        "email": "tester1@example.com",
+        "deviceModel": "iPhone15,3",
+        "osVersion": "iOS 19.0",
+        "locale": "en_US",
+        "timeZone": "America/Los_Angeles",
+        "architecture": "arm64",
+        "connectionType": "WIFI",
+        "appUptimeInMilliseconds": 12345,
+        "diskBytesAvailable": 53687091200,
+        "diskBytesTotal": 128849018880,
+        "batteryPercentage": 75,
+        "screenWidthInPoints": 393,
+        "screenHeightInPoints": 852,
+        "appPlatform": "IOS",
+        "devicePlatform": "IOS",
+        "deviceFamily": "PHONE",
+        "buildBundleId": "com.example.alpha"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/betaFeedbackCrashSubmissions/CRASH-001"
+      }
+    },
+    {
+      "type": "betaFeedbackCrashSubmissions",
+      "id": "CRASH-002",
+      "attributes": {
+        "createdDate": "2026-04-15T09:17:00Z",
+        "comment": "",
+        "email": "tester2@example.com",
+        "deviceModel": "iPad13,11",
+        "osVersion": "iPadOS 19.0",
+        "locale": "en_GB",
+        "timeZone": "Europe/London",
+        "architecture": "arm64",
+        "connectionType": "CELL",
+        "appUptimeInMilliseconds": 98765,
+        "appPlatform": "IOS",
+        "devicePlatform": "IOS",
+        "deviceFamily": "PAD",
+        "buildBundleId": "com.example.alpha"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/betaFeedbackCrashSubmissions/CRASH-002"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps/1234567890/betaFeedbackCrashSubmissions?limit=200"
+  },
+  "meta": {
+    "paging": {
+      "total": 2,
+      "limit": 200
+    }
+  }
+}
