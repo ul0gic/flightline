@@ -1,0 +1,10 @@
+{
+  "data": {
+    "type": "appCategories",
+    "id": "PRODUCTIVITY"
+  },
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/appInfos/9000000001/relationships/primaryCategory",
+    "related": "https://api.appstoreconnect.apple.com/v1/appInfos/9000000001/primaryCategory"
+  }
+}

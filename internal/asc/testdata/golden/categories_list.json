@@ -1,0 +1,43 @@
+{
+  "data": [
+    {
+      "type": "appCategories",
+      "id": "GAMES",
+      "attributes": {
+        "platforms": ["IOS", "MAC_OS", "TV_OS", "VISION_OS"]
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appCategories/GAMES"
+      }
+    },
+    {
+      "type": "appCategories",
+      "id": "PRODUCTIVITY",
+      "attributes": {
+        "platforms": ["IOS", "MAC_OS"]
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appCategories/PRODUCTIVITY"
+      }
+    },
+    {
+      "type": "appCategories",
+      "id": "PHOTO_AND_VIDEO",
+      "attributes": {
+        "platforms": ["IOS", "MAC_OS"]
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appCategories/PHOTO_AND_VIDEO"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/appCategories?filter%5Bplatforms%5D=IOS&exists%5Bparent%5D=false&limit=200"
+  },
+  "meta": {
+    "paging": {
+      "total": 3,
+      "limit": 200
+    }
+  }
+}
