@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "bundleId": "com.example.testapp",
+  "reportClass": "analytics",
+  "requestId": "REQ-CMD-1",
+  "submittedAt": "2026-05-01T12:00:00Z",
+  "lastPollAt": "2026-05-01T12:30:00Z",
+  "status": "processing",
+  "reports": [
+    {
+      "id": "RPT-A",
+      "name": "App Usage",
+      "category": "APP_USAGE"
+    },
+    {
+      "id": "RPT-B",
+      "name": "Commerce",
+      "category": "COMMERCE"
+    }
+  ],
+  "downloadedSegments": [
+    "SEG-1",
+    "SEG-2"
+  ]
+}

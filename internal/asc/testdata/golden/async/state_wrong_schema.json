@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 999,
+  "bundleId": "com.example.testapp",
+  "reportClass": "analytics",
+  "requestId": "REQ-CMD-1",
+  "submittedAt": "2026-05-01T12:00:00Z",
+  "status": "processing"
+}
