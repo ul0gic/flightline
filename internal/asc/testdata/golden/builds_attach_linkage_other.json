@@ -1,0 +1,9 @@
+{
+  "data": {
+    "type": "builds",
+    "id": "9000000041"
+  },
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/appStoreVersions/8000000001/relationships/build"
+  }
+}

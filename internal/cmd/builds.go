@@ -98,9 +98,22 @@ var buildsGetCmd = &cobra.Command{
   skipper builds get com.example.myapp --build 42 --output json | jq .attributes.processingState`,
 }
 
+var buildsAttachCmd = &cobra.Command{
+	Use:          "attach <bundleId>",
+	Short:        "Attach a build to an App Store version (idempotent: skip if already attached)",
+	SilenceUsage: true,
+	Args:         cobra.ExactArgs(1),
+	RunE:         runBuildsAttach,
+	Example: `  skipper builds attach com.example.myapp --version 1.0.1 --build 42
+  skipper builds attach com.example.myapp --version 1.0.1 --build 42 --platform IOS --output json`,
+}
+
 var (
-	buildsListLimit int
-	buildsGetBuild  string
+	buildsListLimit      int
+	buildsGetBuild       string
+	buildsAttachVersion  string
+	buildsAttachBuild    string
+	buildsAttachPlatform string
 )
 
 func init() {
@@ -109,8 +122,15 @@ func init() {
 	buildsGetCmd.Flags().StringVar(&buildsGetBuild, "build", "", "build number to fetch (CFBundleVersion, e.g. 42)")
 	_ = buildsGetCmd.MarkFlagRequired("build")
 
+	buildsAttachCmd.Flags().StringVar(&buildsAttachVersion, "version", "", "App Store version string the build is attached to (e.g. 1.0.1)")
+	buildsAttachCmd.Flags().StringVar(&buildsAttachBuild, "build", "", "build number to attach (CFBundleVersion, e.g. 42)")
+	buildsAttachCmd.Flags().StringVar(&buildsAttachPlatform, "platform", "IOS", "platform of the App Store version (IOS|MAC_OS|TV_OS|VISION_OS)")
+	_ = buildsAttachCmd.MarkFlagRequired("version")
+	_ = buildsAttachCmd.MarkFlagRequired("build")
+
 	buildsCmd.AddCommand(buildsListCmd)
 	buildsCmd.AddCommand(buildsGetCmd)
+	buildsCmd.AddCommand(buildsAttachCmd)
 	rootCmd.AddCommand(buildsCmd)
 }
 
@@ -188,4 +208,180 @@ func collectBuilds(ctx context.Context, c *asc.Client, path string, query url.Va
 		}
 	}
 	return out, nil
+}
+
+// BuildAttachResult is the JSON-stable envelope for `builds attach`.
+//
+// Fields:
+//   - Action is one of "attached" | "noop". "attached" means a PATCH was
+//     issued and Apple now points the version at this build; "noop" means
+//     the version was already attached to the same build and no PATCH was
+//     issued.
+//   - Changed is true iff a PATCH was issued.
+//   - Version / Build / VersionID / BuildID identify the involved resources
+//     so JSON consumers don't need a follow-up GET to know what got linked.
+type BuildAttachResult struct {
+	Action    string `json:"action"`
+	Changed   bool   `json:"changed"`
+	Version   string `json:"version"`
+	VersionID string `json:"versionId"`
+	Build     string `json:"build"`
+	BuildID   string `json:"buildId"`
+	Platform  string `json:"platform,omitempty"`
+}
+
+// TableRows implements TableRenderable for the attach result.
+func (r *BuildAttachResult) TableRows() (headers []string, rows [][]string) {
+	headers = []string{"FIELD", "VALUE"}
+	rows = [][]string{
+		{"ACTION", r.Action},
+		{"CHANGED", boolString(r.Changed)},
+		{"VERSION", r.Version},
+		{"VERSION_ID", r.VersionID},
+		{"BUILD", r.Build},
+		{"BUILD_ID", r.BuildID},
+		{"PLATFORM", r.Platform},
+	}
+	return headers, rows
+}
+
+// buildLinkageEnvelope is Apple's
+// `/v1/appStoreVersions/{id}/relationships/build` payload — both for GET
+// (current attached build, may be {"data": null}) and PATCH (new linkage).
+//
+// Apple's GET response surfaces ONLY the {type, id} ref, not the full Build
+// resource. That keeps the idempotency probe a single round-trip rather
+// than fetching the full build record.
+type buildLinkageEnvelope struct {
+	Data *buildLinkageRef `json:"data"`
+}
+
+// buildLinkageRef is the `{type:"builds", id:"..."}` ref used in linkage
+// payloads. Pointer to allow Apple's "no build attached" response (data:
+// null) to round-trip without false-positive matching.
+type buildLinkageRef struct {
+	Type string `json:"type"`
+	ID   string `json:"id"`
+}
+
+// runBuildsAttach implements `builds attach`. Idempotent path:
+//
+//  1. resolveAppID(bundleId)
+//  2. lookup version by --version + --platform → versionID
+//  3. lookup build by --build → buildID
+//  4. GET /v1/appStoreVersions/{versionID}/relationships/build
+//  5. if existing.id == buildID → action="noop", no PATCH
+//     else PATCH the same path with the new linkage → action="attached"
+//
+// Surfaces actionable typed errors when either lookup misses; "no build
+// found" / "no version found" name the bundleId and the failing identifier.
+func runBuildsAttach(cmd *cobra.Command, args []string) error {
+	bundleID := args[0]
+	versionStr := strings.TrimSpace(buildsAttachVersion)
+	buildNum := strings.TrimSpace(buildsAttachBuild)
+	platform := strings.TrimSpace(buildsAttachPlatform)
+	if versionStr == "" {
+		return fmt.Errorf("builds: --version is required")
+	}
+	if buildNum == "" {
+		return fmt.Errorf("builds: --build is required")
+	}
+
+	c, err := newClient()
+	if err != nil {
+		return err
+	}
+
+	appID, err := resolveAppID(cmd.Context(), c, bundleID)
+	if err != nil {
+		return err
+	}
+
+	versionView, err := lookupVersion(cmd.Context(), c, appID, versionStr, platform)
+	if err != nil {
+		return err
+	}
+	if versionView == nil {
+		return fmt.Errorf("builds: no version %q found for %q (platform=%s)", versionStr, bundleID, platform)
+	}
+
+	buildView, err := lookupBuild(cmd.Context(), c, appID, buildNum)
+	if err != nil {
+		return err
+	}
+	if buildView == nil {
+		return fmt.Errorf("builds: no build %q found for %q", buildNum, bundleID)
+	}
+
+	current, err := getAttachedBuild(cmd.Context(), c, versionView.ID)
+	if err != nil {
+		return err
+	}
+
+	result := &BuildAttachResult{
+		Version:   versionStr,
+		VersionID: versionView.ID,
+		Build:     buildNum,
+		BuildID:   buildView.ID,
+		Platform:  versionView.Attributes.Platform,
+	}
+
+	if current != nil && current.ID == buildView.ID {
+		result.Action = "noop"
+		result.Changed = false
+		return Render(result, outputMode())
+	}
+
+	body := buildLinkageEnvelope{Data: &buildLinkageRef{Type: "builds", ID: buildView.ID}}
+	if err := patchAttachedBuild(cmd.Context(), c, versionView.ID, body); err != nil {
+		return err
+	}
+	result.Action = "attached"
+	result.Changed = true
+	return Render(result, outputMode())
+}
+
+// lookupBuild is the same shape as lookupVersion (cmd/versions.go) but for
+// builds: returns (nil, nil) when no build with `version=<num>` exists for
+// the app. Centralized here so 3.1.3 callers stay simple.
+func lookupBuild(ctx context.Context, c *asc.Client, appID, buildNum string) (*BuildView, error) {
+	q := url.Values{
+		"filter[version]": {buildNum},
+		"limit":           {"1"},
+	}
+	page, err := asc.Get[asc.Collection[asc.BuildAttributes]](
+		ctx, c, "/v1/apps/"+appID+"/builds", q,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if len(page.Data) == 0 {
+		return nil, nil
+	}
+	return &BuildView{
+		ID:         page.Data[0].ID,
+		Type:       page.Data[0].Type,
+		Attributes: page.Data[0].Attributes,
+	}, nil
+}
+
+// getAttachedBuild GETs the linkage relationship on a version. Returns nil
+// when Apple's response is `{"data": null}` (no build attached yet).
+func getAttachedBuild(ctx context.Context, c *asc.Client, versionID string) (*buildLinkageRef, error) {
+	path := "/v1/appStoreVersions/" + url.PathEscape(versionID) + "/relationships/build"
+	resp, err := asc.Get[buildLinkageEnvelope](ctx, c, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// patchAttachedBuild PATCHes the linkage relationship. Apple returns 204
+// No Content on success; we don't need a typed return shape.
+func patchAttachedBuild(ctx context.Context, c *asc.Client, versionID string, body buildLinkageEnvelope) error {
+	path := "/v1/appStoreVersions/" + url.PathEscape(versionID) + "/relationships/build"
+	if _, err := asc.Patch[buildLinkageEnvelope](ctx, c, path, nil, body); err != nil {
+		return err
+	}
+	return nil
 }

@@ -1,0 +1,30 @@
+{
+  "data": [
+    {
+      "type": "builds",
+      "id": "9000000042",
+      "attributes": {
+        "version": "42",
+        "uploadedDate": "2025-04-15T10:00:00-07:00",
+        "expirationDate": "2025-07-14T10:00:00-07:00",
+        "expired": false,
+        "minOsVersion": "16.0",
+        "processingState": "VALID",
+        "usesNonExemptEncryption": false,
+        "buildAudienceType": "APP_STORE_ELIGIBLE"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/builds/9000000042"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps/1234567890/builds?filter%5Bversion%5D=42&limit=1"
+  },
+  "meta": {
+    "paging": {
+      "total": 1,
+      "limit": 1
+    }
+  }
+}

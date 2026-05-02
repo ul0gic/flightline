@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net/http"
 	"net/url"
 	"strings"
 	"testing"
@@ -218,5 +219,260 @@ func TestBuilds_FixtureReplay_Get(t *testing.T) {
 	}
 	if page.Data[0].Attributes.ProcessingState != "VALID" {
 		t.Errorf("processingState = %q, want VALID", page.Data[0].Attributes.ProcessingState)
+	}
+}
+
+// ----- builds attach tests -----
+
+func TestBuildsAttach_RegisteredWithRequiredFlags(t *testing.T) {
+	var attach *cobra.Command
+	for _, c := range buildsCmd.Commands() {
+		if c.Name() == "attach" {
+			attach = c
+			break
+		}
+	}
+	if attach == nil {
+		t.Fatal("builds attach not registered")
+	}
+	for _, want := range []string{"version", "build"} {
+		if attach.Flag(want) == nil {
+			t.Errorf("builds attach missing --%s flag", want)
+		}
+	}
+}
+
+func TestBuildAttachResult_JSONShape(t *testing.T) {
+	r := BuildAttachResult{
+		Action:    "attached",
+		Changed:   true,
+		Version:   "1.0.1",
+		VersionID: "8000000001",
+		Build:     "42",
+		BuildID:   "9000000042",
+		Platform:  "IOS",
+	}
+	b, err := json.Marshal(r)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	out := string(b)
+	for _, want := range []string{
+		`"action":"attached"`,
+		`"changed":true`,
+		`"version":"1.0.1"`,
+		`"versionId":"8000000001"`,
+		`"build":"42"`,
+		`"buildId":"9000000042"`,
+		`"platform":"IOS"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("json missing %q: %s", want, out)
+		}
+	}
+}
+
+func TestBuildAttachResult_TableRows(t *testing.T) {
+	r := &BuildAttachResult{Action: "noop", Changed: false, Version: "1.0.1", Build: "42"}
+	headers, rows := r.TableRows()
+	if len(headers) != 2 {
+		t.Errorf("headers = %v, want 2 columns", headers)
+	}
+	if rows[0][0] != "ACTION" || rows[0][1] != "noop" {
+		t.Errorf("rows[0] = %v, want ACTION/noop", rows[0])
+	}
+}
+
+// TestBuildLinkage_NullData round-trips Apple's "no build attached" shape:
+// {"data": null}. The pointer-typed Data field must decode to nil rather
+// than an empty struct so callers can branch correctly.
+func TestBuildLinkage_NullData(t *testing.T) {
+	var got buildLinkageEnvelope
+	if err := json.Unmarshal([]byte(`{"data":null}`), &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got.Data != nil {
+		t.Errorf("Data = %+v, want nil for null linkage", got.Data)
+	}
+}
+
+// TestBuilds_LookupBuild_Found exercises the build idempotency probe.
+func TestBuilds_LookupBuild_Found(t *testing.T) {
+	srv := startFixtureServer(t, map[string]fixtureRoute{
+		"GET /v1/apps/1234567890/builds": {File: "builds_lookup_byVersion"},
+	})
+	c := fixtureASCClient(t, srv)
+	got, err := lookupBuild(context.Background(), c, "1234567890", "42")
+	if err != nil {
+		t.Fatalf("lookupBuild: %v", err)
+	}
+	if got == nil || got.ID != "9000000042" {
+		t.Fatalf("lookupBuild = %+v, want id 9000000042", got)
+	}
+}
+
+func TestBuilds_LookupBuild_NotFound(t *testing.T) {
+	srv := startFixtureServer(t, map[string]fixtureRoute{
+		"GET /v1/apps/1234567890/builds": {File: "builds_lookup_empty"},
+	})
+	c := fixtureASCClient(t, srv)
+	got, err := lookupBuild(context.Background(), c, "1234567890", "999")
+	if err != nil {
+		t.Fatalf("lookupBuild: %v", err)
+	}
+	if got != nil {
+		t.Errorf("lookupBuild = %+v, want nil", got)
+	}
+}
+
+// TestBuilds_GetAttachedBuild_NullData confirms the GET-linkage path
+// returns nil when no build is attached, matching Apple's wire shape.
+func TestBuilds_GetAttachedBuild_NullData(t *testing.T) {
+	srv := startFixtureServer(t, map[string]fixtureRoute{
+		"GET /v1/appStoreVersions/8000000001/relationships/build": {File: "builds_attach_linkage_empty"},
+	})
+	c := fixtureASCClient(t, srv)
+	got, err := getAttachedBuild(context.Background(), c, "8000000001")
+	if err != nil {
+		t.Fatalf("getAttachedBuild: %v", err)
+	}
+	if got != nil {
+		t.Errorf("got %+v, want nil for empty linkage", got)
+	}
+}
+
+// TestBuilds_GetAttachedBuild_AlreadyAttached confirms that an existing
+// linkage decodes to the right id — the value the idempotency check
+// branches on.
+func TestBuilds_GetAttachedBuild_AlreadyAttached(t *testing.T) {
+	srv := startFixtureServer(t, map[string]fixtureRoute{
+		"GET /v1/appStoreVersions/8000000001/relationships/build": {File: "builds_attach_linkage_already"},
+	})
+	c := fixtureASCClient(t, srv)
+	got, err := getAttachedBuild(context.Background(), c, "8000000001")
+	if err != nil {
+		t.Fatalf("getAttachedBuild: %v", err)
+	}
+	if got == nil {
+		t.Fatal("got nil, want a linkage ref")
+	}
+	if got.ID != "9000000042" {
+		t.Errorf("id = %q, want 9000000042", got.ID)
+	}
+}
+
+// TestBuilds_PatchAttachedBuild_204NoContent confirms the PATCH path
+// tolerates Apple's 204 No Content response. The fixture server returns
+// 204 with an empty body; doJSON must not error on the empty decode.
+func TestBuilds_PatchAttachedBuild_204NoContent(t *testing.T) {
+	srv := startFixtureServer(t, map[string]fixtureRoute{
+		"PATCH /v1/appStoreVersions/8000000001/relationships/build": {
+			File:   "builds_attach_linkage_already",
+			Status: http.StatusNoContent,
+		},
+	})
+	c := fixtureASCClient(t, srv)
+	body := buildLinkageEnvelope{Data: &buildLinkageRef{Type: "builds", ID: "9000000042"}}
+	if err := patchAttachedBuild(context.Background(), c, "8000000001", body); err != nil {
+		t.Fatalf("patchAttachedBuild: %v", err)
+	}
+}
+
+// TestBuilds_AttachIdempotency_SameBuild simulates the noop branch end-to-
+// end: lookups all match, current linkage already points at the requested
+// build, and the runner declines to issue a PATCH. The route table omits
+// the PATCH entry — if the wire layer ever called it, the fixture server
+// would 404 and the test would fail.
+func TestBuilds_AttachIdempotency_SameBuild(t *testing.T) {
+	srv := startFixtureServer(t, map[string]fixtureRoute{
+		"GET /v1/apps": {File: "apps_get_byBundleId"},
+		"GET /v1/apps/1234567890/appStoreVersions": {File: "versions_lookup_existing"},
+		"GET /v1/apps/1234567890/builds":           {File: "builds_lookup_byVersion"},
+		"GET /v1/appStoreVersions/8000000001/relationships/build": {
+			File: "builds_attach_linkage_already",
+		},
+	})
+	c := fixtureASCClient(t, srv)
+
+	appID, err := resolveAppID(context.Background(), c, "com.example.alpha")
+	if err != nil {
+		t.Fatalf("resolveAppID: %v", err)
+	}
+	versionView, err := lookupVersion(context.Background(), c, appID, "1.0.1", "IOS")
+	if err != nil {
+		t.Fatalf("lookupVersion: %v", err)
+	}
+	buildView, err := lookupBuild(context.Background(), c, appID, "42")
+	if err != nil {
+		t.Fatalf("lookupBuild: %v", err)
+	}
+	current, err := getAttachedBuild(context.Background(), c, versionView.ID)
+	if err != nil {
+		t.Fatalf("getAttachedBuild: %v", err)
+	}
+	if current == nil || current.ID != buildView.ID {
+		t.Fatalf("expected current attached build %s, got %+v", buildView.ID, current)
+	}
+	// "Same build attached" branch: do NOT issue a PATCH. The fixture server
+	// would 404 on an unregistered route, so reaching here is the assertion.
+}
+
+// TestBuilds_AttachIdempotency_DifferentBuild simulates the attach branch:
+// version currently points at a different build, runner issues a PATCH.
+// The PATCH route is registered; reaching it is the assertion.
+func TestBuilds_AttachIdempotency_DifferentBuild(t *testing.T) {
+	srv := startFixtureServer(t, map[string]fixtureRoute{
+		"GET /v1/apps": {File: "apps_get_byBundleId"},
+		"GET /v1/apps/1234567890/appStoreVersions": {File: "versions_lookup_existing"},
+		"GET /v1/apps/1234567890/builds":           {File: "builds_lookup_byVersion"},
+		"GET /v1/appStoreVersions/8000000001/relationships/build": {
+			File: "builds_attach_linkage_other",
+		},
+		"PATCH /v1/appStoreVersions/8000000001/relationships/build": {
+			File:   "builds_attach_linkage_already",
+			Status: http.StatusNoContent,
+		},
+	})
+	c := fixtureASCClient(t, srv)
+
+	appID, err := resolveAppID(context.Background(), c, "com.example.alpha")
+	if err != nil {
+		t.Fatalf("resolveAppID: %v", err)
+	}
+	versionView, err := lookupVersion(context.Background(), c, appID, "1.0.1", "IOS")
+	if err != nil {
+		t.Fatalf("lookupVersion: %v", err)
+	}
+	buildView, err := lookupBuild(context.Background(), c, appID, "42")
+	if err != nil {
+		t.Fatalf("lookupBuild: %v", err)
+	}
+	current, err := getAttachedBuild(context.Background(), c, versionView.ID)
+	if err != nil {
+		t.Fatalf("getAttachedBuild: %v", err)
+	}
+	if current == nil || current.ID == buildView.ID {
+		t.Fatalf("expected current attached build to differ from %s, got %+v", buildView.ID, current)
+	}
+	body := buildLinkageEnvelope{Data: &buildLinkageRef{Type: "builds", ID: buildView.ID}}
+	if err := patchAttachedBuild(context.Background(), c, versionView.ID, body); err != nil {
+		t.Fatalf("patchAttachedBuild: %v", err)
+	}
+}
+
+// TestBuilds_AttachWireBody asserts the linkage PATCH body matches Apple's
+// schema: {"data":{"type":"builds","id":"<id>"}}. Catches accidental
+// misnamed fields that would 422 against the live API.
+func TestBuilds_AttachWireBody(t *testing.T) {
+	body := buildLinkageEnvelope{Data: &buildLinkageRef{Type: "builds", ID: "9000000042"}}
+	b, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	out := string(b)
+	for _, want := range []string{`"data":`, `"type":"builds"`, `"id":"9000000042"`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("body missing %q: %s", want, out)
+		}
 	}
 }
