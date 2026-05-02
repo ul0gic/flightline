@@ -1,0 +1,12 @@
+{
+  "data": [],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/AC000000001/appScreenshotSets?filter%5BscreenshotDisplayType%5D=APP_IPHONE_67&limit=1"
+  },
+  "meta": {
+    "paging": {
+      "total": 0,
+      "limit": 1
+    }
+  }
+}

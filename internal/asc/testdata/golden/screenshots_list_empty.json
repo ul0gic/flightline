@@ -1,0 +1,12 @@
+{
+  "data": [],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/appScreenshotSets/SS000000001/appScreenshots?limit=200"
+  },
+  "meta": {
+    "paging": {
+      "total": 0,
+      "limit": 200
+    }
+  }
+}

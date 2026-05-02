@@ -1,0 +1,15 @@
+{
+  "data": {
+    "type": "appScreenshotSets",
+    "id": "SS000000002",
+    "attributes": {
+      "screenshotDisplayType": "APP_IPHONE_67"
+    },
+    "links": {
+      "self": "https://api.appstoreconnect.apple.com/v1/appScreenshotSets/SS000000002"
+    }
+  },
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/appScreenshotSets/SS000000002"
+  }
+}

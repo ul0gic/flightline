@@ -1,0 +1,23 @@
+{
+  "data": [
+    {
+      "type": "appScreenshotSets",
+      "id": "SS000000001",
+      "attributes": {
+        "screenshotDisplayType": "APP_IPHONE_67"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appScreenshotSets/SS000000001"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/AC000000001/appScreenshotSets?filter%5BscreenshotDisplayType%5D=APP_IPHONE_67&limit=1"
+  },
+  "meta": {
+    "paging": {
+      "total": 1,
+      "limit": 1
+    }
+  }
+}

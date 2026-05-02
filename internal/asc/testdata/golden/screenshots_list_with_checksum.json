@@ -1,0 +1,37 @@
+{
+  "data": [
+    {
+      "type": "appScreenshots",
+      "id": "SH000000001",
+      "attributes": {
+        "fileName": "01.png",
+        "fileSize": 1234,
+        "sourceFileChecksum": "0cbc6611f5540bd0809a388dc95a615b"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appScreenshots/SH000000001"
+      }
+    },
+    {
+      "type": "appScreenshots",
+      "id": "SH000000002",
+      "attributes": {
+        "fileName": "02.png",
+        "fileSize": 5678,
+        "sourceFileChecksum": "5d41402abc4b2a76b9719d911017c592"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appScreenshots/SH000000002"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/appScreenshotSets/SS000000001/appScreenshots?limit=200"
+  },
+  "meta": {
+    "paging": {
+      "total": 2,
+      "limit": 200
+    }
+  }
+}
