@@ -191,7 +191,7 @@ func LoadAsyncState(bundleID string, reportClass ReportClass) (AsyncState, error
 
 	var state AsyncState
 	if err := json.Unmarshal(buf, &state); err != nil {
-		return AsyncState{}, fmt.Errorf("%w: %s: %v", ErrStateCorrupt, path, err)
+		return AsyncState{}, fmt.Errorf("%w: %s: %w", ErrStateCorrupt, path, err)
 	}
 	if state.SchemaVersion == 0 || state.SchemaVersion > AsyncStateSchemaVersion {
 		return AsyncState{}, fmt.Errorf(

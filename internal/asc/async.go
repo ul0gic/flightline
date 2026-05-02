@@ -332,49 +332,8 @@ func (c *Client) PollAnalyticsReport(ctx context.Context, id RequestID, opts Pol
 		attempts := 0
 
 		for {
-			// Check cancellation first so a ctx that's already cancelled exits
-			// without firing a wasted HTTP request.
-			if err := ctx.Err(); err != nil {
-				yield(AnalyticsReport{}, err)
-				return
-			}
-
-			// 1. Re-fetch the request so we can detect stoppedDueToInactivity.
-			reqInfo, err := c.getAnalyticsRequest(ctx, id)
-			if err != nil {
-				yield(AnalyticsReport{}, err)
-				return
-			}
-			if reqInfo.StoppedDueToInactivity {
-				yield(AnalyticsReport{}, ErrAnalyticsRequestStopped)
-				return
-			}
-
-			// 2. List reports on the request. New ones (not in `seen`) yield.
-			reports, err := c.listReportsForRequest(ctx, id)
-			if err != nil {
-				yield(AnalyticsReport{}, err)
-				return
-			}
-			progressed := false
-			for _, r := range reports {
-				if _, dup := seen[r.ID]; dup {
-					continue
-				}
-				seen[r.ID] = struct{}{}
-				progressed = true
-				if !yield(r, nil) {
-					return
-				}
-			}
-
-			// 3. ONE_TIME_SNAPSHOT: once we have ANY reports and a follow-up
-			// poll yields no new ones, stop. We can't distinguish "more
-			// reports coming" from "all delivered" from the response alone,
-			// so the heuristic is: after first non-empty page, one quiet
-			// follow-up = done. ONGOING never auto-terminates here; caller
-			// drives termination via ctx or stoppedDueToInactivity.
-			if reqInfo.AccessType == AccessTypeOneTimeSnapshot && len(seen) > 0 && !progressed {
+			done, err := c.runPollStep(ctx, id, seen, yield)
+			if err != nil || done {
 				return
 			}
 
@@ -383,20 +342,109 @@ func (c *Client) PollAnalyticsReport(ctx context.Context, id RequestID, opts Pol
 				return
 			}
 
-			// 4. Sleep with backoff, but wake on ctx cancel.
-			select {
-			case <-ctx.Done():
-				yield(AnalyticsReport{}, ctx.Err())
+			if !sleepWithCancel(ctx, backoff, yield) {
 				return
-			case <-time.After(backoff):
 			}
-			next := time.Duration(float64(backoff) * o.Multiplier)
-			if next > o.MaxBackoff {
-				next = o.MaxBackoff
-			}
-			backoff = next
+			backoff = nextBackoff(backoff, o.Multiplier, o.MaxBackoff)
 		}
 	}
+}
+
+// pollStepDone signals that the iterator should terminate without an error
+// (either a ONE_TIME_SNAPSHOT request reached its quiet follow-up or the
+// caller broke out via the yield callback returning false).
+//
+// runPollStep performs one poll iteration: re-fetches the parent request to
+// honour stoppedDueToInactivity, lists current reports, yields any new
+// ones, and reports back whether the iterator should terminate.
+//
+// Returns (done=true, nil) when the loop should end cleanly. Returns
+// (done=false, err!=nil) when an error was already yielded and the caller
+// should also terminate. Returns (done=false, err=nil) when the caller
+// should sleep and retry.
+func (c *Client) runPollStep(
+	ctx context.Context,
+	id RequestID,
+	seen map[ReportID]struct{},
+	yield func(AnalyticsReport, error) bool,
+) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		yield(AnalyticsReport{}, err)
+		return false, err
+	}
+
+	reqInfo, err := c.getAnalyticsRequest(ctx, id)
+	if err != nil {
+		yield(AnalyticsReport{}, err)
+		return false, err
+	}
+	if reqInfo.StoppedDueToInactivity {
+		yield(AnalyticsReport{}, ErrAnalyticsRequestStopped)
+		return false, ErrAnalyticsRequestStopped
+	}
+
+	reports, err := c.listReportsForRequest(ctx, id)
+	if err != nil {
+		yield(AnalyticsReport{}, err)
+		return false, err
+	}
+
+	progressed, halted := yieldNewReports(reports, seen, yield)
+	if halted {
+		return true, nil
+	}
+
+	// ONE_TIME_SNAPSHOT terminates the iterator after the first quiet
+	// follow-up: we have at least one report and the latest poll
+	// produced no new ones. ONGOING stays alive until ctx cancels or
+	// Apple flips stoppedDueToInactivity.
+	if reqInfo.AccessType == AccessTypeOneTimeSnapshot && len(seen) > 0 && !progressed {
+		return true, nil
+	}
+	return false, nil
+}
+
+// yieldNewReports drains a fresh report list against the de-dup set,
+// yielding each previously-unseen report exactly once. progressed is true
+// when at least one new report was yielded; halted is true when the caller
+// returned false from yield (caller wants to stop).
+func yieldNewReports(
+	reports []AnalyticsReport,
+	seen map[ReportID]struct{},
+	yield func(AnalyticsReport, error) bool,
+) (progressed, halted bool) {
+	for _, r := range reports {
+		if _, dup := seen[r.ID]; dup {
+			continue
+		}
+		seen[r.ID] = struct{}{}
+		progressed = true
+		if !yield(r, nil) {
+			return progressed, true
+		}
+	}
+	return progressed, false
+}
+
+// sleepWithCancel blocks for d, returning false (and yielding ctx.Err())
+// when the context cancels before the timer fires.
+func sleepWithCancel(ctx context.Context, d time.Duration, yield func(AnalyticsReport, error) bool) bool {
+	select {
+	case <-ctx.Done():
+		yield(AnalyticsReport{}, ctx.Err())
+		return false
+	case <-time.After(d):
+		return true
+	}
+}
+
+// nextBackoff applies the multiplier and clamps to max.
+func nextBackoff(current time.Duration, multiplier float64, maxBackoff time.Duration) time.Duration {
+	next := time.Duration(float64(current) * multiplier)
+	if next > maxBackoff {
+		return maxBackoff
+	}
+	return next
 }
 
 // getAnalyticsRequest hydrates the parent request resource so we can read
