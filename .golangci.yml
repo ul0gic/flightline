@@ -1,0 +1,62 @@
+version: "2"
+
+run:
+  timeout: 5m
+  go: "1.26"
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - bodyclose
+    - errcheck
+    - errorlint
+    - gocritic
+    - gocyclo
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - revive
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+  settings:
+    gocyclo:
+      min-complexity: 15
+    errorlint:
+      errorf: true
+      asserts: true
+      comparison: true
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+    revive:
+      severity: warning
+    gosec:
+      excludes:
+        - G104  # already covered by errcheck
+  exclusions:
+    paths:
+      - internal/api
+    rules:
+      - path: _test\.go
+        linters:
+          - gosec
+          - gocyclo
+          - errcheck
+          - unparam
+      - path: \.gen\.go$
+        linters:
+          - errcheck
+          - gocritic
+          - revive
+          - gosec
+          - unparam
+          - unused
+          - staticcheck
+          - gocyclo
+          - bodyclose

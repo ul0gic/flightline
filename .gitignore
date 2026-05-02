@@ -1,0 +1,24 @@
+# Internal scaffolding — never ships with the repo
+.claude/
+.project/
+
+# Build output
+/bin/
+*.exe
+
+# Coverage
+coverage.out
+coverage.html
+
+# Editor / OS
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Credentials — defense in depth (creds live at ~/.appstoreconnect/, not in repo)
+*.p8
+.env
+.env.*
+!.env.example
