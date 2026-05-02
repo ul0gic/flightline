@@ -136,7 +136,7 @@ func Patch[T any](ctx context.Context, c *Client, path string, query url.Values,
 // Delete issues a DELETE. Apple typically returns 204 No Content on success;
 // any 2xx is treated as success and no body is decoded.
 func (c *Client) Delete(ctx context.Context, path string, query url.Values) error {
-	resp, err := c.do(ctx, http.MethodDelete, path, query, nil)
+	resp, err := c.do(ctx, http.MethodDelete, path, query, nil, "")
 	if err != nil {
 		return err
 	}
@@ -153,7 +153,7 @@ func (c *Client) Delete(ctx context.Context, path string, query url.Values) erro
 // typed verb helper.
 func doJSON[T any](ctx context.Context, c *Client, method, path string, query url.Values, body any) (T, error) {
 	var zero T
-	resp, err := c.do(ctx, method, path, query, body)
+	resp, err := c.do(ctx, method, path, query, body, "")
 	if err != nil {
 		return zero, err
 	}
@@ -178,7 +178,12 @@ func doJSON[T any](ctx context.Context, c *Client, method, path string, query ur
 // do is the inner request executor. It builds the request, mints a fresh JWT,
 // sets headers, and returns the *http.Response without touching the body.
 // Caller owns Close.
-func (c *Client) do(ctx context.Context, method, path string, query url.Values, body any) (*http.Response, error) {
+//
+// accept lets callers override the Accept header. Pass "" for the default
+// "application/json"; pass "application/a-gzip" for endpoints that stream
+// gzipped reports (sales, finance) — Apple returns 406 for those when Accept
+// is JSON.
+func (c *Client) do(ctx context.Context, method, path string, query url.Values, body any, accept string) (*http.Response, error) {
 	target, err := c.buildURL(path, query)
 	if err != nil {
 		return nil, err
@@ -202,9 +207,12 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 	if err != nil {
 		return nil, fmt.Errorf("asc: mint JWT: %w", err)
 	}
+	if accept == "" {
+		accept = "application/json"
+	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("User-Agent", c.userAgent)
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept", accept)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

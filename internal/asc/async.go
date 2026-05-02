@@ -745,7 +745,7 @@ func (c *Client) FetchFinanceReport(ctx context.Context, params FinanceReportPar
 // uses the JWT-injecting *Client.do — Apple's report endpoints are
 // authenticated and live on api.appstoreconnect.apple.com.
 func (c *Client) fetchGzipReport(ctx context.Context, path string, query url.Values) ([]byte, error) {
-	resp, err := c.do(ctx, http.MethodGet, path, query, nil)
+	resp, err := c.do(ctx, http.MethodGet, path, query, nil, "application/a-gzip")
 	if err != nil {
 		return nil, err
 	}
