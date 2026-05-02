@@ -67,18 +67,57 @@ var privacyLabelsGetCmd = &cobra.Command{
   skipper privacy-labels get com.example.myapp --output json | jq .supported`,
 }
 
+// privacyLabelsSetCmd is the write-side companion of privacy-labels get.
+// Apple's ASC API v4.3 has no appPrivacyDetails surface, so set returns
+// the same typed diagnostic as get rather than fabricating an endpoint.
+// See ISSUE-002.
+var privacyLabelsSetCmd = &cobra.Command{
+	Use:          "set <bundleId>",
+	Short:        "Set privacy nutrition labels (currently unsupported by ASC API)",
+	SilenceUsage: true,
+	Args:         cobra.ExactArgs(1),
+	RunE:         runPrivacyLabelsSet,
+	Long: `set would PATCH an app's privacy nutrition labels. Apple's App Store Connect
+API v4.3 does not expose this surface — labels are authored exclusively in
+App Store Connect's web UI.
+
+This command returns a typed diagnostic so callers can detect the
+unsupported state programmatically (` + "`.supported == false`" + `). When Apple
+ships an API endpoint, set will be wired without changing the JSON contract.
+
+See ISSUE-002 in .project/issues/.`,
+	Example: `  skipper privacy-labels set com.example.myapp --from labels.yaml
+  skipper privacy-labels set com.example.myapp --output json | jq .supported`,
+}
+
+// privacyLabelsSetFrom is accepted but unused — kept on the surface so the
+// flag exists when Apple eventually ships the endpoint and the JSON
+// contract stays forward-compatible.
+var privacyLabelsSetFrom string
+
 func init() {
+	privacyLabelsSetCmd.Flags().StringVar(&privacyLabelsSetFrom, "from", "", "(reserved) path to YAML/JSON describing the labels — see ISSUE-002")
+
 	privacyLabelsCmd.AddCommand(privacyLabelsGetCmd)
+	privacyLabelsCmd.AddCommand(privacyLabelsSetCmd)
 	rootCmd.AddCommand(privacyLabelsCmd)
 }
 
-func runPrivacyLabelsGet(_ *cobra.Command, args []string) error {
-	bundleID := args[0]
-	view := &PrivacyLabelsView{
+// privacyLabelsDiagnostic is the canonical "unsupported" view returned by
+// both get and set. Centralizing it keeps the JSON contract identical.
+func privacyLabelsDiagnostic(bundleID string) *PrivacyLabelsView {
+	return &PrivacyLabelsView{
 		BundleID:  bundleID,
 		Supported: false,
 		Reason:    "App Store Connect API v4.3 does not expose appPrivacyDetails. Manage privacy nutrition labels via App Store Connect web UI.",
 		Reference: "https://developer.apple.com/app-store/app-privacy-details/",
 	}
-	return Render(view, outputMode())
+}
+
+func runPrivacyLabelsGet(_ *cobra.Command, args []string) error {
+	return Render(privacyLabelsDiagnostic(args[0]), outputMode())
+}
+
+func runPrivacyLabelsSet(_ *cobra.Command, args []string) error {
+	return Render(privacyLabelsDiagnostic(args[0]), outputMode())
 }
