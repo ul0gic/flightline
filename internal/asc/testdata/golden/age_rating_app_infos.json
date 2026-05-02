@@ -1,0 +1,33 @@
+{
+  "data": [
+    {
+      "type": "appInfos",
+      "id": "9000000001",
+      "attributes": {
+        "state": "PREPARE_FOR_SUBMISSION"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appInfos/9000000001"
+      }
+    },
+    {
+      "type": "appInfos",
+      "id": "9000000000",
+      "attributes": {
+        "state": "READY_FOR_DISTRIBUTION"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appInfos/9000000000"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps/1234567890/appInfos?limit=50"
+  },
+  "meta": {
+    "paging": {
+      "total": 2,
+      "limit": 50
+    }
+  }
+}

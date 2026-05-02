@@ -1,0 +1,37 @@
+{
+  "data": {
+    "type": "ageRatingDeclarations",
+    "id": "AAAA0000-0000-0000-0000-000000000001",
+    "attributes": {
+      "advertising": false,
+      "ageAssurance": false,
+      "alcoholTobaccoOrDrugUseOrReferences": "NONE",
+      "contests": "NONE",
+      "gambling": false,
+      "gamblingSimulated": "NONE",
+      "gunsOrOtherWeapons": "NONE",
+      "healthOrWellnessTopics": false,
+      "horrorOrFearThemes": "NONE",
+      "kidsAgeBand": null,
+      "lootBox": false,
+      "matureOrSuggestiveThemes": "NONE",
+      "medicalOrTreatmentInformation": "NONE",
+      "messagingAndChat": false,
+      "parentalControls": false,
+      "profanityOrCrudeHumor": "INFREQUENT_OR_MILD",
+      "sexualContentGraphicAndNudity": "NONE",
+      "sexualContentOrNudity": "NONE",
+      "unrestrictedWebAccess": false,
+      "userGeneratedContent": false,
+      "violenceCartoonOrFantasy": "INFREQUENT_OR_MILD",
+      "violenceRealistic": "NONE",
+      "violenceRealisticProlongedGraphicOrSadistic": "NONE",
+      "ageRatingOverrideV2": "NONE",
+      "koreaAgeRatingOverride": "NONE",
+      "developerAgeRatingInfoUrl": ""
+    },
+    "links": {
+      "self": "https://api.appstoreconnect.apple.com/v1/ageRatingDeclarations/AAAA0000-0000-0000-0000-000000000001"
+    }
+  }
+}
