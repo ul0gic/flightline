@@ -1,0 +1,37 @@
+{
+  "data": [
+    {
+      "type": "appCustomProductPageVersions",
+      "id": "CPPV-1",
+      "attributes": {
+        "version": "1",
+        "state": "REPLACED_WITH_NEW_VERSION",
+        "deepLink": "myapp://promo/holiday"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appCustomProductPageVersions/CPPV-1"
+      }
+    },
+    {
+      "type": "appCustomProductPageVersions",
+      "id": "CPPV-2",
+      "attributes": {
+        "version": "2",
+        "state": "APPROVED",
+        "deepLink": "myapp://promo/holiday"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appCustomProductPageVersions/CPPV-2"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/appCustomProductPages/CPP-1/appCustomProductPageVersions?limit=50"
+  },
+  "meta": {
+    "paging": {
+      "total": 2,
+      "limit": 50
+    }
+  }
+}

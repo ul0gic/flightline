@@ -1,0 +1,35 @@
+{
+  "data": [
+    {
+      "type": "appCustomProductPageLocalizations",
+      "id": "CPPL-EN",
+      "attributes": {
+        "locale": "en-US",
+        "promotionalText": "Limited time holiday savings — get 50% off Pro through January!"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appCustomProductPageLocalizations/CPPL-EN"
+      }
+    },
+    {
+      "type": "appCustomProductPageLocalizations",
+      "id": "CPPL-FR",
+      "attributes": {
+        "locale": "fr-FR",
+        "promotionalText": "Offre limitée — économisez 50% sur Pro jusqu'en janvier !"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appCustomProductPageLocalizations/CPPL-FR"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/appCustomProductPageVersions/CPPV-2/appCustomProductPageLocalizations?limit=200"
+  },
+  "meta": {
+    "paging": {
+      "total": 2,
+      "limit": 200
+    }
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "data": [
+    {
+      "type": "appCustomProductPages",
+      "id": "CPP-1",
+      "attributes": {
+        "name": "Holiday Promo",
+        "url": "https://apps.apple.com/app/id1234567890?ppid=CPP-1",
+        "visible": true
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appCustomProductPages/CPP-1"
+      }
+    },
+    {
+      "type": "appCustomProductPages",
+      "id": "CPP-2",
+      "attributes": {
+        "name": "Spring Onboarding",
+        "url": "https://apps.apple.com/app/id1234567890?ppid=CPP-2",
+        "visible": false
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appCustomProductPages/CPP-2"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/apps/1234567890/appCustomProductPages?limit=200"
+  },
+  "meta": {
+    "paging": {
+      "total": 2,
+      "limit": 200
+    }
+  }
+}
