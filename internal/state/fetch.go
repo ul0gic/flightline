@@ -71,7 +71,7 @@ func Fetch(ctx context.Context, c *asc.Client, bundleID string, opts FetchOpts) 
 	out.Spec.Version = projectVersion(versionAttrs)
 
 	// Categories / age rating live on appInfo; pull the editable one.
-	appInfoID, _, err := fetchEditableAppInfo(ctx, c, appID)
+	appInfoID, err := fetchEditableAppInfo(ctx, c, appID)
 	if err == nil && appInfoID != "" {
 		if ar, ferr := fetchAgeRating(ctx, c, appInfoID); ferr == nil {
 			out.Spec.AgeRating = projectAgeRating(ar)
@@ -227,25 +227,28 @@ func fetchVersion(ctx context.Context, c *asc.Client, appID, versionStr, platfor
 	return page.Data[0].Attributes, page.Data[0].ID, nil
 }
 
-func fetchEditableAppInfo(ctx context.Context, c *asc.Client, appID string) (appInfoID, state string, err error) {
+// fetchEditableAppInfo returns the appInfo resource ID for the
+// editable lifecycle state on this app. Falls back to the first
+// appInfo when no editable one exists.
+func fetchEditableAppInfo(ctx context.Context, c *asc.Client, appID string) (string, error) {
 	q := url.Values{"limit": {"50"}}
 	page, err := asc.Get[asc.Collection[asc.AppInfoAttributes]](
 		ctx, c, "/v1/apps/"+appID+"/appInfos", q,
 	)
 	if err != nil {
-		return "", "", fmt.Errorf("state: list appInfos: %w", err)
+		return "", fmt.Errorf("state: list appInfos: %w", err)
 	}
 	for _, r := range page.Data {
 		switch r.Attributes.State {
 		case "PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED",
 			"METADATA_REJECTED", "WAITING_FOR_REVIEW", "IN_REVIEW":
-			return r.ID, r.Attributes.State, nil
+			return r.ID, nil
 		}
 	}
 	if len(page.Data) > 0 {
-		return page.Data[0].ID, page.Data[0].Attributes.State, nil
+		return page.Data[0].ID, nil
 	}
-	return "", "", nil
+	return "", nil
 }
 
 func fetchAgeRating(ctx context.Context, c *asc.Client, appInfoID string) (asc.AgeRatingDeclarationAttributes, error) {
