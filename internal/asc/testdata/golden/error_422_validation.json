@@ -1,0 +1,24 @@
+{
+  "errors": [
+    {
+      "id": "00000000-0000-0000-0000-000000000422",
+      "status": "422",
+      "code": "ENTITY_ERROR.ATTRIBUTE.INVALID",
+      "title": "An attribute value provided is invalid with the expected format.",
+      "detail": "The provided versionString '99.x.0' does not match the expected format of MAJOR.MINOR or MAJOR.MINOR.PATCH (e.g. 1.0 or 1.0.1).",
+      "source": {
+        "pointer": "/data/attributes/versionString"
+      }
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000423",
+      "status": "422",
+      "code": "ENTITY_ERROR.RELATIONSHIPS.REQUIRED",
+      "title": "A required relationship is missing.",
+      "detail": "The relationship 'app' is required but was not provided.",
+      "source": {
+        "pointer": "/data/relationships/app"
+      }
+    }
+  ]
+}
