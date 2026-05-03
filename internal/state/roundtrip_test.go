@@ -94,6 +94,113 @@ func TestRoundTrip_FetchMarshalLoadRefetchDiffEmpty(t *testing.T) {
 	}
 }
 
+// TestRoundTrip_AllSurfacesPopulated asserts every L2 spec.* surface
+// survives the fetch -> YAML -> LoadState pipeline non-zero. The
+// keystone TestRoundTrip_FetchMarshalLoadRefetchDiffEmpty above proves
+// the *invariant* (zero diffs) but a regression that drops a whole
+// surface (e.g. fetch projection stops emitting customProductPages)
+// could be silently consistent — both paths would skip the surface.
+//
+// This second test pins the surface-level coverage: after the reload,
+// every populated section in fullCoverageHandler must show up in
+// reloaded.Spec.* with the exact values the fixture produced.
+func TestRoundTrip_AllSurfacesPopulated(t *testing.T) {
+	srv := httptest.NewServer(fullCoverageHandler(t))
+	defer srv.Close()
+	c := fixtureClient(t, srv)
+
+	first, err := Fetch(context.Background(), c, "com.example.app",
+		FetchOpts{Version: "1.0", Platform: "IOS"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "state.yaml")
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	if err := enc.Encode(first); err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	_ = enc.Close()
+	if err := writeFileTest(t, path, buf.Bytes()); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	reloaded, err := config.LoadState(path)
+	if err != nil {
+		t.Fatalf("LoadState: %v", err)
+	}
+	if diags := config.Validate(path, reloaded); len(diags) != 0 {
+		for _, d := range diags {
+			t.Errorf("schema diag: %s", d)
+		}
+		t.FailNow()
+	}
+
+	// Every L2 surface in the schema (privacyLabels intentionally
+	// absent — see PRD § "What Skipper is NOT" + ISSUE-002).
+	checks := []struct {
+		name string
+		ok   bool
+	}{
+		{"spec.version", reloaded.Spec.Version != nil &&
+			reloaded.Spec.Version.Copyright != nil &&
+			*reloaded.Spec.Version.Copyright == "© 2026"},
+		{"spec.version.releaseType", reloaded.Spec.Version != nil &&
+			reloaded.Spec.Version.ReleaseType != nil &&
+			*reloaded.Spec.Version.ReleaseType == "MANUAL"},
+		{"spec.build.number", reloaded.Spec.Build != nil &&
+			reloaded.Spec.Build.Number == "42"},
+		{"spec.metadata.locales[en-US].description", reloaded.Spec.Metadata != nil &&
+			reloaded.Spec.Metadata.Locales["en-US"].Description != nil},
+		{"spec.metadata.locales[en-US].name (cross-resource appInfoLoc)",
+			reloaded.Spec.Metadata != nil &&
+				reloaded.Spec.Metadata.Locales["en-US"].Name != nil},
+		{"spec.screenshots.locales[en-US][APP_IPHONE_69]",
+			reloaded.Spec.Screenshots != nil &&
+				len(reloaded.Spec.Screenshots.Locales["en-US"]["APP_IPHONE_69"]) > 0},
+		{"spec.iap.products[com.x.lifetime]", reloaded.Spec.IAP != nil &&
+			reloaded.Spec.IAP.Products["com.x.lifetime"].Type == "NON_CONSUMABLE"},
+		{"spec.iap.products[com.x.lifetime].localizations[en-US]",
+			reloaded.Spec.IAP != nil &&
+				len(reloaded.Spec.IAP.Products["com.x.lifetime"].Localizations) > 0},
+		{"spec.ageRating.cartoonOrFantasyViolence",
+			reloaded.Spec.AgeRating != nil &&
+				reloaded.Spec.AgeRating.CartoonOrFantasyViolence != nil &&
+				*reloaded.Spec.AgeRating.CartoonOrFantasyViolence == "NONE"},
+		{"spec.ageRating.gambling", reloaded.Spec.AgeRating != nil &&
+			reloaded.Spec.AgeRating.Gambling != nil &&
+			!*reloaded.Spec.AgeRating.Gambling},
+		{"spec.exportCompliance.usesNonExemptEncryption",
+			reloaded.Spec.ExportCompliance != nil &&
+				reloaded.Spec.ExportCompliance.UsesNonExemptEncryption != nil},
+		{"spec.reviewerDemo.contactEmail", reloaded.Spec.ReviewerDemo != nil &&
+			reloaded.Spec.ReviewerDemo.ContactEmail != nil},
+		{"spec.categories.primary", reloaded.Spec.Categories != nil &&
+			reloaded.Spec.Categories.Primary != nil &&
+			*reloaded.Spec.Categories.Primary == "EDUCATION"},
+		{"spec.categories.secondary", reloaded.Spec.Categories != nil &&
+			reloaded.Spec.Categories.Secondary != nil &&
+			*reloaded.Spec.Categories.Secondary == "REFERENCE"},
+		{"spec.pricing.baseTerritory", reloaded.Spec.Pricing != nil &&
+			reloaded.Spec.Pricing.BaseTerritory != nil},
+		{"spec.testflight.groups[family]", reloaded.Spec.TestFlight != nil &&
+			len(reloaded.Spec.TestFlight.Groups) > 0},
+		{"spec.testflight.groups[family].testers", reloaded.Spec.TestFlight != nil &&
+			len(reloaded.Spec.TestFlight.Groups["family"].Testers) > 0},
+		{"spec.customProductPages[summer-2026]",
+			reloaded.Spec.CustomProductPages != nil &&
+				(*reloaded.Spec.CustomProductPages)["summer-2026"].Visible != nil},
+	}
+	for _, ck := range checks {
+		if !ck.ok {
+			t.Errorf("post-roundtrip: %s not populated", ck.name)
+		}
+	}
+}
+
 // writeFileTest is a tiny test helper that writes a file at mode 0600
 // and surfaces any I/O error to the caller.
 func writeFileTest(t *testing.T, path string, data []byte) error {
