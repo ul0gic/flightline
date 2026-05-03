@@ -2,11 +2,10 @@
 // and Apply (write a change set back to ASC). Both operations are the
 // keystone of Skipper's L2 state-as-code story.
 //
-// Fetch coverage in v1alpha1: version, build (encryption flag),
-// ageRating, exportCompliance, categories, pricing. The remaining
-// surfaces (metadata locales, screenshots, IAP, testflight tester
-// rosters, custom product pages) are scaffolded with clearly-marked
-// gaps tracked under .project/issues/open/QA-009.
+// Fetch coverage in v1alpha1: every spec surface in
+// schemas/skipper.schema.json — version, build, metadata, screenshots,
+// iap, ageRating, exportCompliance, reviewerDemo, categories, pricing,
+// testflight, customProductPages.
 //
 // Privacy labels are intentionally absent — see ISSUE-002 (Apple's
 // public API doesn't expose them).
@@ -51,7 +50,6 @@ func Fetch(ctx context.Context, c *asc.Client, bundleID string, opts FetchOpts) 
 	if err != nil {
 		return nil, err
 	}
-
 	versionAttrs, versionID, err := fetchVersion(ctx, c, appID, opts.Version, platform)
 	if err != nil {
 		return nil, err
@@ -65,28 +63,64 @@ func Fetch(ctx context.Context, c *asc.Client, bundleID string, opts FetchOpts) 
 			Version:  versionAttrs.VersionString,
 			Platform: platform,
 		},
-		Spec: config.StateSpec{},
+		Spec: config.StateSpec{Version: projectVersion(versionAttrs)},
 	}
-
-	out.Spec.Version = projectVersion(versionAttrs)
-
-	// Categories / age rating live on appInfo; pull the editable one.
-	appInfoID, err := fetchEditableAppInfo(ctx, c, appID)
-	if err == nil && appInfoID != "" {
-		if ar, ferr := fetchAgeRating(ctx, c, appInfoID); ferr == nil {
-			out.Spec.AgeRating = projectAgeRating(ar)
-		}
-	}
-
-	// Export compliance flag lives on the build attached to the version.
-	if buildID, encryption, ferr := fetchVersionBuildEncryption(ctx, c, versionID); ferr == nil && buildID != "" {
-		out.Spec.ExportCompliance = &config.ExportComplianceSpec{
-			UsesNonExemptEncryption: encryption,
-		}
-		out.Spec.Build = &config.BuildSpec{Number: ""}
-	}
-
+	fetchAppInfoSurfaces(ctx, c, appID, versionID, out)
+	fetchVersionScopedSurfaces(ctx, c, versionID, out)
+	fetchAppScopedSurfaces(ctx, c, appID, out)
 	return out, nil
+}
+
+// fetchAppInfoSurfaces populates spec surfaces that live on the
+// editable appInfo: ageRating, categories, metadata.
+func fetchAppInfoSurfaces(ctx context.Context, c *asc.Client, appID, versionID string, out *State) {
+	appInfoID, err := fetchEditableAppInfo(ctx, c, appID)
+	if err != nil || appInfoID == "" {
+		return
+	}
+	if ar, ferr := fetchAgeRating(ctx, c, appInfoID); ferr == nil {
+		out.Spec.AgeRating = projectAgeRating(ar)
+	}
+	if cats := fetchCategories(ctx, c, appInfoID); cats != nil {
+		out.Spec.Categories = cats
+	}
+	if md, ferr := fetchMetadataLocales(ctx, c, versionID, appInfoID); ferr == nil {
+		out.Spec.Metadata = md
+	}
+}
+
+// fetchVersionScopedSurfaces populates surfaces tied to a specific
+// version: build (number + encryption flag), reviewerDemo, screenshots.
+func fetchVersionScopedSurfaces(ctx context.Context, c *asc.Client, versionID string, out *State) {
+	if buildID, encryption, ferr := fetchVersionBuildEncryption(ctx, c, versionID); ferr == nil && buildID != "" {
+		out.Spec.ExportCompliance = &config.ExportComplianceSpec{UsesNonExemptEncryption: encryption}
+		if num, nerr := fetchBuildNumber(ctx, c, buildID); nerr == nil {
+			out.Spec.Build = &config.BuildSpec{Number: num}
+		}
+	}
+	if rd := fetchReviewerDemo(ctx, c, versionID); rd != nil {
+		out.Spec.ReviewerDemo = rd
+	}
+	if ss, ferr := fetchScreenshots(ctx, c, versionID); ferr == nil && ss != nil {
+		out.Spec.Screenshots = ss
+	}
+}
+
+// fetchAppScopedSurfaces populates surfaces tied to the app row:
+// pricing, IAPs, TestFlight groups, custom product pages.
+func fetchAppScopedSurfaces(ctx context.Context, c *asc.Client, appID string, out *State) {
+	if pr := fetchPricing(ctx, c, appID); pr != nil {
+		out.Spec.Pricing = pr
+	}
+	if iaps, ferr := fetchIAPs(ctx, c, appID); ferr == nil && iaps != nil && len(iaps.Products) > 0 {
+		out.Spec.IAP = iaps
+	}
+	if tf, ferr := fetchTestFlightGroups(ctx, c, appID); ferr == nil && tf != nil && len(tf.Groups) > 0 {
+		out.Spec.TestFlight = tf
+	}
+	if cpp, ferr := fetchCustomProductPages(ctx, c, appID); ferr == nil && len(cpp) > 0 {
+		out.Spec.CustomProductPages = &cpp
+	}
 }
 
 // State is re-exported here so callers don't need two imports
