@@ -1,89 +1,457 @@
+<div align="center">
+
 # Skipper
 
-Single-binary Go CLI for App Store Connect. Turns ASC into a structured, declarative surface — read account state, lint a desired-state YAML against it, preflight every Apple rejection rule we know about, and apply changes idempotently — so submissions stop being a clerical landmine.
+**App Store Connect, scriptable end-to-end.**
 
-> **Status:** scaffold-only. Commands land starting Phase 1. See development notes below.
+[![CI](https://github.com/ul0gic/skipper/actions/workflows/ci.yml/badge.svg)](https://github.com/ul0gic/skipper/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Go Reference](https://pkg.go.dev/badge/github.com/ul0gic/skipper.svg)](https://pkg.go.dev/github.com/ul0gic/skipper)
+[![Go Report Card](https://goreportcard.com/badge/github.com/ul0gic/skipper)](https://goreportcard.com/report/github.com/ul0gic/skipper)
+[![Go Version](https://img.shields.io/badge/go-1.26%2B-00ADD8.svg)](https://go.dev/doc/go1.26)
 
-## Why
+</div>
 
-Apple's App Store Connect has hundreds of fields scattered across a dozen surfaces. Forget any one (export compliance, age rating, IAP attachment, IAP review screenshot, account-deletion attestation, privacy nutrition label) and the release gets bounced. Skipper makes those fields scriptable, reviewable in git, and lintable before you hit submit.
+Skipper is a single-binary Go CLI that makes App Store Connect scriptable end-to-end. Declare your release state in YAML, lint it, run preflight checks against Apple's rejection rules, and apply changes idempotently. Read sales, analytics, reviews, subscription state, beta feedback, and performance metrics from the terminal. The ASC web UI becomes optional.
 
-## Prerequisites
+This is a personal tool open-sourced for sharing. No SaaS layer, no telemetry, no accounts. Just a binary that talks to Apple's API.
 
-- **Go 1.26+** (stable since April 2026)
-- An **App Store Connect API key** (`.p8`) — generate at App Store Connect → Users and Access → Integrations → App Store Connect API
-- Mac primary; Linux works too if you want to run from CI
+---
+
+## Table of Contents
+
+- [Why Skipper](#why-skipper)
+- [What it does today](#what-it-does-today-v050-beta)
+- [Architecture](#architecture)
+- [The lifecycle](#the-lifecycle)
+- [Install](#install)
+- [Setup](#setup)
+- [Quickstart](#quickstart)
+- [Commands by category](#commands-by-category)
+- [Output](#output)
+- [Configuration precedence](#configuration-precedence)
+- [What it doesn't do](#what-it-doesnt-do)
+- [Documentation](#documentation)
+- [Development](#development)
+- [Status](#status)
+- [License](#license)
+
+---
+
+## Why Skipper
+
+Apple's App Store Connect has two failure modes that cost real time.
+
+**Authoring failures.** Hundreds of fields scattered across a dozen surfaces — version metadata, IAPs, IAP review screenshots, age rating, export compliance, content rights, account-deletion attestation, privacy nutrition labels, review notes, contact info, demo credentials, screenshot dimensions per device, per-locale localizations, build attachment, review submission item composition. Forget any one and the release gets bounced. Every rejection is a lost release cycle.
+
+**Observation friction.** Sales, downloads, conversion, reviews, subscription churn, beta crashes, performance metrics — each on a different ASC web surface, none piped, none scriptable, none LLM-readable. You spend hours per week clicking through screens to answer "how is my app doing."
+
+Skipper addresses both. The authoring half lets you declare release state in YAML next to your app source, diff it against live ASC state, and apply changes idempotently. The observation half gives you composable terminal commands you can pipe to `jq`, feed to LLM prompts, or cron-schedule as snapshots. Neither half is bonus — both are first-class.
+
+---
+
+## What it does today (v0.5.0-beta)
+
+All three layers are complete: L1 (API CLI), L2 (state-as-code), and L3 (preflight rules).
+
+| Surface | L1 read | L1 write | L2 state-as-code | L3 preflight rule |
+|---|:---:|:---:|:---:|:---:|
+| Apps | ✅ | — | — | — |
+| Versions | ✅ | ✅ | ✅ | ✅ |
+| Builds | ✅ | ✅ | ✅ | ✅ |
+| Metadata + localizations | ✅ | ✅ | ✅ | ✅ |
+| Screenshots | ✅ | ✅ | ✅ | ✅ |
+| App Previews | ✅ | ✅ | ✅ | — |
+| IAPs | ✅ | ✅ | ✅ | ✅ (3 rules) |
+| Subscription groups | ✅ | ✅ | ✅ | — |
+| Review submissions | ✅ | ✅ | ✅ | — |
+| Age rating | ✅ | ✅ | ✅ | ✅ |
+| Export compliance | ✅ | ✅ | ✅ | ✅ |
+| Reviewer demo info | ✅ | ✅ | ✅ | — |
+| Categories | ✅ | ✅ | ✅ | — |
+| Pricing | ✅ | ✅ | ✅ | — |
+| TestFlight | ✅ | ✅ | ✅ (partial) | ✅ |
+| Custom product pages | ✅ | ✅ | ✅ | — |
+| Customer reviews | ✅ | ✅ (respond) | — | — |
+| Beta feedback | ✅ | — | — | — |
+| Diagnostic signatures | ✅ | — | — | — |
+| Performance metrics | ✅ | — | — | — |
+| Sales reports | ✅ | — | — | — |
+| Finance reports | ✅ | — | — | — |
+| Subscription reports | ✅ | — | — | — |
+| Analytics reports | ✅ | — | — | — |
+| Privacy nutrition labels | portal-only¹ | — | — | — |
+
+¹ `appPrivacyDetails` is absent from ASC API v4.3. `skipper privacy-labels get` returns a typed diagnostic explaining the gap rather than silently failing.
+
+---
+
+## Architecture
+
+Skipper is a cobra subcommand tree backed by a hand-rolled HTTP+JSON client against Apple's API. There is no codegen — Apple's OpenAPI spec triggers cascading type-name collisions in every Go generator evaluated. The spec is committed as authoritative reference and queried via `jq` during development.
+
+```mermaid
+flowchart TB
+    User["You\n(or LLM / cron)"]
+    YAML["state.yaml"]
+    CLI["skipper CLI\ncmd/skipper/main.go"]
+    Lint["internal/lint\n12 preflight rules"]
+    Plan["internal/plan\ndiff engine"]
+    State["internal/state\nfetch / apply"]
+    ASC["internal/asc\nhand-rolled HTTP+JSON client"]
+    Auth["internal/auth\nES256 JWT (IEEE P1363)"]
+    Apple[("Apple ASC API\napi.appstoreconnect.apple.com")]
+
+    User -->|"edit"| YAML
+    User -->|"skipper lint / preflight"| CLI
+    User -->|"skipper plan / apply"| CLI
+    User -->|"skipper sales / reviews / ..."| CLI
+    YAML --> CLI
+    CLI --> Lint
+    CLI --> Plan
+    CLI --> State
+    Lint --> State
+    Plan --> State
+    State --> ASC
+    ASC --> Auth
+    Auth -->|"ES256 JWT"| Apple
+    ASC -->|"HTTPS"| Apple
+```
+
+**Layer stack:**
+
+```
+L3 — preflight rules (internal/lint/) ─── catches clerical rejection causes
+L2 — state-as-code  (internal/state/) ─── declare → diff → apply
+L1 — API CLI        (internal/asc/)   ─── every ASC surface as a terminal command
+```
+
+Each layer is useful standalone. You can use `skipper sales` and `skipper reviews` without ever touching a `state.yaml`. You can use L2 without running preflight. L3 preflight can catch issues even if you manage writes manually.
+
+---
+
+## The lifecycle
+
+### Authoring (stop getting rejected)
+
+```mermaid
+flowchart LR
+    A["1. fetch\nread live state"] --> B["2. edit\nstate.yaml"]
+    B --> C["3. lint\noffline check"]
+    C --> D["4. plan\ndiff vs live"]
+    D --> E["5. preflight\nlive rule check"]
+    E --> F["6. apply --confirm\nidempotent writes"]
+    F --> G["7. submit\ntestflight beta-review submit"]
+    G --> H["8. rejection\ndiagnose if bounced"]
+
+    classDef readonly fill:#e8f5e9,stroke:#388e3c,color:#1b5e20
+    classDef write fill:#fff8e1,stroke:#f9a825,color:#3e2723
+    classDef commit fill:#fce4ec,stroke:#c62828,color:#b71c1c
+
+    class A,C,D,E,H readonly
+    class B write
+    class F,G commit
+```
+
+Steps 1–5 are read-only and reversible. Step 6 patches ASC but does not submit for review. Step 7 (the beta-review submit) is the only action that triggers Apple Review — it requires explicit confirmation.
+
+### Observation (stop opening the web UI)
+
+```bash
+skipper sales com.under5.passdmv --days 30
+skipper finance com.under5.passdmv --month 2026-04
+skipper subscriptions list com.under5.passdmv
+skipper reviews list com.under5.passdmv --rating 1 --rating 2 --rating 3
+skipper reviews summary com.under5.passdmv
+skipper analytics request com.under5.passdmv --wait
+skipper beta-feedback crash com.under5.passdmv
+skipper diagnostics list com.under5.passdmv
+skipper performance app com.under5.passdmv
+```
+
+All observation commands support `--output json` for piping to `jq` or feeding to LLM prompts.
+
+---
 
 ## Install
+
+**Go install (available now):**
 
 ```bash
 go install github.com/ul0gic/skipper@latest
 ```
 
-Homebrew formula and prebuilt binaries land in a later release.
+Requires Go 1.26 or later. The binary lands in your `GOBIN` (typically `~/go/bin`).
+
+**Homebrew tap and prebuilt binaries** ship at v1.0.0 (Phase 6).
+
+---
 
 ## Setup
 
-Place your `.p8` private key:
+**Place your `.p8` API key:**
 
 ```bash
 mkdir -p ~/.appstoreconnect
-mv ~/Downloads/AuthKey_<KEY_ID>.p8 ~/.appstoreconnect/
-chmod 600 ~/.appstoreconnect/AuthKey_<KEY_ID>.p8
+mv ~/Downloads/AuthKey_XXXXXXXXXX.p8 ~/.appstoreconnect/
+chmod 600 ~/.appstoreconnect/AuthKey_XXXXXXXXXX.p8
 ```
 
-Set environment variables (e.g., in `~/.zshrc`):
+Skipper refuses to load a `.p8` file with permissions wider than 600 and tells you exactly how to fix it.
+
+**Set environment variables** (add to `~/.zshrc` or `~/.bashrc`):
 
 ```bash
-export APP_STORE_CONNECT_KEY_ID="<your 10-char key id>"
-export APP_STORE_CONNECT_ISSUER_ID="<your issuer uuid>"
-export APP_STORE_CONNECT_VENDOR_NUMBER="<your vendor number>"
+export APP_STORE_CONNECT_KEY_ID="XXXXXXXXXX"        # 10-character key ID
+export APP_STORE_CONNECT_ISSUER_ID="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+export APP_STORE_CONNECT_VENDOR_NUMBER="XXXXXXXX"   # for sales/finance reports
 ```
 
-Optionally override the `.p8` location with `APP_STORE_CONNECT_KEY_PATH`. Defaults to `~/.appstoreconnect/AuthKey_<KEY_ID>.p8`.
+You can also set these via CLI flags (`--key-id`, `--issuer-id`) or a config file at `~/.config/skipper/config.yaml`. See [Configuration precedence](#configuration-precedence).
 
-## Usage
+---
+
+## Quickstart
+
+Five commands that verify the install works and cover both pillars:
 
 ```bash
-skipper --help
+# Verify auth
+skipper whoami
+
+# List your apps
+skipper apps list
+
+# Inspect a version
+skipper versions get com.under5.passdmv --version 1.0
+
+# Diagnose a rejection (if the version is in REJECTED state)
+skipper rejection com.under5.passdmv --version 1.0
+
+# Run offline preflight against a state file
+skipper lint state.yaml
 ```
 
-Commands land in subsequent phases. Roughly:
+Replace `com.under5.passdmv` with your bundle ID. For the full state-as-code walkthrough (fetch → edit → plan → apply), see [docs/state-yaml-quickstart.md](docs/state-yaml-quickstart.md).
 
-```text
-skipper whoami                              # verify auth
-skipper apps list                           # list apps
-skipper versions get <bundle> --version 1.1 # version detail
-skipper rejection <bundle> --version 1.1    # diagnose REJECTED state
-skipper lint state.yaml                     # offline schema + format check
-skipper preflight <bundle> --version 1.1    # live rejection-rule check
-skipper apply state.yaml --confirm          # idempotent writes
-skipper submit <bundle> --version 1.1       # the only commit-to-Apple step
+---
+
+## Commands by category
+
+### Authoring — manage release state
+
+```bash
+# Versions
+skipper versions list com.under5.passdmv
+skipper versions get com.under5.passdmv --version 1.1
+skipper versions create com.under5.passdmv --version 1.1 --copyright "2026 ..."
+skipper versions update com.under5.passdmv --version 1.1 --release-type MANUAL
+
+# Metadata and localizations
+skipper metadata set com.under5.passdmv --version 1.1 \
+  --locale en-US --name "PassDMV" --subtitle "..."
+
+# Screenshots
+skipper screenshots upload com.under5.passdmv --version 1.1 \
+  --display-type APP_IPHONE_69 --file ./screenshots/iphone.png
+
+# IAPs
+skipper iap list com.under5.passdmv
+skipper iap create com.under5.passdmv --reference-name "Lifetime" \
+  --product-id com.under5.passdmv.lifetime --type NON_CONSUMABLE
+
+# Age rating and compliance
+skipper age-rating set com.under5.passdmv --version 1.1 --from-file rating.json
+skipper export-compliance set com.under5.passdmv --version 1.1 \
+  --uses-non-exempt-encryption false
+
+# Review submissions
+skipper review-submissions list com.under5.passdmv
+skipper review-submissions items com.under5.passdmv --submission <id>
+
+# Diagnose a rejection
+skipper rejection com.under5.passdmv --version 1.1
 ```
+
+### Observation — read account state
+
+```bash
+# Customer reviews
+skipper reviews list com.under5.passdmv --rating 1 --rating 2
+skipper reviews summary com.under5.passdmv
+
+# Sales and finance reports
+skipper sales com.under5.passdmv --days 30
+skipper sales com.under5.passdmv --month 2026-04 --output json
+skipper finance com.under5.passdmv --month 2026-04
+
+# Subscription reports
+skipper subscriptions list com.under5.passdmv
+skipper subscriptions reports com.under5.passdmv --type summary --range P30D
+
+# Analytics (async — request, poll, download)
+skipper analytics request com.under5.passdmv --access-type ONE_TIME_SNAPSHOT --wait
+skipper analytics list-instances --report-id <id>
+skipper analytics download --instance <id> --out report.csv
+
+# TestFlight feedback and crash diagnostics
+skipper beta-feedback crash com.under5.passdmv
+skipper beta-feedback screenshot com.under5.passdmv
+skipper diagnostics list com.under5.passdmv
+skipper diagnostics get com.under5.passdmv --signature <id>
+
+# Performance metrics
+skipper performance app com.under5.passdmv
+skipper performance build com.under5.passdmv --build <id>
+```
+
+### State as Code — declare, diff, apply
+
+```bash
+# Snapshot live ASC state into a YAML file
+skipper fetch com.under5.passdmv > state.yaml
+
+# Preview what would change (no writes)
+skipper plan state.yaml
+
+# Apply changes idempotently (safe to re-run)
+skipper apply state.yaml --confirm
+
+# Resume a partially-applied run after interruption
+skipper apply state.yaml --confirm --resume
+```
+
+See [docs/state-yaml.md](docs/state-yaml.md) for the full v1alpha1 schema reference and [docs/state-yaml-quickstart.md](docs/state-yaml-quickstart.md) for a step-by-step walkthrough.
+
+### Preflight — catch rejections before they happen
+
+```bash
+# Offline: validates state.yaml against JSON Schema + format rules
+skipper lint state.yaml
+
+# Live: reads ASC state, runs all 12 rules, reports pass/fail
+skipper preflight com.under5.passdmv --version 1.1
+
+# Cross-check live state against a state file
+skipper preflight com.under5.passdmv --version 1.1 --state-file state.yaml
+
+# JSON output for CI integration
+skipper preflight com.under5.passdmv --version 1.1 --output json | jq '.diagnostics'
+```
+
+See [docs/preflight-rules.md](docs/preflight-rules.md) for every rule with mode, severity, fix hints, and examples.
+
+---
 
 ## Output
 
-Every command supports `--output table | json`. JSON is a stable contract for piping and LLM consumers.
+Every command supports `--output table` (default) and `--output json`.
+
+```bash
+skipper apps list --output table
+```
+
+```
+BUNDLE ID                  NAME         STATUS
+com.under5.passdmv         PassDMV      READY_FOR_SALE
+```
+
+```bash
+skipper apps list --output json
+```
+
+```json
+[
+  {
+    "bundleId": "com.under5.passdmv",
+    "name": "PassDMV",
+    "sku": "passdmv",
+    "primaryLocale": "en-US"
+  }
+]
+```
+
+The JSON shape is a stable contract. Adding fields is backward-compatible; removing or renaming fields is a breaking change tracked by a major version bump. Sales and subscription commands additionally support `--output tsv` (passthrough from Apple's wire format).
+
+---
 
 ## Configuration precedence
 
-1. CLI flags (highest)
-2. Environment variables (`SKIPPER_*` and `APP_STORE_CONNECT_*`)
+From highest to lowest priority:
+
+1. CLI flags (`--key-id`, `--issuer-id`, etc.)
+2. Environment variables (`APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`, `APP_STORE_CONNECT_VENDOR_NUMBER`, `APP_STORE_CONNECT_KEY_PATH`, `SKIPPER_*`)
 3. Config file (`~/.config/skipper/config.yaml`)
 4. Defaults
+
+**Config file example** (`~/.config/skipper/config.yaml`):
+
+```yaml
+key-id: XXXXXXXXXX
+issuer-id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+vendor-number: "XXXXXXXX"
+output: table
+```
+
+---
+
+## What it doesn't do
+
+**Not Fastlane.** No pipeline DSL, no build orchestration. Skipper is the ASC config and reporting layer. `xcodebuild`, Xcode Cloud, and Fastlane still own compilation, signing, and binary upload.
+
+**Not a build tool.** Skipper doesn't compile, archive, or upload `.ipa` files. You point a build at a version with `builds attach`; Skipper handles everything from that point forward.
+
+**Not a screenshot generator.** Skipper uploads screenshots you provide via `screenshots upload`.
+
+**Not a SaaS.** No backend, no telemetry, no accounts. The binary talks directly to Apple's API using your credentials.
+
+**Two known portal-only surfaces** — Apple's public API does not expose these. Skipper tells you explicitly when you hit them rather than silently failing:
+
+- **Resolution-center reviewer messages** — the rejection text written by Apple's reviewers is not in the v4.3 API. `skipper rejection` reports every API-visible state field and tells you to check the portal for the actual message.
+- **Privacy nutrition labels** (`appPrivacyDetails`) — entirely absent from ASC API v4.3. `skipper privacy-labels get` returns a typed `supported: false` diagnostic. Skipper will wire this when Apple adds the endpoint to the spec.
+
+---
+
+## Documentation
+
+| Document | What it covers |
+|---|---|
+| [docs/state-yaml.md](docs/state-yaml.md) | Full v1alpha1 reference: every field, type, constraint, and gotcha |
+| [docs/state-yaml-quickstart.md](docs/state-yaml-quickstart.md) | Fetch → edit → plan → apply walkthrough using passdmv |
+| [docs/preflight-rules.md](docs/preflight-rules.md) | All 12 preflight rules: mode, severity, what/why/when/how, fix hints |
+
+---
 
 ## Development
 
 ```bash
-make build    # ./bin/skipper
-make test     # go test -race
-make vet      # go vet
-make lint     # golangci-lint
-make verify   # vet + test + lint
-make gen      # regenerate API client (codegen pending Phase 1.0)
-make fmt      # gofmt + goimports
+make build    # produces ./bin/skipper
+make test     # go test ./... -race
+make vet      # go vet ./...
+make lint     # golangci-lint run
+make verify   # vet + test + lint (the gate)
+make fmt      # gofmt -s -w . && goimports -w .
+make clean    # remove ./bin and coverage artifacts
 ```
+
+**Architecture decisions** live in `.project/` (gitignored — internal scaffolding). The design rationale for the hand-rolled API client instead of codegen, the JWT IEEE P1363 requirement, the async-poll state persistence model, and every other non-obvious choice are documented there.
+
+**Adding a command:** query `openapi.oas.json` with `jq` for the endpoint shape, add a file under `internal/asc/` for the client function, add a file under `internal/cmd/` for the cobra command, add a golden fixture under `internal/asc/testdata/golden/`. See existing files for the pattern — it is consistent throughout.
+
+**Tests:** unit tests for all command logic, HTTP fixture replay tests for the client (captured Apple responses replayed via a local server), integration tests behind `//go:build integration`. Run `make test` before any commit.
+
+---
+
+## Status
+
+v0.5.0-beta. L1 (full API CLI, both authoring and observation pillars), L2 (state-as-code with fetch/plan/apply), and L3 (12 preflight rules) are all complete.
+
+Next milestone is v1.0.0: GoReleaser distribution, Homebrew tap, and retiring the legacy Node CLI.
+
+Personal hack, open-sourced under MIT. Maintained by [ul0gic](https://github.com/ul0gic). Issues and PRs welcome — cadence is evenings and weekends, not a funded project.
+
+---
 
 ## License
 
-MIT — see [LICENSE](./LICENSE).
+MIT — see [LICENSE](LICENSE).
