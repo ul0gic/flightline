@@ -48,7 +48,7 @@ Every other modern platform has "as Code" tooling: Terraform for cloud, Pulumi f
 
 Apple's App Store Connect has two failure modes that cost real time.
 
-**Authoring failures.** Hundreds of fields scattered across a dozen surfaces — version metadata, IAPs, IAP review screenshots, age rating, export compliance, content rights, account-deletion attestation, privacy nutrition labels, review notes, contact info, demo credentials, screenshot dimensions per device, per-locale localizations, build attachment, review submission item composition. Forget any one and the release gets bounced. Every rejection is a lost release cycle.
+**Authoring failures.** Hundreds of fields scattered across a dozen surfaces — version metadata, IAPs, IAP review screenshots, age rating, export compliance, content rights, privacy nutrition labels, review notes, contact info, demo credentials, screenshot dimensions per device, per-locale localizations, build attachment, review submission item composition. Forget any one and the release gets bounced. Every rejection is a lost release cycle.
 
 **Observation friction.** Sales, downloads, conversion, reviews, subscription churn, beta crashes, performance metrics — each on a different ASC web surface, none piped, none scriptable, none LLM-readable. You spend hours per week clicking through screens to answer "how is my app doing."
 
@@ -103,7 +103,7 @@ All three layers are complete: L1 (API CLI), L2 (state-as-code), and L3 (preflig
 | Analytics reports | ✅ | — | — | — |
 | Privacy nutrition labels | portal-only ⁵ | — | — | — |
 
-¹ Asset uploads (screenshots, IAP review screenshots, CPP screenshots) work via L1 verbs (`fline screenshots upload`, `fline iap review-screenshot upload`, `fline custom-product-pages screenshots upload`). The `apply` orchestrator currently emits a typed error pointing at the L1 verb instead of driving the multipart upload itself — config fields converge through `apply`, asset bytes do not.
+¹ Asset uploads (screenshots, IAP review screenshots, CPP screenshots) flow through L1 verbs by design — `fline screenshots upload`, `fline iap review-screenshot upload`, `fline custom-product-pages screenshots upload`. Apple's multipart upload API (reserve → PUT → commit, often via a separate signed-URL host) is structurally distinct from JSON PATCH on a config field, so `apply` deliberately doesn't drive uploads — config fields converge through `apply`, asset bytes flow through the upload verbs. The two-command flow (`upload`, then `apply`) is the intended workflow.
 
 ² Subscriptions are read-only in v1 (`fline subscriptions list/get/reports`). Subscription writes (groups, products, prices, intro offers, promotional offers) are deferred — no near-term plan.
 
@@ -123,7 +123,7 @@ flowchart TB
     User["You\n(or LLM / cron)"]
     YAML["state.yaml"]
     CLI["fline CLI\ncmd/fline/main.go"]
-    Lint["internal/lint\n12 preflight rules"]
+    Lint["internal/lint\n11 preflight rules"]
     Plan["internal/plan\ndiff engine"]
     State["internal/state\nfetch / apply"]
     ASC["internal/asc\nhand-rolled HTTP+JSON client"]
@@ -408,7 +408,7 @@ See [docs/state-yaml.md](docs/state-yaml.md) for the full v1alpha1 schema refere
 # Offline: validates state.yaml against JSON Schema + format rules
 fline lint state.yaml
 
-# Live: reads ASC state, runs all 12 rules, reports pass/fail
+# Live: reads ASC state, runs all 11 rules, reports pass/fail
 fline preflight com.under5.passdmv --version 1.1
 
 # Cross-check live state against a state file
@@ -500,7 +500,7 @@ output: table
 |---|---|
 | [docs/state-yaml.md](docs/state-yaml.md) | Full v1alpha1 reference: every field, type, constraint, and gotcha |
 | [docs/state-yaml-quickstart.md](docs/state-yaml-quickstart.md) | Fetch → edit → plan → apply walkthrough using passdmv |
-| [docs/preflight-rules.md](docs/preflight-rules.md) | All 12 preflight rules: mode, severity, what/why/when/how, fix hints |
+| [docs/preflight-rules.md](docs/preflight-rules.md) | All 11 preflight rules + submission-checklist items Apple's API doesn't expose |
 
 ---
 
@@ -555,7 +555,7 @@ make clean    # remove ./bin and coverage artifacts
 
 ## Status
 
-v0.5.0-beta. L1 (full API CLI, both authoring and observation pillars), L2 (state-as-code with fetch/plan/apply), and L3 (12 preflight rules) are all complete.
+v0.5.0-beta. L1 (full API CLI, both authoring and observation pillars), L2 (state-as-code with fetch/plan/apply), and L3 (11 preflight rules) are all complete.
 
 Next milestone is v1.0.0: GoReleaser distribution, Homebrew tap, and retiring the legacy Node CLI.
 

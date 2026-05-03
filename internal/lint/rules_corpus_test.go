@@ -352,12 +352,13 @@ func runRuleCorpus(t *testing.T, rule Rule, dir string) {
 			hasPass = true
 			t.Run("pass", func(t *testing.T) {
 				diags := runRuleAgainstFixture(t, rule, yamlPath, routesPath)
-				// A rule whose default severity is Info MAY always emit
-				// its Info reminder (e.g. version.account-deletion-attested
-				// has no API surface to verify against, so the reminder
-				// fires unconditionally). For those rules the "pass"
-				// criterion is "no error- or warning-severity diagnostics
-				// from this rule"; Info diagnostics are allowed.
+				// A rule whose default severity is Info MAY emit its
+				// reminder on a "pass" fixture if it carries unconditional
+				// guidance (kept generic since no current rule does this,
+				// but the corpus driver supports the shape for future use).
+				// For those rules the "pass" criterion is "no error- or
+				// warning-severity diagnostics from this rule"; Info
+				// diagnostics are allowed.
 				if rule.Severity() == SeverityInfo {
 					for _, d := range diags {
 						if d.RuleID == rule.ID() &&

@@ -73,8 +73,7 @@ func captureStdout(t *testing.T, fn func()) string {
 }
 
 // TestRunLint_GoodStateNoErrors covers the happy path: a clean state
-// should not produce error-severity diagnostics. Info diagnostics
-// (account-deletion-attested) may fire.
+// should not produce error-severity diagnostics.
 func TestRunLint_GoodStateNoErrors(t *testing.T) {
 	p := writeTempState(t, goodStateYAML)
 	viper.Reset()

@@ -51,7 +51,6 @@ When both errors and warnings are present, exit code is `1`.
 | [`strict.format-email`](#strictformat-email) | Offline | Warning |
 | [`strict.required-nonzero`](#strictrequired-nonzero) | Offline | Error |
 | [`strict.yaml-coercion`](#strictyaml-coercion) | Offline | Error |
-| [`version.account-deletion-attested`](#versionaccount-deletion-attested) | Both | Info |
 | [`version.age-rating-answered`](#versionage-rating-answered) | Both | Error |
 | [`version.export-compliance-answered`](#versionexport-compliance-answered) | Both | Error |
 
@@ -383,32 +382,6 @@ Tester variant:
 
 ---
 
-### `version.account-deletion-attested`
-
-- **Mode:** Both
-- **Severity:** Info
-- **What it checks:** Reminds you to confirm the in-app account-deletion attestation if the app has user accounts.
-- **Why it matters:** Apps with user accounts that haven't toggled the account-deletion attestation are a frequent rejection cause (Guideline 5.1.1(v)). The attestation is a one-time panel toggle in App Store Connect that many developers miss.
-- **API limitation:** Apple's public App Store Connect API does not expose the account-deletion attestation field. The toggle lives in App Store Connect's web UI (App > Distribution > App Privacy > Account Deletion) and is not accessible via any `/v1` endpoint. As a result, this rule cannot perform a definitive yes/no check — it always emits an Info-severity reminder so you remember to verify the panel before submission. When Apple ships an API endpoint for the attestation, this rule will be upgraded to a hard Error check.
-- **When it fires:** Always — on every `lint` and `preflight` run. This is intentional: the reminder fires every time so it doesn't get buried.
-- **How to fix:** In App Store Connect: App > Distribution > App Privacy > Account Deletion > toggle on. If the app has no user accounts (no login, no profile, no persistent identity), document that it's exempt and ignore the reminder.
-- **Reference:** Apple Guideline 5.1.1(v)
-
-**Example diagnostic JSON:**
-
-```json
-{
-  "ruleId": "version.account-deletion-attested",
-  "severity": "info",
-  "message": "if the app has user accounts, confirm the in-app account-deletion attestation is enabled in App Store Connect (App > Distribution > App Privacy > Account Deletion). Apple does not expose this field via the public API; preflight cannot verify it.",
-  "path": "/spec/appInfo",
-  "fixHint": "in App Store Connect: App Privacy > Account Deletion > toggle on, or document why your app is exempt (no user accounts).",
-  "reference": "Apple Guideline 5.1.1(v)"
-}
-```
-
----
-
 ### `version.age-rating-answered`
 
 - **Mode:** Both
@@ -561,3 +534,22 @@ Track Apple's spec versions. If a future ASC API version adds `appPrivacyDetails
 ### App Store Review Guidelines: subjective judgments
 
 Rules reducible to API-checkable state (missing assets, unanswered questions, attachment relationships) are Flightline's domain. Rules that depend on subjective design or content judgments (Guideline 4.0 Design, metadata keyword stuffing, content quality) are not checkable via API. No rule in this set tries to second-guess a human reviewer.
+
+---
+
+## Submission checklist (Flightline does not lint these)
+
+Some submission requirements live entirely outside ASC's API surface, can't be conditioned on anything Flightline can read, and don't belong in the rule engine because they'd just nag every run. They live here as a checklist instead of as Info-severity diagnostics — read once, handle, move on.
+
+### Account-deletion attestation
+
+If your app supports user accounts (login, signup, profile, any persistent user identity), Apple requires you to:
+
+1. Provide an in-app way to delete the account — not just an email link or a "contact support" path
+2. Toggle the attestation on in App Store Connect: **App > Distribution > App Privacy > Account Deletion**
+
+Apps with user accounts that haven't toggled the attestation are a frequent rejection cause (Guideline 5.1.1(v)). Apple's public API does not expose the attestation field, so Flightline cannot verify it — that's why this is a checklist item, not a lint rule.
+
+If your app has no accounts (calculator, reference utility, single-player game with no login, content viewer with no login), this requirement doesn't apply at all.
+
+A future Flightline version may infer "this app has accounts" from Xcode project signals (`com.apple.developer.applesignin` entitlement, `AuthenticationServices.framework` linkage, third-party auth SDKs in `Package.resolved`) and surface the reminder conditionally. Tracked under `.project/issues/open/FEAT-001` — Phase 7+ work.

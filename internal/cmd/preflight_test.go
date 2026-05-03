@@ -85,8 +85,7 @@ func happyPathServer(t *testing.T) *httptest.Server {
 }
 
 // TestRunPreflight_LiveOnlyHappyPathHasNoErrors runs every rule against a
-// fixture that simulates a fully clean version. We tolerate Info-severity
-// findings (the account-deletion-attested reminder always fires).
+// fixture that simulates a fully clean version.
 func TestRunPreflight_LiveOnlyHappyPathHasNoErrors(t *testing.T) {
 	srv := happyPathServer(t)
 	c := fixtureASCClient(t, srv)
