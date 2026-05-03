@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // Sentinel errors for fast-fail no-retry cred problems. Use errors.Is to test.
@@ -18,9 +19,11 @@ var (
 // APIError is the typed error wrapping Apple's errors[] payload on a 4xx/5xx
 // response. HTTPStatus is the response status code; Errors is the parsed
 // errors[] array (may be empty if Apple returned a non-JSON error body).
+// RetryAfter is populated on 429 responses if Apple sent a Retry-After header.
 type APIError struct {
 	HTTPStatus int
 	Errors     []ErrorItem
+	RetryAfter time.Duration
 }
 
 // ErrorItem mirrors one entry in Apple's errors[] array.
@@ -61,6 +64,9 @@ func (e *APIError) Error() string {
 	}
 	if extra := len(e.Errors) - 1; extra > 0 {
 		fmt.Fprintf(&sb, " (+%d more error(s))", extra)
+	}
+	if e.RetryAfter > 0 {
+		fmt.Fprintf(&sb, " (retry after %s)", e.RetryAfter)
 	}
 	return redact(sb.String())
 }

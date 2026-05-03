@@ -18,6 +18,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -151,17 +152,22 @@ func (c *Client) DeleteWithBody(ctx context.Context, path string, query url.Valu
 }
 
 // deleteCommon shares the body-or-not DELETE flow.
+//
+// On non-2xx the response body is read by errorFromResponse to populate
+// Apple's errors[] envelope; on 2xx the body is drained and discarded for
+// keep-alive reuse. The order matters — draining before status check
+// would silently drop the errors[] payload (closed QA-007).
 func (c *Client) deleteCommon(ctx context.Context, path string, query url.Values, body any) error {
 	resp, err := c.do(ctx, http.MethodDelete, path, query, body, "")
 	if err != nil {
 		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	// Drain for keep-alive reuse.
-	_, _ = io.Copy(io.Discard, resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return c.errorFromResponse(resp)
 	}
+	// 2xx: drain body for keep-alive reuse.
+	_, _ = io.Copy(io.Discard, resp.Body)
 	return nil
 }
 
@@ -281,6 +287,7 @@ func (c *Client) buildURL(path string, query url.Values) (string, error) {
 
 // errorFromResponse parses Apple's errors[] payload (if any) and returns a
 // typed *APIError that supports errors.Is for ErrUnauthorized / ErrForbidden.
+// On 429 it also captures the Retry-After header (closed QA-008).
 func (c *Client) errorFromResponse(resp *http.Response) error {
 	apiErr := &APIError{HTTPStatus: resp.StatusCode}
 	// LimitReader caps a runaway error body at 1 MiB.
@@ -293,7 +300,27 @@ func (c *Client) errorFromResponse(resp *http.Response) error {
 			apiErr.Errors = envelope.Errors
 		}
 	}
+	if resp.StatusCode == http.StatusTooManyRequests {
+		apiErr.RetryAfter = parseRetryAfter(resp.Header.Get("Retry-After"))
+	}
 	return apiErr
+}
+
+// parseRetryAfter handles both Retry-After formats: integer seconds and
+// HTTP-date. Returns 0 if header is missing or unparseable.
+func parseRetryAfter(v string) time.Duration {
+	if v == "" {
+		return 0
+	}
+	if secs, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && secs >= 0 {
+		return time.Duration(secs) * time.Second
+	}
+	if t, err := http.ParseTime(v); err == nil {
+		if d := time.Until(t); d > 0 {
+			return d
+		}
+	}
+	return 0
 }
 
 // redactPath strips query strings from a path before it reaches an error
