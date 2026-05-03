@@ -92,18 +92,37 @@ func (e *APIError) Is(target error) bool {
 // bearerPattern matches "Bearer <token>" / "bearer <token>" headers.
 // keyIDPattern matches Apple's 10-character ASC key IDs as standalone tokens.
 var (
-	jwtPattern    = regexp.MustCompile(`eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+`)
-	bearerPattern = regexp.MustCompile(`(?i)bearer\s+[A-Za-z0-9._-]+`)
-	keyIDPattern  = regexp.MustCompile(`\b[A-Z0-9]{10}\b`)
+	jwtPattern         = regexp.MustCompile(`eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+`)
+	bearerPattern      = regexp.MustCompile(`(?i)bearer\s+[A-Za-z0-9._-]+`)
+	keyIDPattern       = regexp.MustCompile(`\b[A-Z0-9]{10}\b`)
+	authKeyPathPattern = regexp.MustCompile(`AuthKey_[A-Z0-9]{10}\.p8`)
+	uuidPattern        = regexp.MustCompile(`\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b`)
 )
 
-// redact strips potential credential material from a string before it reaches
+// Redact strips potential credential material from a string before it reaches
 // stderr or a returned error. Defense-in-depth: callers should never put
 // credentials into APIError fields, but if Apple ever echoes a token back in
 // a 4xx body or a developer logs an Authorization header, we don't leak it.
-func redact(s string) string {
+//
+// Patterns scrubbed:
+//   - JWTs (eyJ-prefixed three-segment dotted base64url)
+//   - "Bearer <token>" headers
+//   - 10-char ASC API key IDs (whole-word boundary)
+//   - AuthKey_<KEYID>.p8 filenames (the underscore breaks \b, so this is a
+//     separate explicit pattern — see closed SEC-002 for context)
+//   - Issuer UUIDs (the App Store Connect issuer ID format)
+//
+// Exported as Redact() so the cmd-layer printer in cmd/skipper/main.go can
+// apply it to ALL error output, not just APIError.Error().
+func Redact(s string) string {
 	s = jwtPattern.ReplaceAllString(s, "[REDACTED-JWT]")
 	s = bearerPattern.ReplaceAllString(s, "Bearer [REDACTED]")
+	s = authKeyPathPattern.ReplaceAllString(s, "AuthKey_[REDACTED-KEYID].p8")
 	s = keyIDPattern.ReplaceAllString(s, "[REDACTED-KEYID]")
+	s = uuidPattern.ReplaceAllString(s, "[REDACTED-UUID]")
 	return s
 }
+
+// redact is the unexported alias retained for in-package callers.
+// New callers should use Redact directly.
+func redact(s string) string { return Redact(s) }
