@@ -261,6 +261,36 @@ func formatDiags(diags []Diagnostic) string {
 	return strings.Join(out, "\n")
 }
 
+// TestRulesCorpus_LiveRulesHaveLiveFixtures asserts every Live or Both
+// rule has at least one fail*.routes.json fixture in its testdata
+// directory. This guards against silent regressions where the offline
+// arm of a Both rule is exercised but the live arm has no coverage.
+func TestRulesCorpus_LiveRulesHaveLiveFixtures(t *testing.T) {
+	root := filepath.Join("testdata", "rules")
+	for _, r := range All() {
+		if r.Mode()&ModeLive == 0 {
+			continue
+		}
+		dir := filepath.Join(root, r.ID())
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			t.Errorf("rule %s: missing testdata dir %s: %v", r.ID(), dir, err)
+			continue
+		}
+		hasLive := false
+		for _, e := range entries {
+			if strings.HasSuffix(e.Name(), ".routes.json") {
+				hasLive = true
+				break
+			}
+		}
+		if !hasLive {
+			t.Errorf("rule %s is Live or Both mode but has no *.routes.json fixture under %s",
+				r.ID(), dir)
+		}
+	}
+}
+
 // TestRulesCorpus is the table-driven driver: it walks
 // testdata/rules/<rule_id>/ subdirectories and asserts each pass.yaml
 // fires no diagnostics for its rule, and each fail*.yaml fires at least
