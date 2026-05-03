@@ -251,7 +251,7 @@
         "gambling":                         { "type": "boolean" },
         "unrestrictedWebAccess":            { "type": "boolean" },
         "kidsAgeBand":                      { "enum": ["FIVE_AND_UNDER", "SIX_TO_EIGHT", "NINE_TO_ELEVEN", null] },
-        "seventeenPlus":                    { "type": "boolean" }
+        "seventeenPlus":                    { "type": "boolean", "description": "Read-only. Apple derives the 17+ rating from the other questionnaire answers; this field cannot be set directly. Skipper returns an error if this appears in a change set. May appear in fetched state files as documentation of the current computed rating." }
       }
     },
 
