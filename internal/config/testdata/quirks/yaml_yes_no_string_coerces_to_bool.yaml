@@ -1,0 +1,11 @@
+apiVersion: skipper.corelift.io/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.typedrift
+  version: "1.0"
+spec:
+  ageRating:
+    # gambling is a boolean. The string "yes" is rejected by yaml.v3 here
+    # because the explicit-quoted scalar tags as !!str, which can't be
+    # unmarshaled into *bool.
+    gambling: "yes"

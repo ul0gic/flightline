@@ -1,0 +1,5 @@
+{
+  "diagnostics": [
+    { "stage": "schema", "path": "/spec/screenshots/locales/en-US/APP_IPHONE_69", "messageContains": "got 11, want 10" }
+  ]
+}

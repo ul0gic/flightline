@@ -1,0 +1,7 @@
+apiVersion: skipper.corelift.io/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.platform
+  version: "2.1.4"
+  platform: MAC_OS
+spec: {}

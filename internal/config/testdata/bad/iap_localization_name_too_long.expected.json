@@ -1,0 +1,5 @@
+{
+  "diagnostics": [
+    { "stage": "schema", "path": "/spec/iap/products/com.example.iaploc.lifetime/localizations/en-US/name", "messageContains": "got 31, want 30" }
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "diagnostics": [
+    { "stage": "schema", "path": "/spec/ageRating/kidsAgeBand", "messageContains": "FIVE_AND_UNDER" }
+  ]
+}

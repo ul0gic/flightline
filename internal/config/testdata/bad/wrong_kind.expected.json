@@ -1,0 +1,5 @@
+{
+  "diagnostics": [
+    { "stage": "schema", "path": "/kind", "messageContains": "must be 'AppState'" }
+  ]
+}

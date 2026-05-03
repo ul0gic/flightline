@@ -1,0 +1,5 @@
+{
+  "diagnostics": [
+    { "stage": "schema", "path": "/spec/version/copyright", "messageContains": "got 104, want 100" }
+  ]
+}

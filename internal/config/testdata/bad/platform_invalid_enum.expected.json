@@ -1,0 +1,5 @@
+{
+  "diagnostics": [
+    { "stage": "schema", "path": "/metadata/platform", "messageContains": "must be one of 'IOS', 'MAC_OS', 'TV_OS', 'VISION_OS'" }
+  ]
+}

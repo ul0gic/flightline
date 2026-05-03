@@ -1,0 +1,21 @@
+apiVersion: skipper.corelift.io/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.toomany
+  version: "1.0"
+spec:
+  screenshots:
+    locales:
+      en-US:
+        APP_IPHONE_69:
+          - path: ./s/01.png
+          - path: ./s/02.png
+          - path: ./s/03.png
+          - path: ./s/04.png
+          - path: ./s/05.png
+          - path: ./s/06.png
+          - path: ./s/07.png
+          - path: ./s/08.png
+          - path: ./s/09.png
+          - path: ./s/10.png
+          - path: ./s/11.png

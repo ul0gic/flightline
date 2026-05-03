@@ -1,0 +1,5 @@
+{
+  "diagnostics": [
+    { "stage": "schema", "path": "/spec/testflight/groups/external/publicLinkLimit", "messageContains": "10,001" }
+  ]
+}

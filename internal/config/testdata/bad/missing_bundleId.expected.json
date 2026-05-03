@@ -1,0 +1,6 @@
+{
+  "diagnostics": [
+    { "stage": "schema", "path": "/metadata/bundleId", "messageContains": "want 3" },
+    { "stage": "schema", "path": "/metadata/bundleId", "messageContains": "does not match pattern" }
+  ]
+}

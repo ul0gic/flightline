@@ -1,0 +1,11 @@
+apiVersion: skipper.corelift.io/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.longkeys
+  version: "1.0"
+spec:
+  metadata:
+    locales:
+      en-US:
+        # >100 chars
+        keywords: "alpha,bravo,charlie,delta,echo,foxtrot,golf,hotel,india,juliet,kilo,lima,mike,november,oscar,papa,quebec"

@@ -1,0 +1,11 @@
+apiVersion: skipper.corelift.io/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.baddevice
+  version: "1.0"
+spec:
+  screenshots:
+    locales:
+      en-US:
+        APP_NOKIA_3310:
+          - path: ./screens/nope.png

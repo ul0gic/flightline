@@ -1,0 +1,12 @@
+apiVersion: skipper.corelift.io/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.toomanysubs
+  version: "1.0"
+spec:
+  categories:
+    primary: GAMES
+    primarySubcategories:
+      - GAMES_PUZZLE
+      - GAMES_CASUAL
+      - GAMES_TRIVIA

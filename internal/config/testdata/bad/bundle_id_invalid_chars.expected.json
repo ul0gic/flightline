@@ -1,0 +1,5 @@
+{
+  "diagnostics": [
+    { "stage": "schema", "path": "/metadata/bundleId", "messageContains": "does not match pattern '^[a-zA-Z0-9._-]+$'" }
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "diagnostics": [
+    { "stage": "schema", "path": "/spec/metadata/locales", "messageContains": "additional properties 'EN_US' not allowed" }
+  ]
+}

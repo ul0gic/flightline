@@ -1,0 +1,5 @@
+{
+  "diagnostics": [
+    { "stage": "schema", "path": "/apiVersion", "messageContains": "must be 'skipper.corelift.io/v1alpha1'" }
+  ]
+}

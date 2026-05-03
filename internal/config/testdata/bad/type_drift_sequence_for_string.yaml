@@ -1,0 +1,10 @@
+apiVersion: skipper.corelift.io/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.seqforstring
+  version: "1.0"
+spec:
+  version:
+    copyright:
+      - "this should not be a sequence"
+      - "but here we are"

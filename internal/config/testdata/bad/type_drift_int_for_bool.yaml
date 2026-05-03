@@ -1,0 +1,9 @@
+apiVersion: skipper.corelift.io/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.intforbool
+  version: "1.0"
+spec:
+  ageRating:
+    # 1 cannot be coerced into bool by yaml.v3 (only true/false/yes/no/on/off).
+    gambling: 1

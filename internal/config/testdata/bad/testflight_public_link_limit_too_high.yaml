@@ -1,0 +1,11 @@
+apiVersion: skipper.corelift.io/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.publink
+  version: "1.0"
+spec:
+  testflight:
+    groups:
+      external:
+        publicLink: true
+        publicLinkLimit: 10001

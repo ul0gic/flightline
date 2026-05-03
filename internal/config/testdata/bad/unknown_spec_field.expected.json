@@ -1,0 +1,5 @@
+{
+  "diagnostics": [
+    { "stage": "load", "line": 7, "messageContains": "field notARealSection not found in type config.StateSpec" }
+  ]
+}

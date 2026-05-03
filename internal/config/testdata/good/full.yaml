@@ -1,0 +1,89 @@
+apiVersion: skipper.corelift.io/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.full
+  version: "1.2.3"
+  platform: IOS
+spec:
+  version:
+    releaseType: SCHEDULED
+    earliestReleaseDate: "2026-06-01T00:00:00Z"
+    copyright: "© 2026 Full Example"
+    downloadable: true
+  build:
+    number: "999"
+  metadata:
+    locales:
+      en-US:
+        name: "Full Example"
+        subtitle: "Every spec field"
+        description: |
+          A comprehensive Skipper state file exercising every spec.* section.
+        keywords: "full,example,every,field"
+        whatsNew: "Initial 1.2.3 release."
+        promotionalText: "Promo text."
+        marketingUrl: "https://example.com/m"
+        supportUrl: "https://example.com/s"
+        privacyPolicyUrl: "https://example.com/p"
+  screenshots:
+    locales:
+      en-US:
+        APP_IPHONE_69:
+          - path: ./screens/iphone69-1.png
+  iap:
+    products:
+      com.example.full.lifetime:
+        type: NON_CONSUMABLE
+        name: "Lifetime"
+        familySharable: false
+        contentHosting: NON_HOSTED
+        reviewNote: "Tap Unlock."
+        reviewScreenshot:
+          path: ./review/lifetime.png
+        localizations:
+          en-US:
+            name: "Lifetime"
+            description: "Unlock all features."
+  ageRating:
+    cartoonOrFantasyViolence: NONE
+    realisticViolence: NONE
+    profanityOrCrudeHumor: NONE
+    matureSuggestiveThemes: NONE
+    horrorOrFearThemes: NONE
+    medicalOrTreatmentInformation: NONE
+    alcoholTobaccoOrDrugUseOrReferences: NONE
+    contestsAndGambling: NONE
+    sexualContentOrNudity: NONE
+    sexualContentGraphicAndNudity: NONE
+    gambling: false
+    unrestrictedWebAccess: false
+    seventeenPlus: false
+  exportCompliance:
+    usesNonExemptEncryption: false
+  reviewerDemo:
+    username: "demo@example.com"
+    passwordRef: env:DEMO_PASSWORD
+    notes: "Tap login then play through tutorial."
+    contactName: "QA Lead"
+    contactEmail: "qa@example.com"
+    contactPhone: "+1-555-0100"
+  categories:
+    primary: EDUCATION
+    secondary: REFERENCE
+  pricing:
+    baseTerritory: USA
+    appPricePointId: "FREE"
+  testflight:
+    groups:
+      internal:
+        isInternal: true
+        testers:
+          - email: tester1@example.com
+            firstName: Test
+            lastName: One
+  customProductPages:
+    page-one:
+      visible: true
+      localizations:
+        en-US:
+          promotionalText: "Special offer."

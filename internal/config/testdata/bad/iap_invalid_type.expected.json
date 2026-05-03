@@ -1,0 +1,5 @@
+{
+  "diagnostics": [
+    { "stage": "schema", "path": "/spec/iap/products/com.example.iaptype.lifetime/type", "messageContains": "must be one of 'CONSUMABLE', 'NON_CONSUMABLE', 'NON_RENEWING_SUBSCRIPTION'" }
+  ]
+}

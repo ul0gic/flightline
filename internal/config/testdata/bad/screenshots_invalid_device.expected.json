@@ -1,0 +1,5 @@
+{
+  "diagnostics": [
+    { "stage": "schema", "path": "/spec/screenshots/locales/en-US", "messageContains": "additional properties 'APP_NOKIA_3310' not allowed" }
+  ]
+}

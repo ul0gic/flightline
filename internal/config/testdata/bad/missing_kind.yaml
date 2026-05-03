@@ -1,0 +1,5 @@
+apiVersion: skipper.corelift.io/v1alpha1
+metadata:
+  bundleId: com.example.nokind
+  version: "1.0"
+spec: {}

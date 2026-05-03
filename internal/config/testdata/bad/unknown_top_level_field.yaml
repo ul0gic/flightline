@@ -1,0 +1,7 @@
+apiVersion: skipper.corelift.io/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.unknown
+  version: "1.0"
+spec: {}
+extraTopLevelField: "should be rejected"

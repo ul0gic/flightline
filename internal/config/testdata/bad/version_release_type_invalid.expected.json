@@ -1,0 +1,5 @@
+{
+  "diagnostics": [
+    { "stage": "schema", "path": "/spec/version/releaseType", "messageContains": "must be one of 'MANUAL', 'AFTER_APPROVAL', 'SCHEDULED'" }
+  ]
+}

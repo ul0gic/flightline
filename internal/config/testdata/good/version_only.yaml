@@ -1,0 +1,10 @@
+apiVersion: skipper.corelift.io/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.versiononly
+  version: "1.0.0"
+spec:
+  version:
+    releaseType: AFTER_APPROVAL
+    copyright: "© 2026 Example LLC"
+    downloadable: true

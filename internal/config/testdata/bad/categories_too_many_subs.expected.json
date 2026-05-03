@@ -1,0 +1,5 @@
+{
+  "diagnostics": [
+    { "stage": "schema", "path": "/spec/categories/primarySubcategories", "messageContains": "got 3, want 2" }
+  ]
+}

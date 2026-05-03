@@ -1,0 +1,10 @@
+apiVersion: skipper.corelift.io/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.iapnotype
+  version: "1.0"
+spec:
+  iap:
+    products:
+      com.example.iapnotype.lifetime:
+        name: "No type set"

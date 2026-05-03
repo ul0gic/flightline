@@ -1,0 +1,10 @@
+apiVersion: skipper.corelift.io/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.badloc
+  version: "1.0"
+spec:
+  metadata:
+    locales:
+      EN_US:
+        name: "Wrong locale code"

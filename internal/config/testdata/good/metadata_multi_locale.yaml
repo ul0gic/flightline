@@ -1,0 +1,29 @@
+apiVersion: skipper.corelift.io/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.multilocale
+  version: "1.0"
+spec:
+  metadata:
+    locales:
+      en-US:
+        name: "Multi Locale"
+        subtitle: "English"
+        description: "English description."
+        keywords: "english,locale,test"
+        marketingUrl: "https://example.com/en"
+        supportUrl: "https://example.com/en/support"
+        privacyPolicyUrl: "https://example.com/en/privacy"
+      es-MX:
+        name: "Multi Idioma"
+        subtitle: "Español"
+        description: "Descripción en español."
+        keywords: "español,idioma,prueba"
+      fr-FR:
+        name: "Multi Langue"
+        subtitle: "Français"
+        description: "Description en français."
+      ja-JP:
+        name: "マルチロケール"
+        subtitle: "日本語"
+        description: "日本語の説明。"

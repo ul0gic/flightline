@@ -1,0 +1,9 @@
+apiVersion: skipper.corelift.io/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.copyright
+  version: "1.0"
+spec:
+  version:
+    # 110 characters — exceeds the 100-char schema ceiling.
+    copyright: "© 2026 Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore"

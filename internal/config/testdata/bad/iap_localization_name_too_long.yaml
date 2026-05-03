@@ -1,0 +1,14 @@
+apiVersion: skipper.corelift.io/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.iaploc
+  version: "1.0"
+spec:
+  iap:
+    products:
+      com.example.iaploc.lifetime:
+        type: NON_CONSUMABLE
+        localizations:
+          en-US:
+            # 31 chars — schema cap on iapLocalization.name is 30.
+            name: "ThisIapLocalizedNameIsTooLongOK"

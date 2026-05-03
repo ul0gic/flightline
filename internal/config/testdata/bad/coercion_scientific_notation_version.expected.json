@@ -1,0 +1,5 @@
+{
+  "diagnostics": [
+    { "stage": "schema", "path": "/metadata/version", "messageContains": "'1.0e2' does not match pattern" }
+  ]
+}

@@ -1,0 +1,8 @@
+apiVersion: skipper.corelift.io/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.scinot
+  # Unquoted 1.0e2 parses as a float, then yaml.v3 stringifies it as "1.0e2".
+  # The schema's version pattern (^[0-9]+(\.[0-9]+)*$) rejects the literal "e".
+  version: 1.0e2
+spec: {}

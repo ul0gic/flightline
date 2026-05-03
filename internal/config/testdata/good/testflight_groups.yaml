@@ -1,0 +1,21 @@
+apiVersion: skipper.corelift.io/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.testflight
+  version: "1.0"
+spec:
+  testflight:
+    groups:
+      internal:
+        isInternal: true
+        testers:
+          - email: dev1@example.com
+            firstName: Dev
+            lastName: One
+          - email: dev2@example.com
+      external-public:
+        isInternal: false
+        publicLink: true
+        publicLinkLimit: 1000
+        testers:
+          - email: tester@example.com

@@ -1,0 +1,5 @@
+{
+  "diagnostics": [
+    { "stage": "load", "line": 11, "messageContains": "field bogusFieldOnLocale not found in type config.MetadataLocale" }
+  ]
+}

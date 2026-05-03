@@ -1,0 +1,29 @@
+apiVersion: skipper.corelift.io/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.iap
+  version: "1.0"
+spec:
+  iap:
+    products:
+      com.example.iap.lifetime:
+        type: NON_CONSUMABLE
+        name: "Lifetime"
+        familySharable: true
+        contentHosting: NON_HOSTED
+        reviewNote: "Tap Unlock on the home screen."
+        reviewScreenshot:
+          path: ./review/lifetime.png
+        localizations:
+          en-US:
+            name: "Lifetime Access"
+            description: "Unlock all features."
+          es-MX:
+            name: "Acceso de por vida"
+            description: "Desbloquea todo."
+      com.example.iap.coins100:
+        type: CONSUMABLE
+        name: "100 Coins"
+      com.example.iap.month1:
+        type: NON_RENEWING_SUBSCRIPTION
+        name: "1 Month Pass"

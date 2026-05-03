@@ -1,0 +1,6 @@
+apiVersion: skipper.corelift.io/v9beta42
+kind: AppState
+metadata:
+  bundleId: com.example.wrongapi
+  version: "1.0"
+spec: {}

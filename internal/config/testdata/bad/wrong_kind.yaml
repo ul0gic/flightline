@@ -1,0 +1,6 @@
+apiVersion: skipper.corelift.io/v1alpha1
+kind: SubmissionState
+metadata:
+  bundleId: com.example.wrongkind
+  version: "1.0"
+spec: {}

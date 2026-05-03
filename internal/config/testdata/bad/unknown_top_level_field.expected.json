@@ -1,0 +1,5 @@
+{
+  "diagnostics": [
+    { "stage": "load", "line": 7, "messageContains": "field extraTopLevelField not found in type config.State" }
+  ]
+}

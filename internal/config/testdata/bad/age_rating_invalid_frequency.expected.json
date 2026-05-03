@@ -1,0 +1,5 @@
+{
+  "diagnostics": [
+    { "stage": "schema", "path": "/spec/ageRating/cartoonOrFantasyViolence", "messageContains": "must be one of 'NONE', 'INFREQUENT_OR_MILD', 'FREQUENT_OR_INTENSE'" }
+  ]
+}
