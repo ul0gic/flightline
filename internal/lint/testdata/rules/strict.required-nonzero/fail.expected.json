@@ -1,0 +1,10 @@
+{
+  "diagnostics": [
+    {
+      "ruleId": "strict.required-nonzero",
+      "severity": "error",
+      "messageSubstring": "missing a non-empty email",
+      "path": "/spec/testflight/groups/external/testers/0/email"
+    }
+  ]
+}

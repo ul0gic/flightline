@@ -1,0 +1,8 @@
+{
+  "routes": {
+    "/v1/apps": "{\"data\":[{\"id\":\"app-1\",\"type\":\"apps\",\"attributes\":{\"bundleId\":\"com.example.iap\"}}]}",
+    "/inAppPurchasesV2": "{\"data\":[{\"id\":\"iap-A\",\"type\":\"inAppPurchases\",\"attributes\":{\"productId\":\"com.example.iap.lifetime\",\"state\":\"READY_TO_SUBMIT\"}}]}",
+    "/v1/reviewSubmissions": "{\"data\":[{\"id\":\"sub-1\",\"type\":\"reviewSubmissions\",\"attributes\":{\"state\":\"WAITING_FOR_REVIEW\"}}]}",
+    "/items": "{\"data\":[{\"id\":\"item-1\",\"type\":\"reviewSubmissionItems\",\"attributes\":{\"state\":\"READY_FOR_REVIEW\"},\"relationships\":{\"inAppPurchaseV2\":{\"data\":{\"type\":\"inAppPurchaseV2\",\"id\":\"iap-A\"}}}}]}"
+  }
+}

@@ -1,0 +1,21 @@
+apiVersion: skipper.corelift.io/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.agerating
+  version: "1.0.1"
+spec:
+  ageRating:
+    cartoonOrFantasyViolence: NONE
+    realisticViolence: NONE
+    prolongedGraphicSadisticRealisticViolence: false
+    profanityOrCrudeHumor: NONE
+    matureSuggestiveThemes: NONE
+    horrorOrFearThemes: NONE
+    medicalOrTreatmentInformation: NONE
+    alcoholTobaccoOrDrugUseOrReferences: NONE
+    contestsAndGambling: NONE
+    sexualContentOrNudity: NONE
+    sexualContentGraphicAndNudity: NONE
+    gambling: false
+    unrestrictedWebAccess: false
+    seventeenPlus: false

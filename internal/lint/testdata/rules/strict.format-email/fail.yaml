@@ -1,0 +1,8 @@
+apiVersion: skipper.corelift.io/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.email
+  version: "1.0"
+spec:
+  reviewerDemo:
+    contactEmail: "joe at example dot com"

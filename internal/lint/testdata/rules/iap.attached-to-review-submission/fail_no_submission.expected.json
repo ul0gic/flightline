@@ -1,0 +1,10 @@
+{
+  "diagnostics": [
+    {
+      "ruleId": "iap.attached-to-review-submission",
+      "severity": "error",
+      "messageSubstring": "no open review submission",
+      "path": "/spec/iap/products/com.example.iap.lifetime"
+    }
+  ]
+}

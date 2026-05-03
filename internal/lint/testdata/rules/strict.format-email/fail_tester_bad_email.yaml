@@ -1,0 +1,12 @@
+apiVersion: skipper.corelift.io/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.email
+  version: "1.0"
+spec:
+  testflight:
+    groups:
+      internal:
+        isInternal: true
+        testers:
+          - email: "not-an-email"

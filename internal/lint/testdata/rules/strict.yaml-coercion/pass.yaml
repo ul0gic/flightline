@@ -1,0 +1,11 @@
+apiVersion: skipper.corelift.io/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.coercion
+  version: "1.0"
+spec:
+  ageRating:
+    gambling: false
+    unrestrictedWebAccess: false
+  exportCompliance:
+    usesNonExemptEncryption: false

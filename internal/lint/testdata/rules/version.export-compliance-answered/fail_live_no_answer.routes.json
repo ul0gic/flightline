@@ -1,0 +1,7 @@
+{
+  "routes": {
+    "/v1/apps": "{\"data\":[{\"id\":\"app-1\",\"type\":\"apps\",\"attributes\":{\"bundleId\":\"com.example.export\"}}]}",
+    "/appStoreVersions": "{\"data\":[{\"id\":\"v-1\",\"type\":\"appStoreVersions\",\"attributes\":{\"versionString\":\"1.0.1\",\"platform\":\"IOS\"}}]}",
+    "/build": "{\"data\":{\"id\":\"b-1\",\"type\":\"builds\",\"attributes\":{\"version\":\"42\",\"processingState\":\"VALID\"}}}"
+  }
+}

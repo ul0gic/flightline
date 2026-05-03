@@ -1,0 +1,10 @@
+{
+  "diagnostics": [
+    {
+      "ruleId": "strict.format-email",
+      "severity": "warning",
+      "messageSubstring": "does not look like an email",
+      "path": "/spec/reviewerDemo/contactEmail"
+    }
+  ]
+}

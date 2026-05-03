@@ -1,0 +1,11 @@
+{
+  "diagnostics": [
+    {
+      "ruleId": "iap.promotional-image-distinct",
+      "severity": "error",
+      "messageSubstring": "shared-hash",
+      "path": "/spec/iap/products/com.example.iap.lifetime/reviewScreenshot",
+      "referenceContains": "Apple Guideline 2.3.2"
+    }
+  ]
+}

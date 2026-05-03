@@ -1,0 +1,7 @@
+{
+  "routes": {
+    "/v1/apps": "{\"data\":[{\"id\":\"app-1\",\"type\":\"apps\",\"attributes\":{\"bundleId\":\"com.example.agerating\"}}]}",
+    "/appInfos": "{\"data\":[{\"id\":\"info-1\",\"type\":\"appInfos\",\"attributes\":{\"state\":\"PREPARE_FOR_SUBMISSION\"}}]}",
+    "/ageRatingDeclaration": "{\"data\":{\"id\":\"ar-1\",\"type\":\"ageRatingDeclarations\",\"attributes\":{\"violenceCartoonOrFantasy\":\"NONE\",\"violenceRealistic\":\"\",\"profanityOrCrudeHumor\":\"NONE\",\"matureOrSuggestiveThemes\":\"NONE\",\"horrorOrFearThemes\":\"\",\"medicalOrTreatmentInformation\":\"NONE\",\"alcoholTobaccoOrDrugUseOrReferences\":\"NONE\",\"contests\":\"NONE\",\"sexualContentOrNudity\":\"NONE\",\"sexualContentGraphicAndNudity\":\"NONE\",\"gambling\":false,\"unrestrictedWebAccess\":false}}}"
+  }
+}

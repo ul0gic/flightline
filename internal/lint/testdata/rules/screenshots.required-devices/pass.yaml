@@ -1,0 +1,13 @@
+apiVersion: skipper.corelift.io/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.screenshots
+  version: "1.0"
+spec:
+  screenshots:
+    locales:
+      en-US:
+        APP_IPHONE_69:
+          - path: ./en-69.png
+        APP_IPHONE_67:
+          - path: ./en-67.png

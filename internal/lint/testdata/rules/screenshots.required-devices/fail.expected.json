@@ -1,0 +1,10 @@
+{
+  "diagnostics": [
+    {
+      "ruleId": "screenshots.required-devices",
+      "severity": "error",
+      "messageSubstring": "APP_IPHONE_67",
+      "path": "/spec/screenshots/locales/en-US/APP_IPHONE_67"
+    }
+  ]
+}

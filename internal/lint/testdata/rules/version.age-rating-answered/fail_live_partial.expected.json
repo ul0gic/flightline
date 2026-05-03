@@ -1,0 +1,17 @@
+{
+  "minCount": 2,
+  "diagnostics": [
+    {
+      "ruleId": "version.age-rating-answered",
+      "severity": "error",
+      "messageSubstring": "live age-rating field \"realisticViolence\"",
+      "path": "/spec/ageRating/realisticViolence"
+    },
+    {
+      "ruleId": "version.age-rating-answered",
+      "severity": "error",
+      "messageSubstring": "live age-rating field \"horrorOrFearThemes\"",
+      "path": "/spec/ageRating/horrorOrFearThemes"
+    }
+  ]
+}

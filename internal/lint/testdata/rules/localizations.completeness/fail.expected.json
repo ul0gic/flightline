@@ -1,0 +1,11 @@
+{
+  "diagnostics": [
+    {
+      "ruleId": "localizations.completeness",
+      "severity": "warning",
+      "messageSubstring": "fr-FR",
+      "path": "/spec/screenshots/locales/fr-FR",
+      "referenceContains": "localizations.completeness"
+    }
+  ]
+}

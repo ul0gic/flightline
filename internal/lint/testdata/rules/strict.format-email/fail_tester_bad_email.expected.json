@@ -1,0 +1,10 @@
+{
+  "diagnostics": [
+    {
+      "ruleId": "strict.format-email",
+      "severity": "warning",
+      "messageSubstring": "tester[0] email",
+      "path": "/spec/testflight/groups/internal/testers/0/email"
+    }
+  ]
+}

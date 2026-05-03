@@ -1,0 +1,11 @@
+{
+  "routes": {
+    "/v1/apps": "{\"data\":[{\"id\":\"app-1\",\"type\":\"apps\",\"attributes\":{\"bundleId\":\"com.example.iap\"}}]}",
+    "/inAppPurchasesV2": "{\"data\":[{\"id\":\"iap-A\",\"type\":\"inAppPurchases\",\"attributes\":{\"productId\":\"com.example.iap.lifetime\",\"state\":\"READY_TO_SUBMIT\"}}]}",
+    "/appStoreReviewScreenshot": "{\"data\":{\"id\":\"rs-1\",\"type\":\"reviewScreenshots\",\"attributes\":{\"sourceFileChecksum\":\"iap-only-hash\",\"fileName\":\"shot.png\",\"imageAsset\":{\"templateUrl\":\"https://example/{w}x{h}{f}/x.png\"}}}}",
+    "/appStoreVersions": "{\"data\":[{\"id\":\"v-1\",\"type\":\"appStoreVersions\",\"attributes\":{}}]}",
+    "/appStoreVersionLocalizations": "{\"data\":[{\"id\":\"loc-1\",\"type\":\"appStoreVersionLocalizations\",\"attributes\":{\"locale\":\"en-US\"}}]}",
+    "/appScreenshotSets": "{\"data\":[{\"id\":\"set-1\",\"type\":\"appScreenshotSets\",\"attributes\":{\"screenshotDisplayType\":\"APP_IPHONE_67\"}}]}",
+    "/appScreenshots": "{\"data\":[{\"id\":\"sc-1\",\"type\":\"appScreenshots\",\"attributes\":{\"sourceFileChecksum\":\"app-only-hash\",\"fileName\":\"shot.png\"}}]}"
+  }
+}

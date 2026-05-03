@@ -1,0 +1,10 @@
+{
+  "diagnostics": [
+    {
+      "ruleId": "version.age-rating-answered",
+      "severity": "error",
+      "messageSubstring": "spec.ageRating is missing",
+      "path": "/spec/ageRating"
+    }
+  ]
+}

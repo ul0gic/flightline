@@ -1,0 +1,17 @@
+apiVersion: skipper.corelift.io/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.localizations
+  version: "1.0"
+spec:
+  metadata:
+    locales:
+      en-US:
+        name: "Hello"
+      fr-FR:
+        name: "Bonjour"
+  screenshots:
+    locales:
+      en-US:
+        APP_IPHONE_69:
+          - path: ./en.png

@@ -1,0 +1,10 @@
+{
+  "diagnostics": [
+    {
+      "ruleId": "version.export-compliance-answered",
+      "severity": "error",
+      "messageSubstring": "has not declared usesNonExemptEncryption",
+      "path": "/spec/exportCompliance/usesNonExemptEncryption"
+    }
+  ]
+}

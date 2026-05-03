@@ -1,0 +1,8 @@
+{
+  "routes": {
+    "/v1/apps": "{\"data\":[{\"id\":\"app-1\",\"type\":\"apps\",\"attributes\":{\"bundleId\":\"com.example.screenshots\"}}]}",
+    "/appStoreVersions": "{\"data\":[{\"id\":\"v-1\",\"type\":\"appStoreVersions\",\"attributes\":{\"versionString\":\"1.0.1\",\"platform\":\"IOS\"}}]}",
+    "/appStoreVersionLocalizations": "{\"data\":[{\"id\":\"loc-1\",\"type\":\"appStoreVersionLocalizations\",\"attributes\":{\"locale\":\"en-US\"}}]}",
+    "/appScreenshotSets": "{\"data\":[{\"id\":\"set-69\",\"type\":\"appScreenshotSets\",\"attributes\":{\"screenshotDisplayType\":\"APP_IPHONE_69\"}}]}"
+  }
+}

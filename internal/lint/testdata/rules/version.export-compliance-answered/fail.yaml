@@ -1,0 +1,9 @@
+apiVersion: skipper.corelift.io/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.export
+  version: "1.0"
+spec:
+  exportCompliance:
+    declaration:
+      usesEncryption: false

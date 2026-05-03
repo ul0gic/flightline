@@ -1,0 +1,10 @@
+{
+  "diagnostics": [
+    {
+      "ruleId": "iap.review-screenshot-exists",
+      "severity": "error",
+      "messageSubstring": "no App Store review screenshot",
+      "path": "/spec/iap/products/com.example.iap.lifetime/reviewScreenshot"
+    }
+  ]
+}

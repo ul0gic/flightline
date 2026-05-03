@@ -1,0 +1,10 @@
+{
+  "diagnostics": [
+    {
+      "ruleId": "strict.yaml-coercion",
+      "severity": "error",
+      "messageSubstring": "gambling",
+      "path": "/gambling"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "routes": {
+    "/v1/apps": "{\"data\":[{\"id\":\"app-1\",\"type\":\"apps\",\"attributes\":{\"bundleId\":\"com.example.iap\"}}]}",
+    "/inAppPurchasesV2": "{\"data\":[{\"id\":\"iap-A\",\"type\":\"inAppPurchases\",\"attributes\":{\"productId\":\"com.example.iap.lifetime\",\"state\":\"READY_TO_SUBMIT\"}}]}",
+    "/appStoreReviewScreenshot": "{\"data\":{\"id\":\"rs-1\",\"type\":\"reviewScreenshots\",\"attributes\":{\"fileName\":\"shot.png\",\"imageAsset\":{\"templateUrl\":\"https://example/{w}x{h}{f}/shot.png\",\"width\":1200,\"height\":1600}}}}"
+  }
+}

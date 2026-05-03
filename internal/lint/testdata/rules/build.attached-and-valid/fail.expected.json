@@ -1,0 +1,10 @@
+{
+  "diagnostics": [
+    {
+      "ruleId": "build.attached-and-valid",
+      "severity": "error",
+      "messageSubstring": "no build attached",
+      "path": "/spec/build"
+    }
+  ]
+}
