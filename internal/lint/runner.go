@@ -67,6 +67,30 @@ func (s Severity) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + s.String() + `"`), nil
 }
 
+// UnmarshalJSON accepts the lowercase token form so the JSON contract
+// round-trips through json.Decode. Test code that re-parses the output of
+// `skipper lint --output json` relies on this.
+func (s *Severity) UnmarshalJSON(b []byte) error {
+	if len(b) < 2 {
+		return fmt.Errorf("severity: empty payload")
+	}
+	v := string(b)
+	if v[0] == '"' && v[len(v)-1] == '"' {
+		v = v[1 : len(v)-1]
+	}
+	switch v {
+	case "info":
+		*s = SeverityInfo
+	case "warning":
+		*s = SeverityWarning
+	case "error":
+		*s = SeverityError
+	default:
+		return fmt.Errorf("severity: unknown token %q", v)
+	}
+	return nil
+}
+
 // Mode is a bitmask of the contexts a rule runs in. Offline-only rules
 // declare ModeOffline; live-only declare ModeLive; rules that work in both
 // shapes declare ModeBoth and inspect CheckContext.Live to specialize.
