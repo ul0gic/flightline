@@ -1,4 +1,4 @@
-.PHONY: build install test vet lint fmt gen verify clean help
+.PHONY: build install test vet lint fmt gen verify clean help sync-schema
 
 GO ?= go
 BIN := ./bin/skipper
@@ -46,7 +46,13 @@ gen:
 	@echo "  jq '.paths | keys[]' openapi.oas.json | grep -i <resource>"
 	@echo "  jq '.components.schemas.<Name>' openapi.oas.json"
 
-verify: vet test lint
+verify: sync-schema vet test lint
+
+# Keep internal/config/schema.json in sync with the canonical schema.
+# `go:embed` forbids `..` traversal, so the validator's embedded copy
+# lives next to its package; this target enforces byte-identity.
+sync-schema:
+	@cp schemas/skipper.schema.json internal/config/schema.json
 
 clean:
 	rm -rf ./bin coverage.out coverage.html

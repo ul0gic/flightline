@@ -209,11 +209,14 @@ type TestFlightTester struct {
 	LastName  *string `yaml:"lastName,omitempty"  json:"lastName,omitempty"`
 }
 
-// CustomProductPagesSpec — see #/$defs/customProductPagesSpec. Keys are
-// the page identifier (slug); values describe the page.
-type CustomProductPagesSpec struct {
-	Pages map[string]CustomProductPage `yaml:",inline" json:"pages"`
-}
+// CustomProductPagesSpec — see #/$defs/customProductPagesSpec. Keys
+// are the page identifier (slug); values describe the page.
+//
+// The schema models this as a patternProperties object at the root of
+// `customProductPages`, so the Go type is a bare map. The pointer in
+// StateSpec lets callers distinguish "not managed" (nil) from
+// "explicitly empty" (zero-len map).
+type CustomProductPagesSpec map[string]CustomProductPage
 
 // CustomProductPage — see #/$defs/customProductPage.
 type CustomProductPage struct {
