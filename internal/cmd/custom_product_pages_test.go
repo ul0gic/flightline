@@ -284,3 +284,173 @@ func TestCustomProductPages_FixtureReplay_AppNotFound(t *testing.T) {
 		t.Errorf("error %q does not name the bundleId", err.Error())
 	}
 }
+
+// TestCustomProductPagesWrites_RegisteredOnGroup confirms create / update /
+// delete subcommands and their flags.
+func TestCustomProductPagesWrites_RegisteredOnGroup(t *testing.T) {
+	var cpp *cobra.Command
+	for _, c := range rootCmd.Commands() {
+		if c.Name() == "custom-product-pages" {
+			cpp = c
+			break
+		}
+	}
+	if cpp == nil {
+		t.Fatal("custom-product-pages not on root")
+	}
+	subs := map[string]*cobra.Command{}
+	for _, sc := range cpp.Commands() {
+		subs[sc.Name()] = sc
+	}
+	for _, want := range []string{"list", "get", "create", "update", "delete"} {
+		if _, ok := subs[want]; !ok {
+			t.Errorf("custom-product-pages %s subcommand missing", want)
+		}
+	}
+	if subs["create"].Flags().Lookup("name") == nil {
+		t.Errorf("create missing --name flag")
+	}
+	for _, w := range []string{"name", "visible"} {
+		if subs["update"].Flags().Lookup(w) == nil {
+			t.Errorf("update missing --%s flag", w)
+		}
+	}
+}
+
+// TestBuildCustomProductPageCreate_Shape locks the JSON:API POST body
+// shape: required (name, app), with no included block at L1.
+func TestBuildCustomProductPageCreate_Shape(t *testing.T) {
+	body := buildCustomProductPageCreate("APP-1", "Holiday Promo")
+	raw, _ := json.Marshal(body)
+	out := string(raw)
+	for _, want := range []string{
+		`"type":"appCustomProductPages"`,
+		`"name":"Holiday Promo"`,
+		`"app":{"data":{"id":"APP-1","type":"apps"}}`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("body missing %q: %s", want, out)
+		}
+	}
+	if strings.Contains(out, `"included"`) {
+		t.Errorf("body should not carry 'included' at L1: %s", out)
+	}
+}
+
+// TestComputeCustomProductPagePatchAttrs_NoOpAndChange asserts that an
+// unset flag never produces a patch entry; a same-value flag is filtered
+// out; a new value lands in the patch.
+func TestComputeCustomProductPagePatchAttrs_NoOpAndChange(t *testing.T) {
+	yes := true
+	cur := asc.AppCustomProductPageAttributes{
+		Name:    "Holiday Promo",
+		Visible: &yes,
+	}
+
+	// No flags set → empty patch.
+	root := &cobra.Command{Use: "x"}
+	root.Flags().StringVar(&customProductPagesUpdateName, "name", "", "")
+	root.Flags().BoolVar(&customProductPagesUpdateVisible, "visible", false, "")
+	patch := computeCustomProductPagePatchAttrs(root, cur)
+	if len(patch) != 0 {
+		t.Errorf("patch should be empty, got %v", patch)
+	}
+
+	// --name to same value → no name in patch.
+	root2 := &cobra.Command{Use: "x"}
+	root2.Flags().StringVar(&customProductPagesUpdateName, "name", "", "")
+	root2.Flags().BoolVar(&customProductPagesUpdateVisible, "visible", false, "")
+	if err := root2.ParseFlags([]string{"--name", "Holiday Promo"}); err != nil {
+		t.Fatalf("ParseFlags: %v", err)
+	}
+	patch = computeCustomProductPagePatchAttrs(root2, cur)
+	if _, ok := patch["name"]; ok {
+		t.Errorf("name should not be in patch (matches): %v", patch)
+	}
+
+	// --name new + --visible to false → both entries.
+	root3 := &cobra.Command{Use: "x"}
+	root3.Flags().StringVar(&customProductPagesUpdateName, "name", "", "")
+	root3.Flags().BoolVar(&customProductPagesUpdateVisible, "visible", false, "")
+	if err := root3.ParseFlags([]string{"--name", "Spring 2026", "--visible=false"}); err != nil {
+		t.Fatalf("ParseFlags: %v", err)
+	}
+	patch = computeCustomProductPagePatchAttrs(root3, cur)
+	if patch["name"] != "Spring 2026" {
+		t.Errorf("patch[name] = %v, want Spring 2026", patch["name"])
+	}
+	if patch["visible"] != false {
+		t.Errorf("patch[visible] = %v, want false", patch["visible"])
+	}
+}
+
+// TestFindCustomProductPageByName_FixtureReplay walks the read path used
+// by the idempotent create.
+func TestFindCustomProductPageByName_FixtureReplay(t *testing.T) {
+	srv := startFixtureServer(t, map[string]fixtureRoute{
+		"GET /v1/apps/1234567890/appCustomProductPages": {File: "custom_product_pages_list"},
+	})
+	c := fixtureASCClient(t, srv)
+	got, err := findCustomProductPageByName(context.Background(), c, "1234567890", "Holiday Promo")
+	if err != nil {
+		t.Fatalf("findCustomProductPageByName: %v", err)
+	}
+	if got == nil || got.ID != "CPP-1" {
+		t.Fatalf("got = %+v, want CPP-1", got)
+	}
+	miss, err := findCustomProductPageByName(context.Background(), c, "1234567890", "Nonexistent")
+	if err != nil {
+		t.Fatalf("findCustomProductPageByName miss: %v", err)
+	}
+	if miss != nil {
+		t.Errorf("miss should be nil, got %+v", miss)
+	}
+}
+
+// TestCustomProductPageSetResult_JSONShape locks the JSON contract for
+// the create/update result.
+func TestCustomProductPageSetResult_JSONShape(t *testing.T) {
+	yes := true
+	r := &CustomProductPageSetResult{
+		PageID:  "CPP-1",
+		Changed: true,
+		Created: true,
+		Attributes: asc.AppCustomProductPageAttributes{
+			Name:    "Holiday Promo",
+			Visible: &yes,
+		},
+	}
+	var buf bytes.Buffer
+	if err := renderTo(&buf, r, "json", true); err != nil {
+		t.Fatalf("renderTo: %v", err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &decoded); err != nil {
+		t.Fatalf("decode: %v: %s", err, buf.String())
+	}
+	for _, key := range []string{"pageId", "changed", "created", "attributes"} {
+		if _, ok := decoded[key]; !ok {
+			t.Errorf("missing key %q. Got: %v", key, mapKeys(decoded))
+		}
+	}
+}
+
+// TestCustomProductPageDeleteResult_TableRows_NoChange covers the
+// idempotent delete row.
+func TestCustomProductPageDeleteResult_TableRows_NoChange(t *testing.T) {
+	r := &CustomProductPageDeleteResult{
+		PageID:  "CPP-1",
+		Changed: false,
+		Note:    "no change (idempotent) — page already absent",
+	}
+	_, rows := r.TableRows()
+	foundNote := false
+	for _, row := range rows {
+		if row[0] == "NOTE" {
+			foundNote = true
+		}
+	}
+	if !foundNote {
+		t.Errorf("expected NOTE row, rows=%v", rows)
+	}
+}

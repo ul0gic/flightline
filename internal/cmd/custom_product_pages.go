@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -140,9 +141,52 @@ var customProductPagesGetCmd = &cobra.Command{
   skipper custom-product-pages get com.example.myapp --page 8000000001 --output json`,
 }
 
+// customProductPagesCreateCmd creates a new AppCustomProductPage on the
+// app via POST /v1/appCustomProductPages. Idempotent on (app, name): if
+// a page with the same name already exists for the app, the existing
+// page is returned with changed=false rather than POSTed.
+var customProductPagesCreateCmd = &cobra.Command{
+	Use:          "create <bundleId>",
+	Short:        "Create a custom product page (idempotent on name)",
+	SilenceUsage: true,
+	Args:         cobra.ExactArgs(1),
+	RunE:         runCustomProductPagesCreate,
+	Example: `  skipper custom-product-pages create com.example.myapp --name "Holiday Promo"
+  skipper custom-product-pages create com.example.myapp --name "Spring 2026" --output json`,
+}
+
+// customProductPagesUpdateCmd PATCHes mutable attributes (name, visible)
+// on a custom product page. Idempotent: only PATCHes when at least one
+// supplied attribute differs from current.
+var customProductPagesUpdateCmd = &cobra.Command{
+	Use:          "update <pageId>",
+	Short:        "Update a custom product page's mutable attributes (idempotent)",
+	SilenceUsage: true,
+	Args:         cobra.ExactArgs(1),
+	RunE:         runCustomProductPagesUpdate,
+	Example: `  skipper custom-product-pages update CPP-1 --visible
+  skipper custom-product-pages update CPP-1 --name "Updated Holiday"`,
+}
+
+// customProductPagesDeleteCmd deletes a custom product page. Idempotent:
+// 404 (already absent) reports changed=false rather than erroring.
+var customProductPagesDeleteCmd = &cobra.Command{
+	Use:          "delete <pageId>",
+	Short:        "Delete a custom product page (idempotent)",
+	SilenceUsage: true,
+	Args:         cobra.ExactArgs(1),
+	RunE:         runCustomProductPagesDelete,
+	Example:      `  skipper custom-product-pages delete CPP-1`,
+}
+
 var (
 	customProductPagesListLimit int
 	customProductPagesGetPage   string
+
+	customProductPagesCreateName string
+
+	customProductPagesUpdateName    string
+	customProductPagesUpdateVisible bool
 )
 
 func init() {
@@ -151,8 +195,17 @@ func init() {
 	customProductPagesGetCmd.Flags().StringVar(&customProductPagesGetPage, "page", "", "AppCustomProductPage ID to fetch")
 	_ = customProductPagesGetCmd.MarkFlagRequired("page")
 
+	customProductPagesCreateCmd.Flags().StringVar(&customProductPagesCreateName, "name", "", "developer-friendly page name (must be unique per app)")
+	_ = customProductPagesCreateCmd.MarkFlagRequired("name")
+
+	customProductPagesUpdateCmd.Flags().StringVar(&customProductPagesUpdateName, "name", "", "rename the page")
+	customProductPagesUpdateCmd.Flags().BoolVar(&customProductPagesUpdateVisible, "visible", false, "set visibility (true = public)")
+
 	customProductPagesCmd.AddCommand(customProductPagesListCmd)
 	customProductPagesCmd.AddCommand(customProductPagesGetCmd)
+	customProductPagesCmd.AddCommand(customProductPagesCreateCmd)
+	customProductPagesCmd.AddCommand(customProductPagesUpdateCmd)
+	customProductPagesCmd.AddCommand(customProductPagesDeleteCmd)
 	rootCmd.AddCommand(customProductPagesCmd)
 }
 
@@ -328,4 +381,240 @@ func collectCustomProductPageLocalizations(ctx context.Context, c *asc.Client, v
 		}
 	}
 	return out, nil
+}
+
+// CustomProductPageSetResult is the structured outcome of `custom-product-pages
+// create / update`. Surfaces whether a write was issued.
+type CustomProductPageSetResult struct {
+	PageID     string                             `json:"pageId"`
+	Changed    bool                               `json:"changed"`
+	Created    bool                               `json:"created,omitempty"`
+	Note       string                             `json:"note,omitempty"`
+	Attributes asc.AppCustomProductPageAttributes `json:"attributes"`
+}
+
+// TableRows for a custom-product-page set result.
+func (r *CustomProductPageSetResult) TableRows() (headers []string, rows [][]string) {
+	headers = []string{"FIELD", "VALUE"}
+	rows = [][]string{
+		{"PAGE_ID", r.PageID},
+		{"CHANGED", boolStrCPP(r.Changed)},
+		{"CREATED", boolStrCPP(r.Created)},
+		{"NAME", r.Attributes.Name},
+		{"VISIBLE", boolPtrStr(r.Attributes.Visible)},
+		{"URL", r.Attributes.URL},
+	}
+	if r.Note != "" {
+		rows = append(rows, []string{"NOTE", r.Note})
+	}
+	return headers, rows
+}
+
+// CustomProductPageDeleteResult is the structured outcome of
+// `custom-product-pages delete`.
+type CustomProductPageDeleteResult struct {
+	PageID  string `json:"pageId"`
+	Changed bool   `json:"changed"`
+	Note    string `json:"note,omitempty"`
+}
+
+// TableRows for the delete result.
+func (r *CustomProductPageDeleteResult) TableRows() (headers []string, rows [][]string) {
+	headers = []string{"FIELD", "VALUE"}
+	rows = [][]string{
+		{"PAGE_ID", r.PageID},
+		{"CHANGED", boolStrCPP(r.Changed)},
+	}
+	if r.Note != "" {
+		rows = append(rows, []string{"NOTE", r.Note})
+	}
+	return headers, rows
+}
+
+// boolStrCPP renders a bool as "true"/"false" for CPP result tables.
+func boolStrCPP(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
+}
+
+// runCustomProductPagesCreate creates an AppCustomProductPage on the named
+// app. Idempotent on (app, name).
+func runCustomProductPagesCreate(cmd *cobra.Command, args []string) error {
+	bundleID := args[0]
+	name := strings.TrimSpace(customProductPagesCreateName)
+	if name == "" {
+		return fmt.Errorf("custom-product-pages: --name is required")
+	}
+
+	c, err := newClient()
+	if err != nil {
+		return err
+	}
+	appID, err := resolveAppID(cmd.Context(), c, bundleID)
+	if err != nil {
+		return err
+	}
+
+	existing, err := findCustomProductPageByName(cmd.Context(), c, appID, name)
+	if err != nil {
+		return err
+	}
+	if existing != nil {
+		return Render(&CustomProductPageSetResult{
+			PageID:     existing.ID,
+			Changed:    false,
+			Created:    false,
+			Note:       "no change (idempotent) — page with same name already exists",
+			Attributes: existing.Attributes,
+		}, outputMode())
+	}
+
+	body := buildCustomProductPageCreate(appID, name)
+	resp, err := asc.Post[asc.Single[asc.AppCustomProductPageAttributes]](
+		cmd.Context(), c, "/v1/appCustomProductPages", nil, body,
+	)
+	if err != nil {
+		return err
+	}
+	return Render(&CustomProductPageSetResult{
+		PageID:     resp.Data.ID,
+		Changed:    true,
+		Created:    true,
+		Attributes: resp.Data.Attributes,
+	}, outputMode())
+}
+
+// runCustomProductPagesUpdate PATCHes a page's mutable attributes.
+// Idempotent: only PATCHes when at least one supplied attribute differs.
+func runCustomProductPagesUpdate(cmd *cobra.Command, args []string) error {
+	pageID := args[0]
+	c, err := newClient()
+	if err != nil {
+		return err
+	}
+
+	cur, err := asc.Get[asc.Single[asc.AppCustomProductPageAttributes]](
+		cmd.Context(), c, "/v1/appCustomProductPages/"+pageID, nil,
+	)
+	if err != nil {
+		return err
+	}
+
+	patchAttrs := computeCustomProductPagePatchAttrs(cmd, cur.Data.Attributes)
+	if len(patchAttrs) == 0 {
+		return Render(&CustomProductPageSetResult{
+			PageID:     pageID,
+			Changed:    false,
+			Note:       "no change (idempotent) — all requested attributes already match",
+			Attributes: cur.Data.Attributes,
+		}, outputMode())
+	}
+
+	body := map[string]any{
+		"data": map[string]any{
+			"type":       "appCustomProductPages",
+			"id":         pageID,
+			"attributes": patchAttrs,
+		},
+	}
+	resp, err := asc.Patch[asc.Single[asc.AppCustomProductPageAttributes]](
+		cmd.Context(), c, "/v1/appCustomProductPages/"+pageID, nil, body,
+	)
+	if err != nil {
+		return err
+	}
+	return Render(&CustomProductPageSetResult{
+		PageID:     pageID,
+		Changed:    true,
+		Attributes: resp.Data.Attributes,
+	}, outputMode())
+}
+
+// computeCustomProductPagePatchAttrs builds the partial attributes map
+// for a page PATCH. Only flags actually passed contribute; same-value
+// flags are filtered so re-runs produce no PATCH.
+func computeCustomProductPagePatchAttrs(cmd *cobra.Command, cur asc.AppCustomProductPageAttributes) map[string]any {
+	patch := map[string]any{}
+	flags := cmd.Flags()
+	if flags.Changed("name") {
+		newName := strings.TrimSpace(customProductPagesUpdateName)
+		if newName != cur.Name {
+			patch["name"] = newName
+		}
+	}
+	if flags.Changed("visible") {
+		curVal := false
+		if cur.Visible != nil {
+			curVal = *cur.Visible
+		}
+		if curVal != customProductPagesUpdateVisible {
+			patch["visible"] = customProductPagesUpdateVisible
+		}
+	}
+	return patch
+}
+
+// runCustomProductPagesDelete deletes a custom product page. Idempotent:
+// 404 (already absent) reports changed=false rather than erroring so
+// re-runs of a delete script are safe.
+func runCustomProductPagesDelete(cmd *cobra.Command, args []string) error {
+	pageID := args[0]
+	c, err := newClient()
+	if err != nil {
+		return err
+	}
+	if err := c.Delete(cmd.Context(), "/v1/appCustomProductPages/"+pageID, nil); err != nil {
+		var apiErr *asc.APIError
+		if errors.As(err, &apiErr) && apiErr.HTTPStatus == 404 {
+			return Render(&CustomProductPageDeleteResult{
+				PageID:  pageID,
+				Changed: false,
+				Note:    "no change (idempotent) — page already absent",
+			}, outputMode())
+		}
+		return err
+	}
+	return Render(&CustomProductPageDeleteResult{
+		PageID:  pageID,
+		Changed: true,
+	}, outputMode())
+}
+
+// findCustomProductPageByName scans the app's pages and returns the first
+// one whose name matches (case-sensitive). Returns (nil, nil) when no
+// match exists.
+func findCustomProductPageByName(ctx context.Context, c *asc.Client, appID, name string) (*asc.Resource[asc.AppCustomProductPageAttributes], error) {
+	q := url.Values{"limit": {"200"}}
+	page, err := asc.Get[asc.Collection[asc.AppCustomProductPageAttributes]](
+		ctx, c, "/v1/apps/"+appID+"/appCustomProductPages", q,
+	)
+	if err != nil {
+		return nil, err
+	}
+	for i := range page.Data {
+		if page.Data[i].Attributes.Name == name {
+			return &page.Data[i], nil
+		}
+	}
+	return nil, nil
+}
+
+// buildCustomProductPageCreate crafts the JSON:API POST body for
+// /v1/appCustomProductPages with only the required (name, app) fields.
+// The included inline-versions/localizations are not modelled at L1;
+// callers create those via the version subresource later.
+func buildCustomProductPageCreate(appID, name string) map[string]any {
+	return map[string]any{
+		"data": map[string]any{
+			"type":       "appCustomProductPages",
+			"attributes": map[string]any{"name": name},
+			"relationships": map[string]any{
+				"app": map[string]any{
+					"data": map[string]any{"type": "apps", "id": appID},
+				},
+			},
+		},
+	}
 }
