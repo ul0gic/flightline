@@ -136,7 +136,23 @@ func Patch[T any](ctx context.Context, c *Client, path string, query url.Values,
 // Delete issues a DELETE. Apple typically returns 204 No Content on success;
 // any 2xx is treated as success and no body is decoded.
 func (c *Client) Delete(ctx context.Context, path string, query url.Values) error {
-	resp, err := c.do(ctx, http.MethodDelete, path, query, nil, "")
+	return c.deleteCommon(ctx, path, query, nil)
+}
+
+// DeleteWithBody issues a DELETE with a JSON request body. Apple's
+// "delete to-many relationship" endpoints require this shape — e.g.
+// /v1/betaGroups/{id}/relationships/betaTesters expects the linkages list
+// in the body, not the URL.
+//
+// Behavior matches Delete on the response side: 2xx success, body
+// drained and discarded, 4xx/5xx surfaced as a typed *APIError.
+func (c *Client) DeleteWithBody(ctx context.Context, path string, query url.Values, body any) error {
+	return c.deleteCommon(ctx, path, query, body)
+}
+
+// deleteCommon shares the body-or-not DELETE flow.
+func (c *Client) deleteCommon(ctx context.Context, path string, query url.Values, body any) error {
+	resp, err := c.do(ctx, http.MethodDelete, path, query, body, "")
 	if err != nil {
 		return err
 	}

@@ -333,3 +333,268 @@ func TestTestflight_BuildNotFoundErrorMessage(t *testing.T) {
 		t.Errorf("build lookup data len = %d, want 0 (notFound fixture)", len(bpage.Data))
 	}
 }
+
+// TestTestflightWrites_RegisteredOnGroup verifies the cobra wiring for all
+// new write verbs: groups create/update/delete, testers add/remove,
+// beta-review submit.
+func TestTestflightWrites_RegisteredOnGroup(t *testing.T) {
+	var tf *cobra.Command
+	for _, c := range rootCmd.Commands() {
+		if c.Name() == "testflight" {
+			tf = c
+			break
+		}
+	}
+	if tf == nil {
+		t.Fatal("testflight not on root")
+	}
+
+	want := map[string][]string{
+		"groups":      {"list", "create", "update", "delete"},
+		"testers":     {"list", "add", "remove"},
+		"beta-review": {"get", "submit"},
+	}
+	for _, sub := range tf.Commands() {
+		expected, ok := want[sub.Name()]
+		if !ok {
+			continue
+		}
+		got := map[string]bool{}
+		for _, sc := range sub.Commands() {
+			got[sc.Name()] = true
+		}
+		for _, w := range expected {
+			if !got[w] {
+				t.Errorf("testflight %s missing subcommand %s", sub.Name(), w)
+			}
+		}
+	}
+}
+
+// TestBuildBetaGroupCreate_ShapesFlagsCorrectly asserts that only flags
+// the user actually passed appear in the body, with required attrs always
+// present.
+func TestBuildBetaGroupCreate_ShapesFlagsCorrectly(t *testing.T) {
+	body := buildBetaGroupCreate("APP-1", "Internal Team", true, false, false, false, 0, false, false)
+	raw, _ := json.Marshal(body)
+	out := string(raw)
+	for _, want := range []string{
+		`"type":"betaGroups"`,
+		`"isInternalGroup":true`,
+		`"name":"Internal Team"`,
+		`"app":{"data":{"id":"APP-1","type":"apps"}}`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("body missing %q\nfull body: %s", want, out)
+		}
+	}
+	for _, leak := range []string{`"publicLinkEnabled"`, `"publicLinkLimit"`, `"feedbackEnabled"`} {
+		if strings.Contains(out, leak) {
+			t.Errorf("body should omit %s when flag wasn't supplied: %s", leak, out)
+		}
+	}
+}
+
+// TestBuildBetaGroupCreate_PublicLinkLimit asserts that the matching
+// publicLinkLimitEnabled flag is auto-set when --public-link-limit is
+// supplied with a non-zero value.
+func TestBuildBetaGroupCreate_PublicLinkLimit(t *testing.T) {
+	body := buildBetaGroupCreate("APP-1", "Public", false, true, true, true, 5000, true, true)
+	raw, _ := json.Marshal(body)
+	out := string(raw)
+	for _, want := range []string{
+		`"publicLinkEnabled":true`,
+		`"publicLinkLimit":5000`,
+		`"publicLinkLimitEnabled":true`,
+		`"feedbackEnabled":true`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("body missing %q: %s", want, out)
+		}
+	}
+}
+
+// TestBuildBetaTesterLinkages_ShapeArray asserts the linkage body shape
+// for the to-many betaTesters relationship endpoints.
+func TestBuildBetaTesterLinkages_ShapeArray(t *testing.T) {
+	body := buildBetaTesterLinkages([]string{"T1", "T2", "T3"})
+	raw, _ := json.Marshal(body)
+	out := string(raw)
+	for _, want := range []string{
+		`"data":[`,
+		`{"id":"T1","type":"betaTesters"}`,
+		`{"id":"T2","type":"betaTesters"}`,
+		`{"id":"T3","type":"betaTesters"}`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("body missing %q: %s", want, out)
+		}
+	}
+}
+
+// TestDedupeStrings_StableOrderEmptyDropped covers the helper guarding
+// idempotent tester adds/removes from accidental duplicates.
+func TestDedupeStrings_StableOrderEmptyDropped(t *testing.T) {
+	got := dedupeStrings([]string{"T1", "", "T2", "T1", "  T3  ", "T3"})
+	want := []string{"T1", "T2", "T3"}
+	if len(got) != len(want) {
+		t.Fatalf("got = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("got[%d]=%q want %q", i, got[i], want[i])
+		}
+	}
+}
+
+// TestBetaTestersChangeResult_FilterEmptyAppliedSkipsPOST simulates the
+// idempotency path: when applied is empty, no write should be issued
+// (the runTestflightTestersAdd/Remove early-return). Verified at the
+// helper level: a result with empty Applied yields Changed=false when
+// constructed with Changed=false.
+func TestBetaTestersChangeResult_NoOpRendersChangedFalse(t *testing.T) {
+	r := &BetaTestersChangeResult{
+		GroupID:   "BG-1",
+		Action:    "add",
+		Requested: []string{"T1"},
+		Skipped:   []string{"T1"},
+		Changed:   false,
+	}
+	var buf bytes.Buffer
+	if err := renderTo(&buf, r, "json", true); err != nil {
+		t.Fatalf("renderTo: %v", err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &decoded); err != nil {
+		t.Fatalf("decode: %v: %s", err, buf.String())
+	}
+	if v, ok := decoded["changed"].(bool); !ok || v {
+		t.Errorf("changed = %v, want false", decoded["changed"])
+	}
+	if _, ok := decoded["skipped"]; !ok {
+		t.Errorf("missing skipped key. Got: %v", mapKeys(decoded))
+	}
+}
+
+// TestBetaGroupSetResult_JSONShape locks the JSON contract for the
+// groups-create / groups-update result.
+func TestBetaGroupSetResult_JSONShape(t *testing.T) {
+	yes := true
+	r := &BetaGroupSetResult{
+		GroupID: "BG-1",
+		Changed: true,
+		Created: true,
+		Attributes: asc.BetaGroupAttributes{
+			Name:            "Internal",
+			IsInternalGroup: &yes,
+			FeedbackEnabled: &yes,
+		},
+	}
+	var buf bytes.Buffer
+	if err := renderTo(&buf, r, "json", true); err != nil {
+		t.Fatalf("renderTo: %v", err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &decoded); err != nil {
+		t.Fatalf("decode: %v: %s", err, buf.String())
+	}
+	for _, key := range []string{"groupId", "changed", "created", "attributes"} {
+		if _, ok := decoded[key]; !ok {
+			t.Errorf("missing key %q. Got: %v", key, mapKeys(decoded))
+		}
+	}
+}
+
+// TestBetaReviewSubmitResult_JSONShape locks the JSON contract for the
+// beta-review submit result.
+func TestBetaReviewSubmitResult_JSONShape(t *testing.T) {
+	r := &BetaReviewSubmitResult{
+		BundleID:     "com.example.alpha",
+		BuildID:      "BUILD-42",
+		BuildNumber:  "42",
+		SubmissionID: "BARS-42",
+		Changed:      true,
+	}
+	var buf bytes.Buffer
+	if err := renderTo(&buf, r, "json", true); err != nil {
+		t.Fatalf("renderTo: %v", err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &decoded); err != nil {
+		t.Fatalf("decode: %v: %s", err, buf.String())
+	}
+	for _, key := range []string{"bundleId", "buildId", "buildNumber", "submissionId", "changed", "attributes"} {
+		if _, ok := decoded[key]; !ok {
+			t.Errorf("missing key %q. Got: %v", key, mapKeys(decoded))
+		}
+	}
+}
+
+// TestFindBetaGroupByName_FixtureReplay walks the read path used by the
+// idempotent groups-create.
+func TestFindBetaGroupByName_FixtureReplay(t *testing.T) {
+	srv := startFixtureServer(t, map[string]fixtureRoute{
+		"GET /v1/apps/1234567890/betaGroups": {File: "testflight_groups_list"},
+	})
+	c := fixtureASCClient(t, srv)
+	got, err := findBetaGroupByName(context.Background(), c, "1234567890", "Internal Team")
+	if err != nil {
+		t.Fatalf("findBetaGroupByName: %v", err)
+	}
+	if got == nil || got.ID != "BG-INTERNAL-1" {
+		t.Fatalf("got = %+v, want BG-INTERNAL-1", got)
+	}
+
+	// Name miss returns (nil, nil).
+	miss, err := findBetaGroupByName(context.Background(), c, "1234567890", "Nonexistent")
+	if err != nil {
+		t.Fatalf("findBetaGroupByName miss: %v", err)
+	}
+	if miss != nil {
+		t.Errorf("miss should be nil, got %+v", miss)
+	}
+}
+
+// TestComputeBetaGroupPatchAttrs_OnlyChangedFlags asserts that an unset
+// flag never produces a patch entry; a flag matching current state is
+// also filtered out.
+func TestComputeBetaGroupPatchAttrs_OnlyChangedFlags(t *testing.T) {
+	yes := true
+	cur := asc.BetaGroupAttributes{
+		Name:            "Old Name",
+		PublicLinkLimit: 1000,
+		FeedbackEnabled: &yes,
+	}
+	root := &cobra.Command{Use: "x"}
+	root.Flags().StringVar(&testflightGroupsUpdateName, "name", "", "")
+	root.Flags().IntVar(&testflightGroupsUpdatePublicLinkLimit, "public-link-limit", 0, "")
+	root.Flags().BoolVar(&testflightGroupsUpdateFeedback, "feedback", false, "")
+
+	// No flags set → empty patch.
+	patch := computeBetaGroupPatchAttrs(root, cur)
+	if len(patch) != 0 {
+		t.Errorf("patch should be empty, got %v", patch)
+	}
+
+	// --name to same value → empty patch (idempotent).
+	if err := root.ParseFlags([]string{"--name", "Old Name"}); err != nil {
+		t.Fatalf("ParseFlags: %v", err)
+	}
+	patch = computeBetaGroupPatchAttrs(root, cur)
+	if _, ok := patch["name"]; ok {
+		t.Errorf("name should not be in patch (matches current): %v", patch)
+	}
+
+	// --name to new value → patch carries name only.
+	root2 := &cobra.Command{Use: "x"}
+	root2.Flags().StringVar(&testflightGroupsUpdateName, "name", "", "")
+	root2.Flags().IntVar(&testflightGroupsUpdatePublicLinkLimit, "public-link-limit", 0, "")
+	root2.Flags().BoolVar(&testflightGroupsUpdateFeedback, "feedback", false, "")
+	if err := root2.ParseFlags([]string{"--name", "New Name"}); err != nil {
+		t.Fatalf("ParseFlags: %v", err)
+	}
+	patch = computeBetaGroupPatchAttrs(root2, cur)
+	if patch["name"] != "New Name" {
+		t.Errorf("patch[name] = %v, want New Name", patch["name"])
+	}
+}

@@ -226,6 +226,70 @@ func TestDelete_2xxIsSuccess(t *testing.T) {
 	}
 }
 
+// TestDeleteWithBody_SendsBody confirms the body-bearing DELETE variant
+// transmits the JSON body intact and accepts a 204 as success. Used by
+// Apple's "delete to-many relationship" endpoints
+// (e.g. /v1/betaGroups/{id}/relationships/betaTesters).
+func TestDeleteWithBody_SendsBody(t *testing.T) {
+	called := false
+	var gotBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		if r.Method != http.MethodDelete {
+			t.Errorf("method = %s, want DELETE", r.Method)
+		}
+		if r.Header.Get("Content-Type") != "application/json" {
+			t.Errorf("Content-Type = %q, want application/json", r.Header.Get("Content-Type"))
+		}
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			t.Errorf("decode body: %v", err)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv)
+	body := map[string]any{
+		"data": []map[string]any{
+			{"type": "betaTesters", "id": "T1"},
+		},
+	}
+	if err := c.DeleteWithBody(context.Background(), "/v1/betaGroups/BG-1/relationships/betaTesters", nil, body); err != nil {
+		t.Fatalf("DeleteWithBody: %v", err)
+	}
+	if !called {
+		t.Fatal("server not called")
+	}
+	gotData, ok := gotBody["data"].([]any)
+	if !ok || len(gotData) != 1 {
+		t.Fatalf("body data = %v, want one-element slice", gotBody)
+	}
+}
+
+// TestDeleteWithBody_4xxFails confirms typed-error surfacing on a non-2xx
+// response (regression guard against silently dropping Apple's errors[]).
+func TestDeleteWithBody_4xxFails(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = w.Write([]byte(`{"errors":[{"code":"BAD","title":"bad linkage"}]}`))
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv)
+	err := c.DeleteWithBody(context.Background(), "/v1/betaGroups/BG-1/relationships/betaTesters", nil, map[string]any{})
+	if err == nil {
+		t.Fatal("DeleteWithBody: want error on 422, got nil")
+	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("err = %T, want *APIError", err)
+	}
+	if apiErr.HTTPStatus != http.StatusUnprocessableEntity {
+		t.Errorf("HTTPStatus = %d, want 422", apiErr.HTTPStatus)
+	}
+}
+
 func TestBuildURL_RejectsForeignHost(t *testing.T) {
 	c := &Client{baseURL: "https://api.appstoreconnect.apple.com"}
 	_, err := c.buildURL("https://attacker.example.com/v1/apps", nil)
