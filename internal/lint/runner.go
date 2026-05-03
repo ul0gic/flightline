@@ -111,6 +111,13 @@ type CheckContext struct {
 	Live bool
 	// Ctx carries request-scoped cancellation for live calls.
 	Ctx context.Context
+	// SourcePath is the absolute filesystem path of the state.yaml the
+	// rules are linting, when known. The "strict" rules (yaml-coercion,
+	// required-nonzero, format-email) read it to access the raw bytes
+	// before the structural decode strips comments/quoting/etc. Empty
+	// when the runner is invoked without a backing file (e.g. live-only
+	// preflight against fetched state).
+	SourcePath string
 }
 
 // Diagnostic is one finding produced by a rule. Path is a JSON-Pointer-style
