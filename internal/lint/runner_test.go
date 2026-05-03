@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/ul0gic/skipper/internal/config"
+	"github.com/ul0gic/flightline/internal/config"
 )
 
 // stubRule is a fixed-output Rule used to drive Runner tests without standing

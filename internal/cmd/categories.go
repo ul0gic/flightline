@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // CategoryView is one row of the categories list output. Apple's id on a
@@ -94,7 +94,7 @@ var categoriesCmd = &cobra.Command{
 	Long: `categories groups read commands over the /v1/appCategories resource.
 
 categories list dumps Apple's catalog of top-level categories. Filterable
-by --platform; defaults to IOS to match Skipper's default platform.
+by --platform; defaults to IOS to match Flightline's default platform.
 
 categories get <bundleId> shows the category assignments on the app's
 editable appInfo (primary + secondary plus their subcategories).
@@ -107,9 +107,9 @@ var categoriesListCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.NoArgs,
 	RunE:         runCategoriesList,
-	Example: `  skipper categories list
-  skipper categories list --platform MAC_OS
-  skipper categories list --output json | jq -r '.categories[].id'`,
+	Example: `  fline categories list
+  fline categories list --platform MAC_OS
+  fline categories list --output json | jq -r '.categories[].id'`,
 }
 
 var categoriesGetCmd = &cobra.Command{
@@ -118,8 +118,8 @@ var categoriesGetCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runCategoriesGet,
-	Example: `  skipper categories get com.example.myapp
-  skipper categories get com.example.myapp --output json | jq .primaryCategory`,
+	Example: `  fline categories get com.example.myapp
+  fline categories get com.example.myapp --output json | jq .primaryCategory`,
 }
 
 // categoriesSetCmd is the write verb for the categories group. It PATCHes
@@ -137,7 +137,7 @@ var categoriesSetCmd = &cobra.Command{
 Apple stores the assignments on the app's editable appInfo as 6 to-one
 relationships (primaryCategory, primarySubcategoryOne, primarySubcategoryTwo,
 secondaryCategory, secondarySubcategoryOne, secondarySubcategoryTwo).
-The categories must come from /v1/appCategories — see ` + "`skipper categories list`" + `.
+The categories must come from /v1/appCategories — see ` + "`fline categories list`" + `.
 
 Only flags that are explicitly passed are written; omitted flags are left
 untouched. To clear a slot pass --clear-secondary or one of its
@@ -145,10 +145,10 @@ sub-equivalents.
 
 Idempotent: the command first reads the current assignments and only
 PATCHes when at least one requested value differs from current.`,
-	Example: `  skipper categories set com.example.myapp --primary PRODUCTIVITY --primary-subcat BUSINESS
-  skipper categories set com.example.myapp --secondary UTILITIES
-  skipper categories set com.example.myapp --clear-secondary
-  skipper categories set com.example.myapp --primary GAMES --output json`,
+	Example: `  fline categories set com.example.myapp --primary PRODUCTIVITY --primary-subcat BUSINESS
+  fline categories set com.example.myapp --secondary UTILITIES
+  fline categories set com.example.myapp --clear-secondary
+  fline categories set com.example.myapp --primary GAMES --output json`,
 }
 
 var (
@@ -307,7 +307,7 @@ type categoryRelationshipResp struct {
 
 // CategoriesSetResult is the structured outcome of `categories set`. It
 // surfaces what was diffed and whether a PATCH was issued, so machine
-// consumers (Skipper plan/apply later) can detect idempotent no-ops without
+// consumers (Flightline plan/apply later) can detect idempotent no-ops without
 // having to compare before/after themselves.
 type CategoriesSetResult struct {
 	BundleID     string                  `json:"bundleId"`

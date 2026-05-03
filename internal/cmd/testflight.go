@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // BetaGroupView is one row of the testflight groups list output.
@@ -140,8 +140,8 @@ var testflightGroupsListCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runTestflightGroupsList,
-	Example: `  skipper testflight groups list com.example.myapp
-  skipper testflight groups list com.example.myapp --output json | jq -r '.groups[].attributes.name'`,
+	Example: `  fline testflight groups list com.example.myapp
+  fline testflight groups list com.example.myapp --output json | jq -r '.groups[].attributes.name'`,
 }
 
 var testflightGroupsListLimit int
@@ -158,9 +158,9 @@ var testflightTestersListCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runTestflightTestersList,
-	Example: `  skipper testflight testers list com.example.myapp
-  skipper testflight testers list com.example.myapp --group 4242424242
-  skipper testflight testers list com.example.myapp --output json | jq -r '.testers[].attributes.email'`,
+	Example: `  fline testflight testers list com.example.myapp
+  fline testflight testers list com.example.myapp --group 4242424242
+  fline testflight testers list com.example.myapp --output json | jq -r '.testers[].attributes.email'`,
 }
 
 var (
@@ -180,8 +180,8 @@ var testflightBetaReviewGetCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runTestflightBetaReviewGet,
-	Example: `  skipper testflight beta-review get com.example.myapp --build 42
-  skipper testflight beta-review get com.example.myapp --build 42 --output json`,
+	Example: `  fline testflight beta-review get com.example.myapp --build 42
+  fline testflight beta-review get com.example.myapp --build 42 --output json`,
 }
 
 // testflight groups create/update/delete
@@ -198,8 +198,8 @@ without a POST and changed=false.
 Internal vs external is selected via --internal (default false = external).
 Public-link controls are optional and only meaningful for external groups;
 Apple silently ignores them on internal groups.`,
-	Example: `  skipper testflight groups create com.example.myapp --name "Internal" --internal
-  skipper testflight groups create com.example.myapp --name "Public Beta" --public-link --public-link-limit 10000`,
+	Example: `  fline testflight groups create com.example.myapp --name "Internal" --internal
+  fline testflight groups create com.example.myapp --name "Public Beta" --public-link --public-link-limit 10000`,
 }
 
 var testflightGroupsUpdateCmd = &cobra.Command{
@@ -211,8 +211,8 @@ var testflightGroupsUpdateCmd = &cobra.Command{
 	Long: `PATCHes a beta group. Only flags explicitly passed are sent; omitted
 flags leave the corresponding attribute untouched. Idempotent: reads
 current state first, only PATCHes when at least one attribute differs.`,
-	Example: `  skipper testflight groups update BG-EXTERNAL-1 --public-link-limit 5000
-  skipper testflight groups update BG-EXTERNAL-1 --feedback`,
+	Example: `  fline testflight groups update BG-EXTERNAL-1 --public-link-limit 5000
+  fline testflight groups update BG-EXTERNAL-1 --feedback`,
 }
 
 var testflightGroupsDeleteCmd = &cobra.Command{
@@ -224,7 +224,7 @@ var testflightGroupsDeleteCmd = &cobra.Command{
 	Long: `DELETEs a beta group. Idempotent: if the group is already absent
 (404 from Apple) the command exits 0 with changed=false rather than
 failing — re-running a delete script should not be a hard error.`,
-	Example: `  skipper testflight groups delete BG-EXTERNAL-1`,
+	Example: `  fline testflight groups delete BG-EXTERNAL-1`,
 }
 
 // testflight testers add/remove
@@ -238,7 +238,7 @@ var testflightTestersAddCmd = &cobra.Command{
 /v1/betaGroups/{id}/relationships/betaTesters. Pass tester IDs via
 --tester (repeatable). Idempotent: testers already in the group are
 filtered out before the POST so re-running the command is a no-op.`,
-	Example: `  skipper testflight testers add BG-EXTERNAL-1 --tester T1 --tester T2`,
+	Example: `  fline testflight testers add BG-EXTERNAL-1 --tester T1 --tester T2`,
 }
 
 var testflightTestersRemoveCmd = &cobra.Command{
@@ -250,7 +250,7 @@ var testflightTestersRemoveCmd = &cobra.Command{
 	Long: `Removes one or more testers from a beta group via DELETE
 /v1/betaGroups/{id}/relationships/betaTesters. Idempotent: testers
 already absent are filtered out so re-running is a no-op.`,
-	Example: `  skipper testflight testers remove BG-EXTERNAL-1 --tester T1`,
+	Example: `  fline testflight testers remove BG-EXTERNAL-1 --tester T1`,
 }
 
 // testflight beta-review submit
@@ -264,8 +264,8 @@ var testflightBetaReviewSubmitCmd = &cobra.Command{
 Apple's beta review is one-shot per build — if a submission already
 exists for the build, the command surfaces the existing submission ID
 with changed=false rather than erroring.`,
-	Example: `  skipper testflight beta-review submit com.example.myapp --build 42
-  skipper testflight beta-review submit com.example.myapp --build 42 --output json`,
+	Example: `  fline testflight beta-review submit com.example.myapp --build 42
+  fline testflight beta-review submit com.example.myapp --build 42 --output json`,
 }
 
 var (

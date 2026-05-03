@@ -7,7 +7,7 @@ import (
 )
 
 func TestStrictRequiredNonzero_FiresWhenTesterMissingEmail(t *testing.T) {
-	p := writeTempYAML(t, `apiVersion: skipper.corelift.io/v1alpha1
+	p := writeTempYAML(t, `apiVersion: flightline.dev/v1alpha1
 kind: AppState
 metadata:
   bundleId: com.example.x
@@ -32,7 +32,7 @@ spec:
 }
 
 func TestStrictRequiredNonzero_FiresWhenTesterEmailEmpty(t *testing.T) {
-	p := writeTempYAML(t, `apiVersion: skipper.corelift.io/v1alpha1
+	p := writeTempYAML(t, `apiVersion: flightline.dev/v1alpha1
 kind: AppState
 metadata:
   bundleId: com.example.x
@@ -52,7 +52,7 @@ spec:
 }
 
 func TestStrictRequiredNonzero_NoOpWhenAllTestersHaveEmail(t *testing.T) {
-	p := writeTempYAML(t, `apiVersion: skipper.corelift.io/v1alpha1
+	p := writeTempYAML(t, `apiVersion: flightline.dev/v1alpha1
 kind: AppState
 metadata:
   bundleId: com.example.x

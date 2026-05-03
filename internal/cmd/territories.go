@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // TerritoryView is one row of the territories list output.
@@ -48,8 +48,8 @@ const territoriesCacheVersion = 1
 
 // territoriesCacheFile is the on-disk shape: a tiny envelope around
 // TerritoryList plus the timestamp we wrote it. Lives at
-// $XDG_CACHE_HOME/skipper/territories.json (default
-// ~/.cache/skipper/territories.json on Linux/macOS).
+// $XDG_CACHE_HOME/flightline/territories.json (default
+// ~/.cache/flightline/territories.json on Linux/macOS).
 type territoriesCacheFile struct {
 	Version int           `json:"version"`
 	SavedAt time.Time     `json:"savedAt"`
@@ -63,7 +63,7 @@ var territoriesCmd = &cobra.Command{
 
 Apple's territory list is reference data — the same set across every ASC
 account, with currency codes that change at most a few times a year. The
-list command caches results under $XDG_CACHE_HOME/skipper/territories.json
+list command caches results under $XDG_CACHE_HOME/flightline/territories.json
 for 24 hours by default; pass --no-cache to force a fresh fetch.`,
 }
 
@@ -73,9 +73,9 @@ var territoriesListCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.NoArgs,
 	RunE:         runTerritoriesList,
-	Example: `  skipper territories list
-  skipper territories list --output json | jq -r '.territories[].id'
-  skipper territories list --no-cache`,
+	Example: `  fline territories list
+  fline territories list --output json | jq -r '.territories[].id'
+  fline territories list --no-cache`,
 }
 
 var territoriesListNoCache bool
@@ -92,7 +92,7 @@ func runTerritoriesList(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		// Cache-path resolution failure is non-fatal — we still fetch live.
 		// Surfaced on stderr so the user knows their cache isn't being saved.
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "skipper: territories cache disabled: %v\n", err)
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "fline: territories cache disabled: %v\n", err)
 		cachePath = ""
 	}
 
@@ -116,7 +116,7 @@ func runTerritoriesList(cmd *cobra.Command, _ []string) error {
 		// Cache-write failures are non-fatal. The user still gets fresh data
 		// on stdout; we just lose the speedup on next invocation.
 		if werr := writeTerritoriesCache(cachePath, list); werr != nil {
-			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "skipper: territories cache write failed: %v\n", werr)
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "fline: territories cache write failed: %v\n", werr)
 		}
 	}
 
@@ -141,13 +141,13 @@ func fetchTerritories(ctx context.Context, c *asc.Client) (TerritoryList, error)
 // territoriesCachePath returns the absolute path to the on-disk cache file.
 // Uses os.UserCacheDir() so XDG_CACHE_HOME is honored on Linux and the
 // platform-specific default ($HOME/Library/Caches on macOS, %LocalAppData%
-// on Windows) elsewhere. Cache lives under skipper/ subdir.
+// on Windows) elsewhere. Cache lives under flightline/ subdir.
 func territoriesCachePath() (string, error) {
 	dir, err := os.UserCacheDir()
 	if err != nil {
 		return "", fmt.Errorf("resolve cache dir: %w", err)
 	}
-	return filepath.Join(dir, "skipper", "territories.json"), nil
+	return filepath.Join(dir, "flightline", "territories.json"), nil
 }
 
 // readTerritoriesCache reads and validates the cache file. Returns
@@ -175,7 +175,7 @@ func readTerritoriesCache(path string) (TerritoryList, bool) {
 // writeTerritoriesCache writes the payload via a tmp-file + atomic rename so
 // a Ctrl-C mid-write can't corrupt the cache. Mode 0600 even though the
 // territory list isn't sensitive — defense in depth and consistency with
-// other Skipper-managed dotfiles.
+// other Flightline-managed dotfiles.
 func writeTerritoriesCache(path string, payload TerritoryList) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("create cache dir: %w", err)

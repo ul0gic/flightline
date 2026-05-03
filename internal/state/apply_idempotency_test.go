@@ -37,8 +37,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ul0gic/skipper/internal/config"
-	"github.com/ul0gic/skipper/internal/plan"
+	"github.com/ul0gic/flightline/internal/config"
+	"github.com/ul0gic/flightline/internal/plan"
 )
 
 // statefulApplyFixture is an httptest server that holds an in-memory
@@ -426,7 +426,7 @@ func makeDesired() *config.State {
 	primary := "GAMES"
 	descNew := "new description"
 	return &config.State{
-		APIVersion: "skipper.corelift.io/v1alpha1",
+		APIVersion: "flightline.dev/v1alpha1",
 		Kind:       "AppState",
 		Metadata: config.StateMetadata{
 			BundleID: "com.example.app",

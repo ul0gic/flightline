@@ -111,7 +111,7 @@ func fixtureClient(t *testing.T, srv *httptest.Server) *Client {
 		IssuerID:   "11111111-2222-3333-4444-555555555555",
 		KeyPath:    keyPath,
 		HTTPClient: srv.Client(),
-		UserAgent:  "skipper-test/1.0",
+		UserAgent:  "flightline-test/1.0",
 	})
 	if err != nil {
 		t.Fatalf("fixtureClient: New: %v", err)

@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // BuildView is one row of the builds list/get output.
@@ -83,9 +83,9 @@ var buildsListCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runBuildsList,
-	Example: `  skipper builds list com.example.myapp
-  skipper builds list com.example.myapp --limit 20
-  skipper builds list com.example.myapp --output json | jq -r '.builds[].version'`,
+	Example: `  fline builds list com.example.myapp
+  fline builds list com.example.myapp --limit 20
+  fline builds list com.example.myapp --output json | jq -r '.builds[].version'`,
 }
 
 var buildsGetCmd = &cobra.Command{
@@ -94,8 +94,8 @@ var buildsGetCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runBuildsGet,
-	Example: `  skipper builds get com.example.myapp --build 42
-  skipper builds get com.example.myapp --build 42 --output json | jq .attributes.processingState`,
+	Example: `  fline builds get com.example.myapp --build 42
+  fline builds get com.example.myapp --build 42 --output json | jq .attributes.processingState`,
 }
 
 var buildsAttachCmd = &cobra.Command{
@@ -104,8 +104,8 @@ var buildsAttachCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runBuildsAttach,
-	Example: `  skipper builds attach com.example.myapp --version 1.0.1 --build 42
-  skipper builds attach com.example.myapp --version 1.0.1 --build 42 --platform IOS --output json`,
+	Example: `  fline builds attach com.example.myapp --version 1.0.1 --build 42
+  fline builds attach com.example.myapp --version 1.0.1 --build 42 --platform IOS --output json`,
 }
 
 var (

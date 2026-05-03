@@ -1,12 +1,12 @@
-// Package lint implements Skipper's L3 preflight rule engine — the
+// Package lint implements Flightline's L3 preflight rule engine — the
 // rejection-prevention layer.
 //
 // Two execution shapes:
 //
-//  1. Offline (skipper lint <state.yaml>) — pure structural checks against the
+//  1. Offline (fline lint <state.yaml>) — pure structural checks against the
 //     authored YAML. No network. Catches authoring mistakes before any wire
 //     call.
-//  2. Live (skipper preflight <bundleId> --version <v>) — fetches the live
+//  2. Live (fline preflight <bundleId> --version <v>) — fetches the live
 //     state from ASC and runs Live + Both rules against it. Catches the
 //     "READY_TO_SUBMIT but not in submission items" class of bug that only
 //     surfaces against real Apple state.
@@ -26,8 +26,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/ul0gic/skipper/internal/asc"
-	"github.com/ul0gic/skipper/internal/config"
+	"github.com/ul0gic/flightline/internal/asc"
+	"github.com/ul0gic/flightline/internal/config"
 )
 
 // Severity classifies a diagnostic. The Runner's exit-code mapping uses these:
@@ -69,7 +69,7 @@ func (s Severity) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON accepts the lowercase token form so the JSON contract
 // round-trips through json.Decode. Test code that re-parses the output of
-// `skipper lint --output json` relies on this.
+// `fline lint --output json` relies on this.
 func (s *Severity) UnmarshalJSON(b []byte) error {
 	if len(b) < 2 {
 		return fmt.Errorf("severity: empty payload")
@@ -98,9 +98,9 @@ type Mode int
 
 // Mode bits.
 const (
-	// ModeOffline runs during `skipper lint` (no ASC client).
+	// ModeOffline runs during `fline lint` (no ASC client).
 	ModeOffline Mode = 1 << iota
-	// ModeLive runs during `skipper preflight` (ASC client available).
+	// ModeLive runs during `fline preflight` (ASC client available).
 	ModeLive
 	// ModeBoth runs in both shapes. The rule should branch on
 	// CheckContext.Live when its check requires live data.
@@ -225,7 +225,7 @@ func safeCheck(rule Rule, ctx CheckContext) (diags []Diagnostic) {
 				RuleID:   rule.ID(),
 				Severity: SeverityError,
 				Message:  fmt.Sprintf("rule panicked: %v", r),
-				FixHint:  "this is a Skipper bug; please file an issue at https://github.com/ul0gic/skipper/issues with the rule ID and your state.yaml.",
+				FixHint:  "this is a Flightline bug; please file an issue at https://github.com/ul0gic/flightline/issues with the rule ID and your state.yaml.",
 			}}
 		}
 	}()

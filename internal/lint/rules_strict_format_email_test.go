@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ul0gic/skipper/internal/config"
+	"github.com/ul0gic/flightline/internal/config"
 )
 
 func ptr(s string) *string { return &s }

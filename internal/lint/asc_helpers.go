@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // resolveVersionIDOnApp looks up an App Store version by versionString

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // PricingView is the read-side view for `pricing get`. Combines a slice of
@@ -129,9 +129,9 @@ var pricingGetCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runPricingGet,
-	Example: `  skipper pricing get com.example.myapp
-  skipper pricing get com.example.myapp --output json | jq .basePrice
-  skipper pricing get com.example.myapp --output json | jq '.availability.availableCount'`,
+	Example: `  fline pricing get com.example.myapp
+  fline pricing get com.example.myapp --output json | jq .basePrice
+  fline pricing get com.example.myapp --output json | jq '.availability.availableCount'`,
 }
 
 // pricingSetCmd publishes a single-base-territory price schedule via POST
@@ -154,8 +154,8 @@ L1 supports a single base-territory + appPricePoint pairing. Pass:
 Idempotent: if the current schedule already has the requested
 (baseTerritory, appPricePoint) pairing, no POST is issued and the
 result reports changed=false.`,
-	Example: `  skipper pricing set com.example.myapp --base-territory USA --tier PP-USA-999
-  skipper pricing set com.example.myapp --base-territory USA --tier PP-USA-999 --output json`,
+	Example: `  fline pricing set com.example.myapp --base-territory USA --tier PP-USA-999
+  fline pricing set com.example.myapp --base-territory USA --tier PP-USA-999 --output json`,
 }
 
 var (
@@ -371,7 +371,7 @@ func fetchAppAvailability(ctx context.Context, c *asc.Client, appID string) (Ava
 
 // priceScheduleSingle is the typed shape for /v1/apps/{id}/appPriceSchedule.
 // Apple's response is a JSON:API single-resource envelope; we model only the
-// fields Skipper reads. relationships.baseTerritory is to-one, the price
+// fields Flightline reads. relationships.baseTerritory is to-one, the price
 // arrays are to-many.
 type priceScheduleSingle struct {
 	Data struct {
@@ -415,7 +415,7 @@ type toManyRel struct {
 }
 
 // includedSet is the decoded view of an `included` array on a schedule
-// response. We pre-extract the few fields Skipper needs so the schedule
+// response. We pre-extract the few fields Flightline needs so the schedule
 // walker doesn't re-parse RawMessage on every lookup.
 type includedSet struct {
 	territories       map[string]string // id → currency

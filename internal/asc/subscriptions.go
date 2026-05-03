@@ -55,7 +55,7 @@ const (
 )
 
 // SubscriptionGroupAttributes is the subset of Apple's
-// SubscriptionGroup.attributes Skipper reads. ReferenceName is the
+// SubscriptionGroup.attributes Flightline reads. ReferenceName is the
 // developer-facing label (not user-visible); user-visible names live on
 // SubscriptionGroupLocalization.
 type SubscriptionGroupAttributes struct {
@@ -63,7 +63,7 @@ type SubscriptionGroupAttributes struct {
 }
 
 // SubscriptionAttributes is the subset of Apple's Subscription.attributes
-// Skipper reads. GroupLevel is the rank within the group (1 = lowest tier);
+// Flightline reads. GroupLevel is the rank within the group (1 = lowest tier);
 // users in higher tiers cannot downgrade through normal flow.
 type SubscriptionAttributes struct {
 	Name               string `json:"name,omitempty"`
@@ -76,7 +76,7 @@ type SubscriptionAttributes struct {
 }
 
 // SubscriptionLocalizationAttributes is the subset of Apple's
-// SubscriptionLocalization.attributes Skipper reads. Apple stores the
+// SubscriptionLocalization.attributes Flightline reads. Apple stores the
 // user-visible name and description per locale.
 type SubscriptionLocalizationAttributes struct {
 	Name        string `json:"name,omitempty"`
@@ -86,7 +86,7 @@ type SubscriptionLocalizationAttributes struct {
 }
 
 // SubscriptionGroupLocalizationAttributes is the subset of Apple's
-// SubscriptionGroupLocalization.attributes Skipper reads.
+// SubscriptionGroupLocalization.attributes Flightline reads.
 type SubscriptionGroupLocalizationAttributes struct {
 	Name          string `json:"name,omitempty"`
 	CustomAppName string `json:"customAppName,omitempty"`
@@ -95,7 +95,7 @@ type SubscriptionGroupLocalizationAttributes struct {
 }
 
 // SubscriptionPriceAttributes is the subset of Apple's
-// SubscriptionPrice.attributes Skipper reads. Apple's price ladder is
+// SubscriptionPrice.attributes Flightline reads. Apple's price ladder is
 // expressed via prices linked to price-points (territory-priced); this
 // struct is the price-record, not the price-point.
 type SubscriptionPriceAttributes struct {
@@ -104,7 +104,7 @@ type SubscriptionPriceAttributes struct {
 }
 
 // SubscriptionIntroductoryOfferAttributes is the subset of Apple's
-// SubscriptionIntroductoryOffer.attributes Skipper reads.
+// SubscriptionIntroductoryOffer.attributes Flightline reads.
 type SubscriptionIntroductoryOfferAttributes struct {
 	StartDate       string `json:"startDate,omitempty"`
 	EndDate         string `json:"endDate,omitempty"`

@@ -13,7 +13,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // iapCreateRequest is the wire body for POST /v2/inAppPurchases. Mirrors
@@ -203,8 +203,8 @@ var iapCreateCmd = &cobra.Command{
 
 Idempotent: if an IAP with --product-id already exists for this app, returns
 the existing record with noop=true rather than failing or creating a duplicate.`,
-	Example: `  skipper iap create com.example.myapp --product-id com.example.myapp.lifetime --type NON_CONSUMABLE --name "Lifetime Pro"
-  skipper iap create com.example.myapp --product-id com.example.myapp.coins --type CONSUMABLE --name Coins --review-note "Currency for the in-app store"`,
+	Example: `  fline iap create com.example.myapp --product-id com.example.myapp.lifetime --type NON_CONSUMABLE --name "Lifetime Pro"
+  fline iap create com.example.myapp --product-id com.example.myapp.coins --type CONSUMABLE --name Coins --review-note "Currency for the in-app store"`,
 }
 
 var iapUpdateCmd = &cobra.Command{
@@ -219,8 +219,8 @@ value, returns noop=true without issuing a PATCH.
 
 productId and inAppPurchaseType are immutable post-create — to change either,
 delete and recreate.`,
-	Example: `  skipper iap update com.example.myapp --product com.example.myapp.lifetime --name "Lifetime Pro v2"
-  skipper iap update com.example.myapp --product com.example.myapp.lifetime --review-note "updated reviewer steps"`,
+	Example: `  fline iap update com.example.myapp --product com.example.myapp.lifetime --name "Lifetime Pro v2"
+  fline iap update com.example.myapp --product com.example.myapp.lifetime --review-note "updated reviewer steps"`,
 }
 
 var iapDeleteCmd = &cobra.Command{
@@ -234,7 +234,7 @@ var iapDeleteCmd = &cobra.Command{
 Idempotent: if the IAP doesn't exist, returns noop=true without issuing a
 DELETE. Apple may refuse deletion of an IAP that has been APPROVED and is
 visible on the store; that case surfaces as a typed APIError.`,
-	Example: `  skipper iap delete com.example.myapp --product com.example.myapp.lifetime --yes`,
+	Example: `  fline iap delete com.example.myapp --product com.example.myapp.lifetime --yes`,
 }
 
 var iapLocalizationsSetCmd = &cobra.Command{
@@ -246,8 +246,8 @@ var iapLocalizationsSetCmd = &cobra.Command{
 	Long: `set creates the localization for --locale if it does not exist, or PATCHes
 the mutable fields (name, description) if it does. Idempotent: when the
 existing localization already matches the supplied flags, returns noop=true.`,
-	Example: `  skipper iap localizations set com.example.myapp --product com.example.myapp.lifetime --locale en-US --name "Lifetime Pro" --description "Unlock everything, forever."
-  skipper iap localizations set com.example.myapp --product com.example.myapp.lifetime --locale fr-FR --name "Pro à vie" --description "Tout débloquer, pour toujours."`,
+	Example: `  fline iap localizations set com.example.myapp --product com.example.myapp.lifetime --locale en-US --name "Lifetime Pro" --description "Unlock everything, forever."
+  fline iap localizations set com.example.myapp --product com.example.myapp.lifetime --locale fr-FR --name "Pro à vie" --description "Tout débloquer, pour toujours."`,
 }
 
 var iapReviewScreenshotCmd = &cobra.Command{
@@ -267,8 +267,8 @@ Apple's CDN, and commits the upload with the local MD5.
 Idempotent: if a screenshot with the same sourceFileChecksum is already
 attached to this IAP, returns noop=true without re-uploading. Use
 --resume to pick up a partial upload from the on-disk checkpoint.`,
-	Example: `  skipper iap review-screenshot upload com.example.myapp --product com.example.myapp.lifetime --file ./review/lifetime.png
-  skipper iap review-screenshot upload com.example.myapp --product com.example.myapp.lifetime --file ./review/lifetime.png --resume`,
+	Example: `  fline iap review-screenshot upload com.example.myapp --product com.example.myapp.lifetime --file ./review/lifetime.png
+  fline iap review-screenshot upload com.example.myapp --product com.example.myapp.lifetime --file ./review/lifetime.png --resume`,
 }
 
 // Per-subcommand flag state. Pointer-bool flags use string-flag indirection so

@@ -1,10 +1,10 @@
-// preflight.go — `skipper preflight <bundleId> --version <v> [--state-file path]`.
+// preflight.go — `fline preflight <bundleId> --version <v> [--state-file path]`.
 //
 // Live preflight: builds an authenticated ASC client, fetches the live
 // state for the version (or loads --state-file when provided), and runs
 // every Mode=Live + Mode=Both rule.
 //
-// Output and exit-code conventions match `skipper lint` so users can pipe
+// Output and exit-code conventions match `fline lint` so users can pipe
 // either through the same tooling.
 
 package cmd
@@ -17,10 +17,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/ul0gic/skipper/internal/asc"
-	"github.com/ul0gic/skipper/internal/config"
-	"github.com/ul0gic/skipper/internal/lint"
-	"github.com/ul0gic/skipper/internal/state"
+	"github.com/ul0gic/flightline/internal/asc"
+	"github.com/ul0gic/flightline/internal/config"
+	"github.com/ul0gic/flightline/internal/lint"
+	"github.com/ul0gic/flightline/internal/state"
 )
 
 var preflightCmd = &cobra.Command{
@@ -29,7 +29,7 @@ var preflightCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runPreflight,
-	Long: `preflight runs every Skipper rejection-prevention rule against a live
+	Long: `preflight runs every Flightline rejection-prevention rule against a live
 App Store version. Live rules query the ASC API for IAP attachment,
 build state, age-rating completeness, and screenshot device coverage.
 Offline rules run too when --state-file is provided so authoring
@@ -45,9 +45,9 @@ Exit codes:
   0  clean (no diagnostics, or info-only)
   1  at least one error-severity diagnostic
   2  only warnings (no errors)`,
-	Example: `  skipper preflight com.example.myapp --version 1.0.1
-  skipper preflight com.example.myapp --version 1.0.1 --state-file state.yaml
-  skipper preflight com.example.myapp --version 1.0.1 --output json | jq '.summary'`,
+	Example: `  fline preflight com.example.myapp --version 1.0.1
+  fline preflight com.example.myapp --version 1.0.1 --state-file state.yaml
+  fline preflight com.example.myapp --version 1.0.1 --output json | jq '.summary'`,
 }
 
 var (

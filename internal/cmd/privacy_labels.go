@@ -63,8 +63,8 @@ var privacyLabelsGetCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runPrivacyLabelsGet,
-	Example: `  skipper privacy-labels get com.example.myapp
-  skipper privacy-labels get com.example.myapp --output json | jq .supported`,
+	Example: `  fline privacy-labels get com.example.myapp
+  fline privacy-labels get com.example.myapp --output json | jq .supported`,
 }
 
 // privacyLabelsSetCmd is the write-side companion of privacy-labels get.
@@ -86,8 +86,8 @@ unsupported state programmatically (` + "`.supported == false`" + `). When Apple
 ships an API endpoint, set will be wired without changing the JSON contract.
 
 See ISSUE-002 in .project/issues/.`,
-	Example: `  skipper privacy-labels set com.example.myapp --from labels.yaml
-  skipper privacy-labels set com.example.myapp --output json | jq .supported`,
+	Example: `  fline privacy-labels set com.example.myapp --from labels.yaml
+  fline privacy-labels set com.example.myapp --output json | jq .supported`,
 }
 
 // privacyLabelsSetFrom is accepted but unused — kept on the surface so the

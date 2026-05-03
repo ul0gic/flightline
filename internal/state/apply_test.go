@@ -13,7 +13,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/ul0gic/skipper/internal/plan"
+	"github.com/ul0gic/flightline/internal/plan"
 )
 
 // withTempCacheDir reroutes os.UserCacheDir into a temp dir for the

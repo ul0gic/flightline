@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ul0gic/skipper/internal/asc"
-	"github.com/ul0gic/skipper/internal/cmd"
+	"github.com/ul0gic/flightline/internal/asc"
+	"github.com/ul0gic/flightline/internal/cmd"
 )
 
 func main() {
@@ -14,7 +14,7 @@ func main() {
 		// not just *APIError) gets cred-stripped before reaching stderr.
 		// See .project/issues/closed/SEC-002 for the keyID/UUID/AuthKey-path
 		// regression that motivated promoting Redact() to public API.
-		fmt.Fprintf(os.Stderr, "skipper: %s\n", asc.Redact(err.Error()))
+		fmt.Fprintf(os.Stderr, "fline: %s\n", asc.Redact(err.Error()))
 		os.Exit(1)
 	}
 }

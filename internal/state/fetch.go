@@ -1,9 +1,9 @@
 // Package state implements Fetch (read live ASC into a typed *State)
 // and Apply (write a change set back to ASC). Both operations are the
-// keystone of Skipper's L2 state-as-code story.
+// keystone of Flightline's L2 state-as-code story.
 //
 // Fetch coverage in v1alpha1: every spec surface in
-// schemas/skipper.schema.json — version, build, metadata, screenshots,
+// schemas/flightline.schema.json — version, build, metadata, screenshots,
 // iap, ageRating, exportCompliance, reviewerDemo, categories, pricing,
 // testflight, customProductPages.
 //
@@ -18,8 +18,8 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/ul0gic/skipper/internal/asc"
-	"github.com/ul0gic/skipper/internal/config"
+	"github.com/ul0gic/flightline/internal/asc"
+	"github.com/ul0gic/flightline/internal/config"
 )
 
 // FetchOpts narrows what Fetch pulls. Most callers pass an empty
@@ -56,7 +56,7 @@ func Fetch(ctx context.Context, c *asc.Client, bundleID string, opts FetchOpts) 
 	}
 
 	out := &config.State{
-		APIVersion: "skipper.corelift.io/v1alpha1",
+		APIVersion: "flightline.dev/v1alpha1",
 		Kind:       "AppState",
 		Metadata: config.StateMetadata{
 			BundleID: bundleID,
@@ -152,9 +152,9 @@ func projectVersion(a asc.VersionAttributes) *config.VersionSpec {
 }
 
 // projectAgeRating maps Apple's wire field names to the schema's
-// Skipper-friendly names. The schema uses cartoonOrFantasyViolence;
+// Flightline-friendly names. The schema uses cartoonOrFantasyViolence;
 // Apple's API uses violenceCartoonOrFantasy. Mapping is one-way for
-// now — fetched state is Skipper-shape; apply re-translates back.
+// now — fetched state is Flightline-shape; apply re-translates back.
 func projectAgeRating(a asc.AgeRatingDeclarationAttributes) *config.AgeRatingSpec {
 	out := &config.AgeRatingSpec{}
 	if a.ViolenceCartoonOrFantasy != "" {

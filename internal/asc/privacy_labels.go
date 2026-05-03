@@ -11,7 +11,7 @@ package asc
 // "App Privacy Details") live in App Store Connect's web UI only — there
 // is no public REST endpoint to read or write them in the v4.3 spec.
 //
-// The types in this file capture the wire shape Skipper would consume IF
+// The types in this file capture the wire shape Flightline would consume IF
 // Apple ever ships an `appPrivacyDetails` resource. They mirror the public
 // data model documented at:
 //

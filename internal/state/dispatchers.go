@@ -23,8 +23,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ul0gic/skipper/internal/asc"
-	"github.com/ul0gic/skipper/internal/plan"
+	"github.com/ul0gic/flightline/internal/asc"
+	"github.com/ul0gic/flightline/internal/plan"
 )
 
 // --- /spec/build/number — attach a build to the version ---------------------
@@ -322,7 +322,7 @@ func applyReviewerDemoField(ctx context.Context, c *asc.Client, actx ApplyContex
 }
 
 // reviewerDemoAttrs mirrors the subset of Apple's
-// AppStoreReviewDetail.attributes Skipper sets. Wire-name parity.
+// AppStoreReviewDetail.attributes Flightline sets. Wire-name parity.
 type reviewerDemoAttrs struct {
 	ContactFirstName string `json:"contactFirstName,omitempty"`
 	ContactLastName  string `json:"contactLastName,omitempty"`
@@ -674,9 +674,9 @@ func applyIAPField(ctx context.Context, c *asc.Client, actx ApplyContext, ch pla
 	if subPath == "reviewScreenshot" {
 		// Defer to internal/asc/upload.go's 3-step dance. Tracked
 		// in QA-009; for v1alpha1 we surface a typed error so users
-		// know to use `skipper iap update --review-screenshot upload`
+		// know to use `fline iap update --review-screenshot upload`
 		// directly until the orchestrator integrates the upload helper.
-		return fmt.Errorf("apply iap.%s.reviewScreenshot: upload via L1 verb (`skipper iap update --review-screenshot upload`) — tracked under QA-010", productID)
+		return fmt.Errorf("apply iap.%s.reviewScreenshot: upload via L1 verb (`fline iap update --review-screenshot upload`) — tracked under QA-010", productID)
 	}
 
 	// Per-field PATCH on the IAP itself.
@@ -759,14 +759,14 @@ func getOrCreateIAPLocalization(ctx context.Context, c *asc.Client, iapID, local
 // individual file would require addressing files by ID, which Apple's
 // API doesn't do).
 //
-// v1alpha1 surface: defers to `skipper screenshots upload` for the
+// v1alpha1 surface: defers to `fline screenshots upload` for the
 // actual multipart 3-step. The orchestrator-side wiring of
 // internal/asc/upload.go is tracked under QA-010 — reading the file
 // from disk, addressing the screenshotSet by (locale, device class)
 // + checksum diff is well-trodden code we want to integrate properly,
 // not duplicate.
 func applyScreenshotSet(_ context.Context, _ *asc.Client, _ ApplyContext, ch plan.Change) error {
-	return fmt.Errorf("apply screenshots %s: upload via L1 verb (`skipper screenshots upload`) — orchestrator integration tracked under QA-010", ch.Path)
+	return fmt.Errorf("apply screenshots %s: upload via L1 verb (`fline screenshots upload`) — orchestrator integration tracked under QA-010", ch.Path)
 }
 
 // --- /spec/testflight/groups/<name> — beta groups + tester rosters --------
@@ -1004,7 +1004,7 @@ func applyCustomProductPageField(ctx context.Context, c *asc.Client, actx ApplyC
 		// Localizations + screenshots inside CPP versions live behind
 		// L1 `custom-product-pages` verbs. Surface a typed error so
 		// users know to use the L1 path until QA-010 lands.
-		return fmt.Errorf("apply customProductPages.%s.%s: edit via L1 verb (`skipper custom-product-pages ...`) — tracked under QA-010", pageName, subPath)
+		return fmt.Errorf("apply customProductPages.%s.%s: edit via L1 verb (`fline custom-product-pages ...`) — tracked under QA-010", pageName, subPath)
 	}
 	return fmt.Errorf("apply customProductPages.%s.%s: unhandled sub-path", pageName, subPath)
 }

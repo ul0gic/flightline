@@ -13,7 +13,7 @@ package asc
 //
 // There is NO /v1/diagnosticSignatures global list in v4.3 and NO
 // /v1/diagnosticSignatures/{id} get. The `diagnostics get` command in
-// Skipper resolves to the /logs endpoint instead.
+// Flightline resolves to the /logs endpoint instead.
 //
 // Source:
 //
@@ -46,7 +46,7 @@ type DiagnosticReferenceVersion struct {
 }
 
 // DiagnosticSignatureAttributes is the subset of Apple's
-// DiagnosticSignature.attributes Skipper reads. Weight is Apple's severity
+// DiagnosticSignature.attributes Flightline reads. Weight is Apple's severity
 // proxy — higher weight = more user impact / more occurrences.
 type DiagnosticSignatureAttributes struct {
 	DiagnosticType string             `json:"diagnosticType,omitempty"`

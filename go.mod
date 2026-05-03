@@ -1,4 +1,4 @@
-module github.com/ul0gic/skipper
+module github.com/ul0gic/flightline
 
 go 1.26
 

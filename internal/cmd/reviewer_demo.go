@@ -2,7 +2,7 @@
 // account + reviewer contact info on the per-version appStoreReviewDetail.
 //
 // Security note: the --password flag is the only credential surface that
-// flows through Skipper. We never log it (production code never writes it
+// flows through Flightline. We never log it (production code never writes it
 // to stderr; --verbose does not echo it), never include it in error
 // messages (every error path filters the user-supplied password substring
 // out before returning), and offer --password-file <path> as the
@@ -17,7 +17,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // AppStoreReviewDetailAttributes mirrors components.schemas.AppStoreReviewDetail
@@ -129,9 +129,9 @@ supplied flags already match current state, returns noop=true.
 The --password flag is treated specially: never logged, never echoed,
 never included in any error output. Use --password-file <path> to read
 the secret from a file rather than the shell command line.`,
-	Example: `  skipper reviewer-demo set com.example.myapp --version 1.0.1 --contact-name "Jane Doe" --contact-email reviewer@example.com
-  skipper reviewer-demo set com.example.myapp --version 1.0.1 --username demo@example.com --password-file ./.password
-  skipper reviewer-demo set com.example.myapp --version 1.0.1 --notes "Tap the gear icon to access the demo flow"`,
+	Example: `  fline reviewer-demo set com.example.myapp --version 1.0.1 --contact-name "Jane Doe" --contact-email reviewer@example.com
+  fline reviewer-demo set com.example.myapp --version 1.0.1 --username demo@example.com --password-file ./.password
+  fline reviewer-demo set com.example.myapp --version 1.0.1 --notes "Tap the gear icon to access the demo flow"`,
 }
 
 var (

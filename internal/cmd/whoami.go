@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // WhoamiInfo is the command's stable JSON output shape. Field names match
@@ -45,19 +45,19 @@ var whoamiCmd = &cobra.Command{
 	Use:   "whoami",
 	Short: "Verify ASC credentials and print the configured identity",
 	Long: `whoami exercises the simplest auth-required ASC endpoint to verify the
-configured key works, then prints the credential metadata Skipper is using.
+configured key works, then prints the credential metadata Flightline is using.
 
 Credentials are resolved via the standard precedence:
 
-  --key-id flag  >  APP_STORE_CONNECT_KEY_ID  >  ~/.config/skipper/config.yaml
+  --key-id flag  >  APP_STORE_CONNECT_KEY_ID  >  ~/.config/flightline/config.yaml
 
 The .p8 private key is read from $APP_STORE_CONNECT_KEY_PATH if set, otherwise
 ~/.appstoreconnect/AuthKey_<KEY_ID>.p8 (mode 0600 required).
 
 Examples:
-  skipper whoami
-  skipper whoami --output json | jq -r .keyId
-  skipper whoami --output json | jq -e .authorized   # exit nonzero on failure`,
+  fline whoami
+  fline whoami --output json | jq -r .keyId
+  fline whoami --output json | jq -e .authorized   # exit nonzero on failure`,
 	SilenceUsage: true,
 	Args:         cobra.NoArgs,
 	RunE:         runWhoami,

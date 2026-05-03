@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -78,8 +78,8 @@ Validation: every key must be a recognized field on the declaration; an
 unknown key surfaces as a typed error naming the offending key. Frequency
 enums must be one of NONE | INFREQUENT_OR_MILD | FREQUENT_OR_INTENSE |
 INFREQUENT | FREQUENT. Boolean fields must be true/false.`,
-	Example: `  skipper age-rating set com.example.myapp --version 1.0.1 --from age-rating.yaml
-  skipper age-rating set com.example.myapp --version 1.0.1 --from age-rating.json --output json`,
+	Example: `  fline age-rating set com.example.myapp --version 1.0.1 --from age-rating.yaml
+  fline age-rating set com.example.myapp --version 1.0.1 --from age-rating.json --output json`,
 }
 
 var (

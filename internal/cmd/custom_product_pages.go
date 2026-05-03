@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // CustomProductPageView is one row of the custom-product-pages list output.
@@ -127,8 +127,8 @@ var customProductPagesListCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runCustomProductPagesList,
-	Example: `  skipper custom-product-pages list com.example.myapp
-  skipper custom-product-pages list com.example.myapp --output json | jq -r '.pages[].attributes.name'`,
+	Example: `  fline custom-product-pages list com.example.myapp
+  fline custom-product-pages list com.example.myapp --output json | jq -r '.pages[].attributes.name'`,
 }
 
 var customProductPagesGetCmd = &cobra.Command{
@@ -137,8 +137,8 @@ var customProductPagesGetCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runCustomProductPagesGet,
-	Example: `  skipper custom-product-pages get com.example.myapp --page 8000000001
-  skipper custom-product-pages get com.example.myapp --page 8000000001 --output json`,
+	Example: `  fline custom-product-pages get com.example.myapp --page 8000000001
+  fline custom-product-pages get com.example.myapp --page 8000000001 --output json`,
 }
 
 // customProductPagesCreateCmd creates a new AppCustomProductPage on the
@@ -151,8 +151,8 @@ var customProductPagesCreateCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runCustomProductPagesCreate,
-	Example: `  skipper custom-product-pages create com.example.myapp --name "Holiday Promo"
-  skipper custom-product-pages create com.example.myapp --name "Spring 2026" --output json`,
+	Example: `  fline custom-product-pages create com.example.myapp --name "Holiday Promo"
+  fline custom-product-pages create com.example.myapp --name "Spring 2026" --output json`,
 }
 
 // customProductPagesUpdateCmd PATCHes mutable attributes (name, visible)
@@ -164,8 +164,8 @@ var customProductPagesUpdateCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runCustomProductPagesUpdate,
-	Example: `  skipper custom-product-pages update CPP-1 --visible
-  skipper custom-product-pages update CPP-1 --name "Updated Holiday"`,
+	Example: `  fline custom-product-pages update CPP-1 --visible
+  fline custom-product-pages update CPP-1 --name "Updated Holiday"`,
 }
 
 // customProductPagesDeleteCmd deletes a custom product page. Idempotent:
@@ -176,7 +176,7 @@ var customProductPagesDeleteCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runCustomProductPagesDelete,
-	Example:      `  skipper custom-product-pages delete CPP-1`,
+	Example:      `  fline custom-product-pages delete CPP-1`,
 }
 
 var (

@@ -14,7 +14,7 @@ import (
 
 // goodStateYAML returns a state that should pass schema + every offline
 // rule cleanly. Used as the baseline for mutation tests.
-const goodStateYAML = `apiVersion: skipper.corelift.io/v1alpha1
+const goodStateYAML = `apiVersion: flightline.dev/v1alpha1
 kind: AppState
 metadata:
   bundleId: com.example.x
@@ -105,7 +105,7 @@ func TestRunLint_GoodStateNoErrors(t *testing.T) {
 // TestRunLint_MissingAgeRatingFires verifies the rule fires through the
 // command path and surfaces in the JSON.
 func TestRunLint_MissingAgeRatingFires(t *testing.T) {
-	body := `apiVersion: skipper.corelift.io/v1alpha1
+	body := `apiVersion: flightline.dev/v1alpha1
 kind: AppState
 metadata:
   bundleId: com.example.x

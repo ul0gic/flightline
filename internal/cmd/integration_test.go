@@ -8,8 +8,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ul0gic/skipper/internal/asc"
-	"github.com/ul0gic/skipper/internal/auth"
+	"github.com/ul0gic/flightline/internal/asc"
+	"github.com/ul0gic/flightline/internal/auth"
 )
 
 // requireCreds skips the test when ASC creds aren't in the environment.

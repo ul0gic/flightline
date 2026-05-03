@@ -3,13 +3,13 @@ package lint
 import (
 	"fmt"
 
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // versionExportComplianceAnsweredRule fires when the version's
 // usesNonExemptEncryption answer is missing. Apple blocks submission until
 // it's set; the build itself can carry the answer (ITSAppUsesNonExemptEncryption
-// in Info.plist) or it can be set per-version. Skipper checks the spec
+// in Info.plist) or it can be set per-version. Flightline checks the spec
 // answer (offline) and the live build attribute (live).
 //
 // Mode: Both. Offline checks State.Spec.ExportCompliance.UsesNonExemptEncryption.
@@ -83,7 +83,7 @@ func (r versionExportComplianceAnsweredRule) checkLive(ctx CheckContext) []Diagn
 			Message:  "the build attached to this version has not declared usesNonExemptEncryption",
 			Path:     "/spec/exportCompliance/usesNonExemptEncryption",
 			FixHint: "answer the export-compliance question in App Store Connect, or " +
-				"`skipper export-compliance set <bundleId> --version <v> --uses-non-exempt-encryption=false`.",
+				"`fline export-compliance set <bundleId> --version <v> --uses-non-exempt-encryption=false`.",
 			Reference: "PRD §L3 — version.export-compliance-answered",
 		}}
 	}

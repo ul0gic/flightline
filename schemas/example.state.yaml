@@ -1,10 +1,10 @@
-# yaml-language-server: $schema=./skipper.schema.json
+# yaml-language-server: $schema=./flightline.schema.json
 #
-# Example Skipper AppState. Every field is optional unless noted; this file
+# Example Flightline AppState. Every field is optional unless noted; this file
 # illustrates the full v1alpha1 schema. Real configs typically only fill the
 # subsections that need managing.
 
-apiVersion: skipper.corelift.io/v1alpha1
+apiVersion: flightline.dev/v1alpha1
 kind: AppState
 
 metadata:

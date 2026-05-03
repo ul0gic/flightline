@@ -8,14 +8,14 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // ExportComplianceView is the read-side view for `export-compliance get`.
 // Apple splits export-compliance state across two layers — a per-build
 // boolean answer (`usesNonExemptEncryption` on the Build attached to the
 // version) AND optional per-app encryption-declaration resources for full
-// ECCN classification. Skipper surfaces both so callers (and L3 preflight)
+// ECCN classification. Flightline surfaces both so callers (and L3 preflight)
 // see whichever answer matters for the version.
 type ExportComplianceView struct {
 	BundleID      string                      `json:"bundleId"`
@@ -97,8 +97,8 @@ var exportComplianceGetCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runExportComplianceGet,
-	Example: `  skipper export-compliance get com.example.myapp --version 1.0.1
-  skipper export-compliance get com.example.myapp --version 1.0.1 --output json | jq .build`,
+	Example: `  fline export-compliance get com.example.myapp --version 1.0.1
+  fline export-compliance get com.example.myapp --version 1.0.1 --output json | jq .build`,
 }
 
 var (

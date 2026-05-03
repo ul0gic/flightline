@@ -183,11 +183,11 @@ func uploadFixtureClient(t *testing.T, f *uploadFixture) *Client {
 }
 
 // withUploadCacheRoot points uploadCacheRoot() at t.TempDir() for the
-// duration of the test via the SKIPPER_CACHE_HOME escape hatch.
+// duration of the test via the FLINE_CACHE_HOME escape hatch.
 func withUploadCacheRoot(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	t.Setenv("SKIPPER_CACHE_HOME", dir)
+	t.Setenv("FLINE_CACHE_HOME", dir)
 	return dir
 }
 

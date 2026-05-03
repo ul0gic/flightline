@@ -8,7 +8,7 @@ import (
 )
 
 // TestJSONStability_AllCommands locks the top-level JSON keys for every
-// read command Skipper exposes. Adding a new key is safe; renaming or
+// read command Flightline exposes. Adding a new key is safe; renaming or
 // removing one is a breaking change for shell pipelines (`jq '.foo.bar'`)
 // and LLM consumers parsing structured output.
 //

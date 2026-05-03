@@ -16,7 +16,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/ul0gic/skipper/internal/plan"
+	"github.com/ul0gic/flightline/internal/plan"
 )
 
 func ctxApply() ApplyContext {

@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // AgeRatingView is the read-side view for `age-rating get`. The full Apple
@@ -94,7 +94,7 @@ var ageRatingCmd = &cobra.Command{
 	Short: "Inspect Apple age-rating declarations",
 	Long: `age-rating reads the questionnaire Apple uses to compute a version's
 age rating. The declaration lives on the per-version appInfo resource;
-Skipper resolves bundleId + versionString to the right appInfo and
+Flightline resolves bundleId + versionString to the right appInfo and
 fetches its ageRatingDeclaration.
 
 L3 preflight will flag declarations with unanswered questions — surface
@@ -107,8 +107,8 @@ var ageRatingGetCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runAgeRatingGet,
-	Example: `  skipper age-rating get com.example.myapp --version 1.0.1
-  skipper age-rating get com.example.myapp --version 1.0.1 --output json | jq .attributes`,
+	Example: `  fline age-rating get com.example.myapp --version 1.0.1
+  fline age-rating get com.example.myapp --version 1.0.1 --output json | jq .attributes`,
 }
 
 var (

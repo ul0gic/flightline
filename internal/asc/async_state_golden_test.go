@@ -19,7 +19,7 @@ import (
 
 // goldenAsyncDir is the on-disk root for the canonical / corrupted state
 // fixtures. Tests load these via os.ReadFile, install them into the per-test
-// SKIPPER_STATE_HOME tree, and call LoadAsyncState against the install path.
+// FLINE_STATE_HOME tree, and call LoadAsyncState against the install path.
 const goldenAsyncDir = "testdata/golden/async"
 
 // readGoldenAsync returns the bytes of a fixture under testdata/golden/async/.
@@ -36,7 +36,7 @@ func readGoldenAsync(t *testing.T, name string) []byte {
 }
 
 // installGoldenAsync drops a golden fixture into the per-test
-// SKIPPER_STATE_HOME tree at the path that LoadAsyncState will look for given
+// FLINE_STATE_HOME tree at the path that LoadAsyncState will look for given
 // (bundleID, reportClass). Returns the absolute install path so the caller
 // can compare bytes against the on-disk file after a Persist round-trip.
 func installGoldenAsync(t *testing.T, root, bundleID string, class ReportClass, contents []byte) string {

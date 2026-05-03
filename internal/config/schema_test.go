@@ -36,7 +36,7 @@ func TestValidate_Example(t *testing.T) {
 func TestValidate_BadEnum(t *testing.T) {
 	rt := "BOGUS_RELEASE"
 	s := &State{
-		APIVersion: "skipper.corelift.io/v1alpha1",
+		APIVersion: "flightline.dev/v1alpha1",
 		Kind:       "AppState",
 		Metadata:   StateMetadata{BundleID: "com.example.app", Version: "1.0"},
 		Spec: StateSpec{
@@ -71,7 +71,7 @@ func TestValidate_MissingRequired(t *testing.T) {
 // TestValidate_Pattern — bundleId pattern rejects spaces.
 func TestValidate_Pattern(t *testing.T) {
 	s := &State{
-		APIVersion: "skipper.corelift.io/v1alpha1",
+		APIVersion: "flightline.dev/v1alpha1",
 		Kind:       "AppState",
 		Metadata:   StateMetadata{BundleID: "has spaces", Version: "1.0"},
 	}
@@ -104,24 +104,24 @@ func TestValidate_NilState(t *testing.T) {
 // TestSchemaURL — guard against accidental URL drift; the constant is
 // part of the YAML header in fetched files.
 func TestSchemaURL(t *testing.T) {
-	if SchemaURL != "https://schemas.corelift.io/skipper/v1alpha1/state.schema.json" {
+	if SchemaURL != "https://flightline.dev/schemas/v1alpha1/state.schema.json" {
 		t.Errorf("SchemaURL drifted: %s", SchemaURL)
 	}
 }
 
 // TestEmbeddedSchemaInSync — the embedded copy at internal/config/schema.json
-// must match the canonical schemas/skipper.schema.json byte-for-byte.
+// must match the canonical schemas/flightline.schema.json byte-for-byte.
 // Run `make sync-schema` to refresh.
 func TestEmbeddedSchemaInSync(t *testing.T) {
 	repoRoot, err := filepath.Abs("../..")
 	if err != nil {
 		t.Fatalf("repo root: %v", err)
 	}
-	canonical, err := os.ReadFile(filepath.Join(repoRoot, "schemas", "skipper.schema.json"))
+	canonical, err := os.ReadFile(filepath.Join(repoRoot, "schemas", "flightline.schema.json"))
 	if err != nil {
 		t.Fatalf("read canonical schema: %v", err)
 	}
 	if !bytes.Equal(canonical, embeddedSchemaJSON) {
-		t.Fatal("internal/config/schema.json drifted from schemas/skipper.schema.json — run `make sync-schema`")
+		t.Fatal("internal/config/schema.json drifted from schemas/flightline.schema.json — run `make sync-schema`")
 	}
 }

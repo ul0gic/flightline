@@ -60,7 +60,7 @@ type BetaFeedbackBaseAttributes struct {
 }
 
 // BetaFeedbackCrashSubmissionAttributes is the subset of Apple's
-// BetaFeedbackCrashSubmission.attributes Skipper reads. The actual crash
+// BetaFeedbackCrashSubmission.attributes Flightline reads. The actual crash
 // log text lives at the relationship endpoint
 // /v1/betaFeedbackCrashSubmissions/{id}/crashLog and is fetched separately
 // when the user runs `beta-feedback download`.
@@ -79,7 +79,7 @@ type BetaFeedbackScreenshotImage struct {
 }
 
 // BetaFeedbackScreenshotSubmissionAttributes is the subset of Apple's
-// BetaFeedbackScreenshotSubmission.attributes Skipper reads. Screenshots
+// BetaFeedbackScreenshotSubmission.attributes Flightline reads. Screenshots
 // holds the pre-signed image URLs inline — there's no separate
 // relationships endpoint for screenshot bytes.
 type BetaFeedbackScreenshotSubmissionAttributes struct {
@@ -88,7 +88,7 @@ type BetaFeedbackScreenshotSubmissionAttributes struct {
 }
 
 // BetaCrashLogAttributes is the subset of Apple's BetaCrashLog.attributes
-// Skipper reads. LogText is the symbolicated crash log body; Apple returns
+// Flightline reads. LogText is the symbolicated crash log body; Apple returns
 // it as a single string, not a structured object.
 type BetaCrashLogAttributes struct {
 	LogText string `json:"logText,omitempty"`

@@ -1,13 +1,13 @@
 .PHONY: build install test vet lint fmt gen verify clean help sync-schema
 
 GO ?= go
-BIN := ./bin/skipper
+BIN := ./bin/fline
 PKG := ./...
 
 help:
-	@echo "Skipper Makefile targets:"
+	@echo "Flightline Makefile targets:"
 	@echo "  build    Build $(BIN)"
-	@echo "  install  go install ./cmd/skipper"
+	@echo "  install  go install ./cmd/fline"
 	@echo "  test     go test -race"
 	@echo "  vet      go vet"
 	@echo "  lint     golangci-lint run"
@@ -17,10 +17,10 @@ help:
 	@echo "  clean    Remove build artifacts"
 
 build:
-	$(GO) build -o $(BIN) ./cmd/skipper
+	$(GO) build -o $(BIN) ./cmd/fline
 
 install:
-	$(GO) install ./cmd/skipper
+	$(GO) install ./cmd/fline
 
 test:
 	$(GO) test $(PKG) -count=1 -race
@@ -41,8 +41,8 @@ fmt:
 # authoritative reference (queried via jq during command authoring).
 # See .project/issues/closed/ISSUE-001-oapi-codegen-collisions.md.
 gen:
-	@echo "skipper: codegen is intentionally not used — internal/asc/ is hand-rolled."
-	@echo "skipper: spec is authoritative reference. Query via jq:"
+	@echo "flightline: codegen is intentionally not used — internal/asc/ is hand-rolled."
+	@echo "flightline: spec is authoritative reference. Query via jq:"
 	@echo "  jq '.paths | keys[]' openapi.oas.json | grep -i <resource>"
 	@echo "  jq '.components.schemas.<Name>' openapi.oas.json"
 
@@ -52,7 +52,7 @@ verify: sync-schema vet test lint
 # `go:embed` forbids `..` traversal, so the validator's embedded copy
 # lives next to its package; this target enforces byte-identity.
 sync-schema:
-	@cp schemas/skipper.schema.json internal/config/schema.json
+	@cp schemas/flightline.schema.json internal/config/schema.json
 
 clean:
 	rm -rf ./bin coverage.out coverage.html

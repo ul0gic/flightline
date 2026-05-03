@@ -14,7 +14,7 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 func TestScreenshotsCmd_Registered(t *testing.T) {
@@ -71,7 +71,7 @@ func TestValidateScreenshotFile_Errors(t *testing.T) {
 	if err := validateScreenshotFile(""); err == nil {
 		t.Error("empty path: want error")
 	}
-	if err := validateScreenshotFile("/nonexistent/skipper-test-foo.png"); err == nil {
+	if err := validateScreenshotFile("/nonexistent/flightline-test-foo.png"); err == nil {
 		t.Error("nonexistent path: want error")
 	}
 	dir := t.TempDir()
@@ -375,13 +375,13 @@ func TestProcessOneScreenshot_Upload(t *testing.T) {
 	c, err := asc.New(asc.Options{
 		KeyID: "TEST123ABC", IssuerID: "11111111-2222-3333-4444-555555555555",
 		KeyPath: keyPath, HTTPClient: ascSrv.Client(), BaseURL: ascSrv.URL,
-		UserAgent: "skipper-test/1.0",
+		UserAgent: "flightline-test/1.0",
 	})
 	if err != nil {
 		t.Fatalf("asc.New: %v", err)
 	}
 
-	t.Setenv("SKIPPER_CACHE_HOME", t.TempDir())
+	t.Setenv("FLINE_CACHE_HOME", t.TempDir())
 
 	entry, err := processOneScreenshot(context.Background(), c, "SS000000001", path, map[string]existingScreenshotEntry{})
 	if err != nil {

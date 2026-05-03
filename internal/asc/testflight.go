@@ -38,7 +38,7 @@ const (
 	BetaReviewStateApproved         = "APPROVED"
 )
 
-// BetaGroupAttributes is the subset of Apple's BetaGroup.attributes Skipper
+// BetaGroupAttributes is the subset of Apple's BetaGroup.attributes Flightline
 // reads. Internal-vs-external groups share the same resource type;
 // IsInternalGroup distinguishes them.
 //
@@ -63,7 +63,7 @@ type BetaGroupAttributes struct {
 }
 
 // BetaTesterAttributes is the subset of Apple's BetaTester.attributes
-// Skipper reads. The id on the resource is Apple's internal tester id;
+// Flightline reads. The id on the resource is Apple's internal tester id;
 // email is the operator-meaningful identifier.
 //
 // AppDevices is omitted from this struct (it's a per-tester device list
@@ -79,7 +79,7 @@ type BetaTesterAttributes struct {
 }
 
 // BetaAppReviewSubmissionAttributes is the subset of Apple's
-// BetaAppReviewSubmission.attributes Skipper reads. Per-build beta-review
+// BetaAppReviewSubmission.attributes Flightline reads. Per-build beta-review
 // submission carries a state (WAITING_FOR_REVIEW | IN_REVIEW | REJECTED |
 // APPROVED) plus a submittedDate. Apple does not expose review notes via
 // the API for beta submissions.
@@ -89,7 +89,7 @@ type BetaAppReviewSubmissionAttributes struct {
 }
 
 // BetaBuildLocalizationAttributes is the subset of Apple's
-// BetaBuildLocalization.attributes Skipper reads. Per-locale "What's New"
+// BetaBuildLocalization.attributes Flightline reads. Per-locale "What's New"
 // text shown to testers when a new build is released; the locale is
 // Apple-format (e.g. "en-US", "fr-FR").
 type BetaBuildLocalizationAttributes struct {

@@ -85,7 +85,7 @@ jq '.components.schemas.AppsResponse' openapi.oas.json
 # 2. Pull the schema for an item inside it.
 jq '.components.schemas.App' openapi.oas.json
 
-# 3. Build a minimal valid response covering only the fields Skipper reads
+# 3. Build a minimal valid response covering only the fields Flightline reads
 #    (see internal/asc/types.go and internal/cmd/apps.go for the shape).
 
 # 4. Save under testdata/golden/<name>.json. jq pretty-print:
@@ -101,8 +101,8 @@ whitespace, unexpected null fields, Apple-internal `id` formats), capture
 once and redact:
 
 ```bash
-# 1. Issue the request with skipper itself or curl + a fresh JWT.
-skipper apps list --output json > /tmp/apps_list_raw.json
+# 1. Issue the request with fline itself or curl + a fresh JWT.
+fline apps list --output json > /tmp/apps_list_raw.json
 
 # 2. Run the redaction pass:
 sed -E '

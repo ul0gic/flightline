@@ -9,18 +9,18 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // resolutionCenterDisclaimer is printed at the end of the rejection report
 // in table mode AND included in the JSON output (as a top-level field).
 //
 // Apple does NOT expose the resolution-center reviewer text via the public
-// App Store Connect API. Skipper can show every API-visible signal (version
+// App Store Connect API. Flightline can show every API-visible signal (version
 // state, submission state, item states, build links) but cannot show the
 // reviewer's prose. Documenting this loudly is the entire point of the
-// command — without it, users assume Skipper is buggy or incomplete.
-const resolutionCenterDisclaimer = `Apple's resolution-center reviewer text is NOT in the public API. Skipper shows the API-visible state. To read the actual reviewer message, log into App Store Connect.`
+// command — without it, users assume Flightline is buggy or incomplete.
+const resolutionCenterDisclaimer = `Apple's resolution-center reviewer text is NOT in the public API. Flightline shows the API-visible state. To read the actual reviewer message, log into App Store Connect.`
 
 // RejectionItem is one item entry in the rejection report.
 type RejectionItem struct {
@@ -117,10 +117,10 @@ state.
 ` + resolutionCenterDisclaimer + `
 
 Examples:
-  skipper rejection com.example.myapp --version 1.0.1
-  skipper rejection com.example.myapp --version 1.0.1 --output json | jq .submission.state`,
-	Example: `  skipper rejection com.example.myapp --version 1.0.1
-  skipper rejection com.example.myapp --version 1.0.1 --output json`,
+  fline rejection com.example.myapp --version 1.0.1
+  fline rejection com.example.myapp --version 1.0.1 --output json | jq .submission.state`,
+	Example: `  fline rejection com.example.myapp --version 1.0.1
+  fline rejection com.example.myapp --version 1.0.1 --output json`,
 }
 
 var (

@@ -26,8 +26,8 @@ func TestLoadState_Example(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadState: %v", err)
 	}
-	if s.APIVersion != "skipper.corelift.io/v1alpha1" {
-		t.Errorf("apiVersion = %q, want skipper.corelift.io/v1alpha1", s.APIVersion)
+	if s.APIVersion != "flightline.dev/v1alpha1" {
+		t.Errorf("apiVersion = %q, want flightline.dev/v1alpha1", s.APIVersion)
 	}
 	if s.Kind != "AppState" {
 		t.Errorf("kind = %q, want AppState", s.Kind)
@@ -49,7 +49,7 @@ func TestLoadState_Example(t *testing.T) {
 // TestLoadState_UnknownField verifies KnownFields(true) catches typos
 // that would otherwise silently drift away from the schema.
 func TestLoadState_UnknownField(t *testing.T) {
-	yaml := `apiVersion: skipper.corelift.io/v1alpha1
+	yaml := `apiVersion: flightline.dev/v1alpha1
 kind: AppState
 metadata:
   bundleId: com.example.app
@@ -86,7 +86,7 @@ spec:
 // `"yes"`/`"no"` into booleans — those footguns are caught at the lint
 // layer in Phase 5, not here.)
 func TestLoadState_TypeMismatch(t *testing.T) {
-	yaml := `apiVersion: skipper.corelift.io/v1alpha1
+	yaml := `apiVersion: flightline.dev/v1alpha1
 kind: AppState
 metadata:
   bundleId: com.example.app
@@ -132,7 +132,7 @@ func TestLoadState_EmptyFile(t *testing.T) {
 
 // TestLoadState_MissingFile — clean error when the path doesn't exist.
 func TestLoadState_MissingFile(t *testing.T) {
-	_, err := LoadState("/nonexistent/skipper-test/state.yaml")
+	_, err := LoadState("/nonexistent/flightline-test/state.yaml")
 	if err == nil {
 		t.Fatal("expected error for missing file")
 	}
@@ -154,7 +154,7 @@ func TestLoadState_JSONRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("json.Marshal: %v", err)
 	}
-	if !strings.Contains(string(out), `"apiVersion":"skipper.corelift.io/v1alpha1"`) {
+	if !strings.Contains(string(out), `"apiVersion":"flightline.dev/v1alpha1"`) {
 		t.Errorf("JSON output missing apiVersion: %s", string(out))
 	}
 }

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // SubscriptionReport is the JSON contract for `subscriptions reports`.
@@ -73,10 +73,10 @@ vendor-wide on the wire).`,
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runSubscriptionsReports,
-	Example: `  skipper subscriptions reports com.example.myapp --type summary --range P30D
-  skipper subscriptions reports com.example.myapp --type events --range P7D
-  skipper subscriptions reports com.example.myapp --type retention --month 2026-04
-  skipper subscriptions reports com.example.myapp --type summary --range P30D --output json | jq '.rows | length'`,
+	Example: `  fline subscriptions reports com.example.myapp --type summary --range P30D
+  fline subscriptions reports com.example.myapp --type events --range P7D
+  fline subscriptions reports com.example.myapp --type retention --month 2026-04
+  fline subscriptions reports com.example.myapp --type summary --range P30D --output json | jq '.rows | length'`,
 }
 
 var (

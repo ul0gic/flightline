@@ -26,12 +26,12 @@ const (
 )
 
 // ReviewSubmissionAttributes is the subset of Apple's
-// ReviewSubmission.attributes Skipper reads.
+// ReviewSubmission.attributes Flightline reads.
 //
 // Source: jq '.components.schemas.ReviewSubmission.properties.attributes.properties' openapi.oas.json
 //
 // /v1/reviewSubmissions is the modern flow. /v1/appStoreVersionSubmissions
-// is deprecated by Apple; Skipper uses the modern endpoint exclusively.
+// is deprecated by Apple; Flightline uses the modern endpoint exclusively.
 type ReviewSubmissionAttributes struct {
 	Platform      string `json:"platform,omitempty"`
 	SubmittedDate string `json:"submittedDate,omitempty"`
@@ -39,12 +39,12 @@ type ReviewSubmissionAttributes struct {
 }
 
 // ReviewSubmissionItemAttributes is the subset of Apple's
-// ReviewSubmissionItem.attributes Skipper reads.
+// ReviewSubmissionItem.attributes Flightline reads.
 //
 // Source: jq '.components.schemas.ReviewSubmissionItem.properties.attributes.properties' openapi.oas.json
 //
 // Items reference the actual review surface (a version, a custom product
-// page, an experiment, etc.) via the relationships block. Skipper surfaces
+// page, an experiment, etc.) via the relationships block. Flightline surfaces
 // the relationship type + id so consumers know what's being reviewed.
 type ReviewSubmissionItemAttributes struct {
 	State string `json:"state,omitempty"`

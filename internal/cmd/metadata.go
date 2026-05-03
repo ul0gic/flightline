@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // metadata splits across two Apple resources:
@@ -27,7 +27,7 @@ import (
 // no-op masquerading as success.
 
 // metadataASCVersionLocalizationAttrs mirrors Apple's
-// AppStoreVersionLocalization.attributes — only the fields Skipper writes.
+// AppStoreVersionLocalization.attributes — only the fields Flightline writes.
 type metadataASCVersionLocalizationAttrs struct {
 	Locale          string `json:"locale,omitempty"`
 	Description     string `json:"description,omitempty"`
@@ -39,7 +39,7 @@ type metadataASCVersionLocalizationAttrs struct {
 }
 
 // metadataAppInfoLocalizationAttrs mirrors Apple's
-// AppInfoLocalization.attributes — only the fields Skipper writes.
+// AppInfoLocalization.attributes — only the fields Flightline writes.
 type metadataAppInfoLocalizationAttrs struct {
 	Locale   string `json:"locale,omitempty"`
 	Name     string `json:"name,omitempty"`
@@ -120,10 +120,10 @@ var metadataSetCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runMetadataSet,
-	Example: `  skipper metadata set com.example.myapp --version 1.0.1 --locale en-US --name "MyApp" --subtitle "Slogan"
-  skipper metadata set com.example.myapp --version 1.0.1 --locale en-US --description "..." --keywords "..."
-  skipper metadata set com.example.myapp --version 1.0.1 --locale en-US --whats-new "Bug fixes."
-  skipper metadata set com.example.myapp --version 1.0.1 --locale en-US --output json`,
+	Example: `  fline metadata set com.example.myapp --version 1.0.1 --locale en-US --name "MyApp" --subtitle "Slogan"
+  fline metadata set com.example.myapp --version 1.0.1 --locale en-US --description "..." --keywords "..."
+  fline metadata set com.example.myapp --version 1.0.1 --locale en-US --whats-new "Bug fixes."
+  fline metadata set com.example.myapp --version 1.0.1 --locale en-US --output json`,
 }
 
 var (

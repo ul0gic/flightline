@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // AnalyticsRequestView is the JSON contract for `analytics request`.
@@ -153,7 +153,7 @@ var analyticsCmd = &cobra.Command{
 	3. list-instances — enumerate report instances for the active request
 	4. download — pull every segment of an instance to local CSV files
 
-State persists to $XDG_STATE_HOME/skipper/<bundleId>/analytics.json so a
+State persists to $XDG_STATE_HOME/flightline/<bundleId>/analytics.json so a
 Ctrl-C between submit and download resumes cleanly on the next run.`,
 }
 
@@ -163,9 +163,9 @@ var analyticsRequestCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runAnalyticsRequest,
-	Example: `  skipper analytics request com.example.myapp --access-type ONE_TIME_SNAPSHOT
-  skipper analytics request com.example.myapp --access-type ONE_TIME_SNAPSHOT --wait
-  skipper analytics request com.example.myapp --access-type ONGOING --wait --max-duration 10m`,
+	Example: `  fline analytics request com.example.myapp --access-type ONE_TIME_SNAPSHOT
+  fline analytics request com.example.myapp --access-type ONE_TIME_SNAPSHOT --wait
+  fline analytics request com.example.myapp --access-type ONGOING --wait --max-duration 10m`,
 }
 
 var analyticsListInstancesCmd = &cobra.Command{
@@ -174,9 +174,9 @@ var analyticsListInstancesCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runAnalyticsListInstances,
-	Example: `  skipper analytics list-instances com.example.myapp
-  skipper analytics list-instances com.example.myapp --report-id RPT-1
-  skipper analytics list-instances com.example.myapp --category APP_USAGE --name-contains daily`,
+	Example: `  fline analytics list-instances com.example.myapp
+  fline analytics list-instances com.example.myapp --report-id RPT-1
+  fline analytics list-instances com.example.myapp --category APP_USAGE --name-contains daily`,
 }
 
 var analyticsDownloadCmd = &cobra.Command{
@@ -185,8 +185,8 @@ var analyticsDownloadCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runAnalyticsDownload,
-	Example: `  skipper analytics download com.example.myapp --instance INST-1
-  skipper analytics download com.example.myapp --instance INST-1 --out ./reports/`,
+	Example: `  fline analytics download com.example.myapp --instance INST-1
+  fline analytics download com.example.myapp --instance INST-1 --out ./reports/`,
 }
 
 var analyticsStatusCmd = &cobra.Command{
@@ -195,8 +195,8 @@ var analyticsStatusCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runAnalyticsStatus,
-	Example: `  skipper analytics status com.example.myapp
-  skipper analytics status com.example.myapp --output json | jq .requestId`,
+	Example: `  fline analytics status com.example.myapp
+  fline analytics status com.example.myapp --output json | jq .requestId`,
 }
 
 var (
@@ -578,7 +578,7 @@ func loadAnalyticsState(bundleID string) (asc.AsyncState, error) {
 	state, err := asc.LoadAsyncState(bundleID, asc.ReportClassAnalytics)
 	if errors.Is(err, os.ErrNotExist) {
 		return asc.AsyncState{}, fmt.Errorf(
-			"analytics: no active analytics request for %q — run `skipper analytics request %s --access-type ONE_TIME_SNAPSHOT` first",
+			"analytics: no active analytics request for %q — run `fline analytics request %s --access-type ONE_TIME_SNAPSHOT` first",
 			bundleID, bundleID,
 		)
 	}
@@ -587,7 +587,7 @@ func loadAnalyticsState(bundleID string) (asc.AsyncState, error) {
 	}
 	if state.RequestID == "" {
 		return asc.AsyncState{}, fmt.Errorf(
-			"analytics: state file for %q has no request ID — re-submit via `skipper analytics request %s`",
+			"analytics: state file for %q has no request ID — re-submit via `fline analytics request %s`",
 			bundleID, bundleID,
 		)
 	}

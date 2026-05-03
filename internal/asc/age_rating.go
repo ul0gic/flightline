@@ -26,7 +26,7 @@ const (
 
 // AgeRatingDeclarationAttributes is the full ASC age-rating questionnaire
 // surface — every field Apple asks during App Store Connect's age-rating
-// flow. Skipper keeps the entire shape because L3 preflight rules will
+// flow. Flightline keeps the entire shape because L3 preflight rules will
 // flag missing answers (they are a frequent rejection cause).
 //
 // Source: jq '.components.schemas.AgeRatingDeclaration.properties.attributes.properties' openapi.oas.json
@@ -75,7 +75,7 @@ type AgeRatingDeclarationAttributes struct {
 	DeveloperAgeRatingInfoURL string `json:"developerAgeRatingInfoUrl,omitempty"`
 }
 
-// AppInfoAttributes is the subset of Apple's AppInfo.attributes Skipper
+// AppInfoAttributes is the subset of Apple's AppInfo.attributes Flightline
 // reads. AppInfo is the per-review-cycle metadata bag (state mirrors version
 // state); for age-rating reads we use it to pick the right appInfo for a
 // version (each version has a corresponding appInfo in matching lifecycle
@@ -85,7 +85,7 @@ type AgeRatingDeclarationAttributes struct {
 //
 // Apple's older age-rating fields (australiaAgeRating, brazilAgeRating, …)
 // are all marked deprecated; the source of truth is the related
-// ageRatingDeclaration resource, not AppInfo.attributes. Skipper surfaces
+// ageRatingDeclaration resource, not AppInfo.attributes. Flightline surfaces
 // only the fields needed to pick the right appInfo for a version.
 type AppInfoAttributes struct {
 	State string `json:"state,omitempty"`

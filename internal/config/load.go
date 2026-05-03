@@ -1,4 +1,4 @@
-// Package config loads and validates Skipper state YAML files.
+// Package config loads and validates Flightline state YAML files.
 //
 // Two stages:
 //
@@ -23,7 +23,7 @@ import (
 	yaml "go.yaml.in/yaml/v3"
 )
 
-// State mirrors the top-level shape of schemas/skipper.schema.json.
+// State mirrors the top-level shape of schemas/flightline.schema.json.
 // Loaded from YAML and validated against the schema before use.
 type State struct {
 	APIVersion string        `yaml:"apiVersion" json:"apiVersion"`
@@ -39,8 +39,8 @@ type StateMetadata struct {
 	Platform string `yaml:"platform,omitempty" json:"platform,omitempty"`
 }
 
-// StateSpec mirrors schemas/skipper.schema.json's spec section. Each
-// field is a typed sub-spec; nil pointers mean "not managed" — Skipper
+// StateSpec mirrors schemas/flightline.schema.json's spec section. Each
+// field is a typed sub-spec; nil pointers mean "not managed" — Flightline
 // leaves that surface alone during apply.
 type StateSpec struct {
 	Version            *VersionSpec            `yaml:"version,omitempty"            json:"version,omitempty"`
@@ -127,7 +127,7 @@ type IAPLocalization struct {
 }
 
 // AgeRatingSpec — see #/$defs/ageRatingSpec. Pointer-typed enums and
-// booleans so Skipper can distinguish "answered NONE" from "not managed".
+// booleans so Flightline can distinguish "answered NONE" from "not managed".
 type AgeRatingSpec struct {
 	CartoonOrFantasyViolence                  *string `yaml:"cartoonOrFantasyViolence,omitempty"                    json:"cartoonOrFantasyViolence,omitempty"`
 	RealisticViolence                         *string `yaml:"realisticViolence,omitempty"                           json:"realisticViolence,omitempty"`
@@ -292,7 +292,7 @@ func (e *LoadError) Error() string {
 //
 // On any decode error (unknown key, type mismatch, malformed YAML), returns
 // a *LoadError carrying file:line:col-anchored Diagnostics. Schema
-// validation against schemas/skipper.schema.json runs separately via
+// validation against schemas/flightline.schema.json runs separately via
 // Validate — LoadState only does structural decode.
 func LoadState(path string) (*State, error) {
 	abs, err := filepath.Abs(path)

@@ -1,12 +1,12 @@
-# Skipper AppState — YAML Reference
+# Flightline AppState — YAML Reference
 
 ## TL;DR
 
-A Skipper state file is a YAML document that declares the desired configuration for one app across every App Store Connect surface Skipper manages. You run `skipper fetch <bundleId>` once to capture live state, edit the YAML, then use `skipper plan` and `skipper apply` to preview and write the diff. The schema is embedded in the binary; your editor autocompletes via the `yaml-language-server` directive at the top of every fetched file.
+A Flightline state file is a YAML document that declares the desired configuration for one app across every App Store Connect surface Flightline manages. You run `fline fetch <bundleId>` once to capture live state, edit the YAML, then use `fline plan` and `fline apply` to preview and write the diff. The schema is embedded in the binary; your editor autocompletes via the `yaml-language-server` directive at the top of every fetched file.
 
-Every top-level child of `spec` is optional. Omitting a section tells Skipper "leave this surface alone." You don't have to manage everything — start with `spec.metadata` and `spec.version`, add sections when you need them.
+Every top-level child of `spec` is optional. Omitting a section tells Flightline "leave this surface alone." You don't have to manage everything — start with `spec.metadata` and `spec.version`, add sections when you need them.
 
-The schema URL is `https://schemas.corelift.io/skipper/v1alpha1/state.schema.json`. Fields not listed in this document are not part of the v1alpha1 contract; unrecognized keys cause a `LoadState` error.
+The schema URL is `https://flightline.dev/schemas/v1alpha1/state.schema.json`. Fields not listed in this document are not part of the v1alpha1 contract; unrecognized keys cause a `LoadState` error.
 
 **This reference covers v1alpha1.** The `apiVersion` constant locks that. If a future release bumps to `v1beta1`, the diff will be explicit and documented.
 
@@ -19,9 +19,9 @@ See [docs/state-yaml-quickstart.md](./state-yaml-quickstart.md) for a 5-minute w
 A minimal state file:
 
 ```yaml
-# yaml-language-server: $schema=https://schemas.corelift.io/skipper/v1alpha1/state.schema.json
+# yaml-language-server: $schema=https://flightline.dev/schemas/v1alpha1/state.schema.json
 
-apiVersion: skipper.corelift.io/v1alpha1
+apiVersion: flightline.dev/v1alpha1
 kind: AppState
 
 metadata:
@@ -37,18 +37,18 @@ The four top-level keys are required: `apiVersion`, `kind`, `metadata`, `spec`.
 
 | Key | Type | Required | Notes |
 |-----|------|----------|-------|
-| `apiVersion` | string const | yes | Must be exactly `skipper.corelift.io/v1alpha1` |
+| `apiVersion` | string const | yes | Must be exactly `flightline.dev/v1alpha1` |
 | `kind` | string const | yes | Must be exactly `AppState` |
 | `metadata` | object | yes | Bundle identity — see [metadata](#metadata) |
 | `spec` | object | yes | Desired state — all children optional |
 
-**Editor setup.** The `# yaml-language-server: $schema=...` directive at the top of every `skipper fetch` output activates autocomplete and inline validation in VS Code, Neovim (with yaml-language-server), and any editor that supports the LSP YAML extension. The schema is hosted at `https://schemas.corelift.io/skipper/v1alpha1/state.schema.json` and also embedded in the `skipper` binary.
+**Editor setup.** The `# yaml-language-server: $schema=...` directive at the top of every `fline fetch` output activates autocomplete and inline validation in VS Code, Neovim (with yaml-language-server), and any editor that supports the LSP YAML extension. The schema is hosted at `https://flightline.dev/schemas/v1alpha1/state.schema.json` and also embedded in the `fline` binary.
 
 ---
 
 ## metadata
 
-Identifies the app and the version being described. These three fields are also the keys Skipper uses when resolving the live ASC resource to diff against.
+Identifies the app and the version being described. These three fields are also the keys Flightline uses when resolving the live ASC resource to diff against.
 
 ```yaml
 metadata:
@@ -59,11 +59,11 @@ metadata:
 
 | Field | Type | Required | Default | Constraint | Gotcha |
 |-------|------|----------|---------|------------|--------|
-| `bundleId` | string | yes | — | `^[a-zA-Z0-9._-]+$`, min 3 chars | Must already exist in ASC. Skipper does not create apps. |
+| `bundleId` | string | yes | — | `^[a-zA-Z0-9._-]+$`, min 3 chars | Must already exist in ASC. Flightline does not create apps. |
 | `version` | string | yes | — | `^[0-9]+(\.[0-9]+)*$` | Marketing version (CFBundleShortVersionString). Leading zeros rejected — `01.0` fails schema. Quote it: `"1.0"`. |
 | `platform` | enum | no | `IOS` | `IOS`, `MAC_OS`, `TV_OS`, `VISION_OS` | Defaults to `IOS` when absent. Must match the platform your build targets. |
 
-**PRD lifecycle step:** `metadata.bundleId` + `metadata.version` are the identity keys Skipper uses at every step of the [authoring loop](../.project/prd.md#lifecycle) (fetch → lint → plan → apply → preflight → submit).
+**PRD lifecycle step:** `metadata.bundleId` + `metadata.version` are the identity keys Flightline uses at every step of the [authoring loop](../.project/prd.md#lifecycle) (fetch → lint → plan → apply → preflight → submit).
 
 ---
 
@@ -80,7 +80,7 @@ spec:
 
 | Field | Type | Required | Default | Constraint | Gotcha |
 |-------|------|----------|---------|------------|--------|
-| `releaseType` | enum | no | — | `MANUAL`, `AFTER_APPROVAL`, `SCHEDULED` | If absent, Skipper leaves the current ASC setting unchanged. `SCHEDULED` requires `earliestReleaseDate`. |
+| `releaseType` | enum | no | — | `MANUAL`, `AFTER_APPROVAL`, `SCHEDULED` | If absent, Flightline leaves the current ASC setting unchanged. `SCHEDULED` requires `earliestReleaseDate`. |
 | `earliestReleaseDate` | string | no | — | ISO 8601 datetime | Required when `releaseType=SCHEDULED`. Apple rejects times in the past. |
 | `copyright` | string | no | — | maxLength 100 | Displayed on the App Store listing. Apple shows this under the app name. |
 | `downloadable` | boolean | no | — | — | Rarely needed; controls whether the build is downloadable from TestFlight or the App Store. |
@@ -91,7 +91,7 @@ spec:
 
 ## spec.build
 
-Attaches a build (already uploaded via Xcode / altool) to this version. Skipper looks up the build by `version + number` and attaches it by its ASC resource ID.
+Attaches a build (already uploaded via Xcode / altool) to this version. Flightline looks up the build by `version + number` and attaches it by its ASC resource ID.
 
 ```yaml
 spec:
@@ -101,9 +101,9 @@ spec:
 
 | Field | Type | Required | Default | Constraint | Gotcha |
 |-------|------|----------|---------|------------|--------|
-| `number` | string | no | — | — | CFBundleVersion. Quote it: `"42"` not `42`. Bare integers are YAML numbers, not strings, and Skipper's strict loader rejects the type mismatch. |
+| `number` | string | no | — | — | CFBundleVersion. Quote it: `"42"` not `42`. Bare integers are YAML numbers, not strings, and Flightline's strict loader rejects the type mismatch. |
 
-Builds must reach `VALID` state in ASC before Skipper can attach them. Upload is done by Xcode, `altool`, or `xcrun notarytool` — not by Skipper. If the build isn't processed yet, `skipper apply` will surface a typed error.
+Builds must reach `VALID` state in ASC before Flightline can attach them. Upload is done by Xcode, `altool`, or `xcrun notarytool` — not by Flightline. If the build isn't processed yet, `fline apply` will surface a typed error.
 
 ---
 
@@ -149,15 +149,15 @@ Locale codes follow the pattern `^[a-z]{2}(-[A-Z]{2})?$` — two-letter language
 | `supportUrl` | URI | no | — | Full URL. |
 | `privacyPolicyUrl` | URI | no | — | Full URL. |
 
-**Cross-resource routing.** `name` and `subtitle` live on `appInfoLocalization`; everything else lives on `appStoreVersionLocalization`. Skipper handles the routing — you author a single locale map and Skipper dispatches to the correct ASC resource per field.
+**Cross-resource routing.** `name` and `subtitle` live on `appInfoLocalization`; everything else lives on `appStoreVersionLocalization`. Flightline handles the routing — you author a single locale map and Flightline dispatches to the correct ASC resource per field.
 
-**Per-locale completeness.** Every locale you declare must be complete enough for Apple to accept. Apple will reject a submission if a declared locale has a `description` but no `supportUrl`. Skipper's L3 preflight rule `localizations.completeness` (Phase 5) will catch this offline; until then, check the [Apple documentation](https://developer.apple.com/help/app-store-connect/manage-app-information/add-app-localizations/) for required fields per locale.
+**Per-locale completeness.** Every locale you declare must be complete enough for Apple to accept. Apple will reject a submission if a declared locale has a `description` but no `supportUrl`. Flightline's L3 preflight rule `localizations.completeness` (Phase 5) will catch this offline; until then, check the [Apple documentation](https://developer.apple.com/help/app-store-connect/manage-app-information/add-app-localizations/) for required fields per locale.
 
 ---
 
 ## spec.screenshots
 
-Per-locale, per-device-class screenshot sets. Skipper computes an MD5 of each local file and skips slots whose `sourceFileChecksum` already matches — making repeated applies no-ops when screenshots haven't changed.
+Per-locale, per-device-class screenshot sets. Flightline computes an MD5 of each local file and skips slots whose `sourceFileChecksum` already matches — making repeated applies no-ops when screenshots haven't changed.
 
 ```yaml
 spec:
@@ -197,7 +197,7 @@ Each device slot accepts 1–10 screenshots (`minItems: 1`, `maxItems: 10`).
 
 **Required devices for new submissions.** Apple requires at least 6.9" and 6.7" screenshots for new iOS app submissions. The L3 preflight rule `screenshots.requiredDevices` (Phase 5) catches this offline.
 
-**Current limitation.** `skipper apply` cannot yet drive the multipart binary upload for screenshots. The diff engine and fetch projection are correct — apply will surface a typed error pointing you to the L1 verb (`skipper screenshots upload`). This is tracked in [QA-010](../.project/issues/open/QA-010-orchestrator-upload-integration.md). Use `skipper screenshots upload` directly for now; the state file's screenshot section is still useful for tracking what should be there.
+**Current limitation.** `fline apply` cannot yet drive the multipart binary upload for screenshots. The diff engine and fetch projection are correct — apply will surface a typed error pointing you to the L1 verb (`fline screenshots upload`). This is tracked in [QA-010](../.project/issues/open/QA-010-orchestrator-upload-integration.md). Use `fline screenshots upload` directly for now; the state file's screenshot section is still useful for tracking what should be there.
 
 ---
 
@@ -247,7 +247,7 @@ reviewScreenshot:
 |-------|------|----------|--------|
 | `path` | string | yes | Relative to state file directory. The L3 preflight rule `iap.reviewScreenshot.exists` (Phase 5) checks this is populated. Missing review screenshots are a common rejection cause. |
 
-**Current limitation.** Like app screenshots, the `reviewScreenshot` binary upload is not yet driven by `skipper apply`. Use `skipper iap update --review-screenshot upload` until [QA-010](../.project/issues/open/QA-010-orchestrator-upload-integration.md) lands.
+**Current limitation.** Like app screenshots, the `reviewScreenshot` binary upload is not yet driven by `fline apply`. Use `fline iap update --review-screenshot upload` until [QA-010](../.project/issues/open/QA-010-orchestrator-upload-integration.md) lands.
 
 ### iapLocalization fields
 
@@ -283,7 +283,7 @@ spec:
 
 These fields accept `NONE`, `INFREQUENT_OR_MILD`, or `FREQUENT_OR_INTENSE`:
 
-| Field | Skipper name | Apple API field |
+| Field | Flightline name | Apple API field |
 |-------|-------------|-----------------|
 | `cartoonOrFantasyViolence` | cartoon or fantasy violence | `violenceCartoonOrFantasy` |
 | `realisticViolence` | realistic violence | `violenceRealistic` |
@@ -300,11 +300,11 @@ These fields accept `NONE`, `INFREQUENT_OR_MILD`, or `FREQUENT_OR_INTENSE`:
 
 | Field | Type | Gotcha |
 |-------|------|--------|
-| `prolongedGraphicSadisticRealisticViolence` | boolean | Apple's API uses a frequency enum for this field; Skipper maps any non-`NONE` value fetched from Apple to `true`. Set `true` for apps with prolonged, graphic, sadistic violence. |
+| `prolongedGraphicSadisticRealisticViolence` | boolean | Apple's API uses a frequency enum for this field; Flightline maps any non-`NONE` value fetched from Apple to `true`. Set `true` for apps with prolonged, graphic, sadistic violence. |
 | `gambling` | boolean | Gambling features (not just references — actual gambling mechanics). |
 | `unrestrictedWebAccess` | boolean | App provides unrestricted internet access (e.g., a web browser). |
 | `kidsAgeBand` | enum or null | `FIVE_AND_UNDER`, `SIX_TO_EIGHT`, `NINE_TO_ELEVEN`, or `null`. Set only for Kids category apps. |
-| `seventeenPlus` | boolean | **Read-only.** Apple derives the 17+ rating from your answers — you cannot set this field directly. `skipper apply` returns a typed error if you include this in a change set. You may include it in the file for documentation, but it has no write effect. |
+| `seventeenPlus` | boolean | **Read-only.** Apple derives the 17+ rating from your answers — you cannot set this field directly. `fline apply` returns a typed error if you include this in a change set. You may include it in the file for documentation, but it has no write effect. |
 
 ---
 
@@ -342,7 +342,7 @@ Only populate this if your app implements proprietary cryptographic algorithms b
 
 ## spec.reviewerDemo
 
-Login credentials for App Review. Apple requires demo credentials for any app that has a sign-in wall. Skipper never logs or echoes passwords.
+Login credentials for App Review. Apple requires demo credentials for any app that has a sign-in wall. Flightline never logs or echoes passwords.
 
 ```yaml
 spec:
@@ -360,20 +360,20 @@ spec:
 | Field | Type | Required | Constraint | Gotcha |
 |-------|------|----------|------------|--------|
 | `username` | string | no | — | Demo account username. |
-| `passwordRef` | string | no | `^env:[A-Z_][A-Z0-9_]*$` | Env var reference, e.g. `env:DEMO_PASSWORD`. Skipper resolves the variable at apply time. Never put the password directly in the YAML file — it will end up in git. |
+| `passwordRef` | string | no | `^env:[A-Z_][A-Z0-9_]*$` | Env var reference, e.g. `env:DEMO_PASSWORD`. Flightline resolves the variable at apply time. Never put the password directly in the YAML file — it will end up in git. |
 | `passwordFile` | string | no | — | Path to a file containing the password. Trailing newline is trimmed. Alternative to `passwordRef`. |
 | `notes` | string | no | maxLength 4000 | Instructions for the reviewer. Include where to find any non-obvious flows (IAP, restricted features, login-wall bypass). |
 | `contactName` | string | no | — | Your name or the developer's name. |
 | `contactEmail` | string | no | email format | Contact for Review team questions. |
 | `contactPhone` | string | no | — | International format recommended. |
 
-**Password field constraint.** Exactly one of `passwordRef` or `passwordFile` may be present, or neither. Both together is a schema validation error (`oneOf`). If neither is provided, Skipper applies the other reviewer-demo fields without a password update.
+**Password field constraint.** Exactly one of `passwordRef` or `passwordFile` may be present, or neither. Both together is a schema validation error (`oneOf`). If neither is provided, Flightline applies the other reviewer-demo fields without a password update.
 
 ---
 
 ## spec.categories
 
-App Store category assignment. Category IDs correspond to Apple's category taxonomy — use `skipper categories list` to enumerate valid IDs.
+App Store category assignment. Category IDs correspond to Apple's category taxonomy — use `fline categories list` to enumerate valid IDs.
 
 ```yaml
 spec:
@@ -407,13 +407,13 @@ spec:
 | Field | Type | Required | Gotcha |
 |-------|------|----------|--------|
 | `baseTerritory` | string | no | ISO 3166-1 alpha-3 territory code (e.g. `USA`, `GBR`, `JPN`, `AUS`). Not alpha-2. |
-| `appPricePointId` | string | no | Apple's `appPricePoint` resource ID. Use `skipper price-points list` to enumerate. `"FREE"` is the free tier. Quote the value — bare `FREE` is not a YAML string. |
+| `appPricePointId` | string | no | Apple's `appPricePoint` resource ID. Use `fline price-points list` to enumerate. `"FREE"` is the free tier. Quote the value — bare `FREE` is not a YAML string. |
 
 ---
 
 ## spec.testflight
 
-TestFlight beta distribution configuration. Only groups listed here are managed by Skipper. Groups absent from this section are left alone.
+TestFlight beta distribution configuration. Only groups listed here are managed by Flightline. Groups absent from this section are left alone.
 
 ```yaml
 spec:
@@ -432,7 +432,7 @@ spec:
 
 ### Group key format
 
-Group keys match `^[A-Za-z0-9 _-]+$`. They are the human-readable names you assign — Skipper resolves the ASC resource ID by matching the name against the live group list.
+Group keys match `^[A-Za-z0-9 _-]+$`. They are the human-readable names you assign — Flightline resolves the ASC resource ID by matching the name against the live group list.
 
 ### testflightGroup fields
 
@@ -486,27 +486,27 @@ spec:
 
 **Device classes for CPPs.** CPPs support a subset of device classes: `APP_IPHONE_67`, `APP_IPHONE_69`, `APP_IPHONE_65`, `APP_IPHONE_61`, `APP_IPHONE_55`, `APP_IPAD_PRO_3GEN_129`, `APP_IPAD_PRO_3GEN_11`. TV, Watch, and Vision Pro device classes are not supported on CPPs.
 
-**Current limitation.** CPP screenshot binary uploads are not yet driven by `skipper apply`, same as main screenshots. See [QA-010](../.project/issues/open/QA-010-orchestrator-upload-integration.md).
+**Current limitation.** CPP screenshot binary uploads are not yet driven by `fline apply`, same as main screenshots. See [QA-010](../.project/issues/open/QA-010-orchestrator-upload-integration.md).
 
 ---
 
-## What Skipper does NOT manage
+## What Flightline does NOT manage
 
 ### Privacy nutrition labels
 
 `spec.privacyLabels` does not exist in the v1alpha1 schema and is not planned for v1. Apple's App Store Connect API v4.3 does not expose the `appPrivacyDetails` resource — there are no read or write endpoints for privacy nutrition labels in the public API.
 
-Skipper ships a `skipper privacy-labels get <bundleId>` stub that returns a typed diagnostic explaining the gap. The JSON contract has `supported: false` and a pointer to the portal.
+Flightline ships a `fline privacy-labels get <bundleId>` stub that returns a typed diagnostic explaining the gap. The JSON contract has `supported: false` and a pointer to the portal.
 
 Manage privacy labels in the App Store Connect web UI. See [ISSUE-002](../.project/issues/closed/ISSUE-002-privacy-labels-not-in-asc-api.md) for full context.
 
 ### Asset upload paths (screenshots, IAP review screenshots, CPP screenshots)
 
-The `skipper apply` orchestrator does not yet drive multipart binary uploads. The sections for `spec.screenshots`, `spec.iap.products[*].reviewScreenshot`, and `spec.customProductPages.<name>.localizations.<locale>.screenshots` are fully supported in `skipper fetch` and `skipper plan` (the diff engine compares checksums), but `skipper apply` returns a typed error for these change paths and directs you to the L1 upload verbs:
+The `fline apply` orchestrator does not yet drive multipart binary uploads. The sections for `spec.screenshots`, `spec.iap.products[*].reviewScreenshot`, and `spec.customProductPages.<name>.localizations.<locale>.screenshots` are fully supported in `fline fetch` and `fline plan` (the diff engine compares checksums), but `fline apply` returns a typed error for these change paths and directs you to the L1 upload verbs:
 
 ```
-skipper screenshots upload <bundleId> --version <v> --locale <l> --device <d> <path>
-skipper iap update <productId> --review-screenshot <path>
+fline screenshots upload <bundleId> --version <v> --locale <l> --device <d> <path>
+fline iap update <productId> --review-screenshot <path>
 ```
 
 This is tracked in [QA-010](../.project/issues/open/QA-010-orchestrator-upload-integration.md). The full apply orchestration (including checksum-skip and resume) lands when that issue closes.
@@ -517,7 +517,7 @@ This is tracked in [QA-010](../.project/issues/open/QA-010-orchestrator-upload-i
 
 ### YAML coercion
 
-Skipper uses `yaml.v3` with `KnownFields(true)` and strict type matching. These are the most common coercion traps:
+Flightline uses `yaml.v3` with `KnownFields(true)` and strict type matching. These are the most common coercion traps:
 
 | Problem | Bad | Good |
 |---------|-----|------|
@@ -532,33 +532,33 @@ The strict loader surfaces these as `file:line:col` diagnostics before schema va
 
 ### Per-locale completeness
 
-Every locale you declare in `spec.metadata.locales` is managed. If you declare `es-MX` but only provide `name`, Apple may reject the submission because `supportUrl` is missing. Either fill all required fields for a locale or omit the locale entirely. Skipper's L3 rule `localizations.completeness` (Phase 5) will enforce this offline.
+Every locale you declare in `spec.metadata.locales` is managed. If you declare `es-MX` but only provide `name`, Apple may reject the submission because `supportUrl` is missing. Either fill all required fields for a locale or omit the locale entirely. Flightline's L3 rule `localizations.completeness` (Phase 5) will enforce this offline.
 
 ### Cross-resource field routing
 
-`name` and `subtitle` live on `appInfoLocalization` in the ASC API; `description`, `keywords`, `whatsNew`, `promotionalText`, `marketingUrl`, `supportUrl`, and `privacyPolicyUrl` live on `appStoreVersionLocalization`. Skipper handles the dispatch — you do not need to know which resource owns which field. But if you see a diff that looks like a no-op update, check whether you have the same locale in two separate ASC resource states.
+`name` and `subtitle` live on `appInfoLocalization` in the ASC API; `description`, `keywords`, `whatsNew`, `promotionalText`, `marketingUrl`, `supportUrl`, and `privacyPolicyUrl` live on `appStoreVersionLocalization`. Flightline handles the dispatch — you do not need to know which resource owns which field. But if you see a diff that looks like a no-op update, check whether you have the same locale in two separate ASC resource states.
 
 ### seventeenPlus is read-only
 
-The `seventeenPlus` boolean in `spec.ageRating` reflects Apple's computed rating from your questionnaire answers. You cannot set it directly — Skipper returns a typed error if this field appears in a change set. You may include it in the YAML as documentation of the current state (as written by `skipper fetch`), but changes to it are ignored with an error, not silently applied.
+The `seventeenPlus` boolean in `spec.ageRating` reflects Apple's computed rating from your questionnaire answers. You cannot set it directly — Flightline returns a typed error if this field appears in a change set. You may include it in the YAML as documentation of the current state (as written by `fline fetch`), but changes to it are ignored with an error, not silently applied.
 
 ### contestsAndGambling maps to Apple's "contests" field
 
-The schema uses `contestsAndGambling` for the frequency question about contests and gambling features. On Apple's wire API, this field is called `contests`. Skipper translates in both directions; you always use `contestsAndGambling` in your YAML.
+The schema uses `contestsAndGambling` for the frequency question about contests and gambling features. On Apple's wire API, this field is called `contests`. Flightline translates in both directions; you always use `contestsAndGambling` in your YAML.
 
 ### Omitted spec sections are not managed
 
-If you omit `spec.screenshots` entirely, Skipper will not touch your screenshots — not delete them, not diff them, nothing. This is intentional: partial state files let you manage only the surfaces you care about. If you want Skipper to own a surface, fetch the full state first (`skipper fetch`), then edit.
+If you omit `spec.screenshots` entirely, Flightline will not touch your screenshots — not delete them, not diff them, nothing. This is intentional: partial state files let you manage only the surfaces you care about. If you want Flightline to own a surface, fetch the full state first (`fline fetch`), then edit.
 
 ### Version must be in editable state
 
-`skipper plan` and `skipper apply` require the version identified by `metadata.version` to be in an editable state in ASC (e.g., `PREPARE_FOR_SUBMISSION`, `DEVELOPER_REJECTED`). If the version is `READY_FOR_SALE` or under review, writes will fail with a 422 from Apple's API.
+`fline plan` and `fline apply` require the version identified by `metadata.version` to be in an editable state in ASC (e.g., `PREPARE_FOR_SUBMISSION`, `DEVELOPER_REJECTED`). If the version is `READY_FOR_SALE` or under review, writes will fail with a 422 from Apple's API.
 
 ---
 
 ## See also
 
 - [Quickstart](./state-yaml-quickstart.md) — 5-minute fetch → edit → plan → apply walkthrough
-- [Schema source](../schemas/skipper.schema.json) — the JSON Schema 2020-12 contract
+- [Schema source](../schemas/flightline.schema.json) — the JSON Schema 2020-12 contract
 - [PRD Lifecycle](../.project/prd.md#lifecycle) — the full authoring loop (lint → plan → apply → preflight → submit)
-- `skipper --help`, `skipper fetch --help`, `skipper plan --help`, `skipper apply --help`
+- `fline --help`, `fline fetch --help`, `fline plan --help`, `fline apply --help`

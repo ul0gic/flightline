@@ -1,6 +1,6 @@
 package asc
 
-// BuildAttributes is the subset of Apple's Build.attributes Skipper reads.
+// BuildAttributes is the subset of Apple's Build.attributes Flightline reads.
 //
 // Source: jq '.components.schemas.Build.properties.attributes.properties' openapi.oas.json
 //

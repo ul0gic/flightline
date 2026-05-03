@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // fixtureRoute describes one entry in the cmd-level fixture-server route
@@ -98,7 +98,7 @@ func fixtureASCClient(t *testing.T, srv *httptest.Server) *asc.Client {
 		KeyPath:    keyPath,
 		HTTPClient: srv.Client(),
 		BaseURL:    srv.URL,
-		UserAgent:  "skipper-test/1.0",
+		UserAgent:  "flightline-test/1.0",
 	})
 	if err != nil {
 		t.Fatalf("fixtureASCClient: New: %v", err)

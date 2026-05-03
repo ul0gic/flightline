@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/ul0gic/skipper/internal/config"
+	"github.com/ul0gic/flightline/internal/config"
 )
 
 func TestLocalizationsCompleteness_NoOpWhenAllSurfacesMatch(t *testing.T) {

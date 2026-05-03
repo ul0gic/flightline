@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // ---------------------------------------------------------------------------
@@ -278,7 +278,7 @@ func analyticsCmdClient(t *testing.T, f *analyticsCmdFixture) *asc.Client {
 		KeyPath:    keyPath,
 		HTTPClient: f.srv.Client(),
 		BaseURL:    f.srv.URL,
-		UserAgent:  "skipper-test/1.0",
+		UserAgent:  "flightline-test/1.0",
 	})
 	if err != nil {
 		t.Fatalf("analyticsCmdClient: %v", err)
@@ -289,7 +289,7 @@ func analyticsCmdClient(t *testing.T, f *analyticsCmdFixture) *asc.Client {
 func withCmdStateRoot(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	t.Setenv("SKIPPER_STATE_HOME", dir)
+	t.Setenv("FLINE_STATE_HOME", dir)
 	return dir
 }
 
@@ -587,7 +587,7 @@ func TestAnalytics_ListInstances_MissingState(t *testing.T) {
 	if !strings.Contains(err.Error(), "no active analytics request") {
 		t.Errorf("unhelpful error: %v", err)
 	}
-	if !strings.Contains(err.Error(), "skipper analytics request") {
+	if !strings.Contains(err.Error(), "fline analytics request") {
 		t.Errorf("error missing remediation hint: %v", err)
 	}
 }
@@ -741,7 +741,7 @@ func TestAnalytics_Status_MissingFileHelpfulError(t *testing.T) {
 	if err == nil {
 		t.Fatal("want error")
 	}
-	for _, want := range []string{"no active analytics request", "skipper analytics request"} {
+	for _, want := range []string{"no active analytics request", "fline analytics request"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q missing substring %q", err.Error(), want)
 		}

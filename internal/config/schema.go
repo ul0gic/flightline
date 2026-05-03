@@ -2,10 +2,10 @@
 //
 // LoadState (load.go) handles structural decode; this file handles the
 // cross-field, format, and pattern rules expressed in
-// schemas/skipper.schema.json that Go's type system can't capture.
+// schemas/flightline.schema.json that Go's type system can't capture.
 //
-// The schema is embedded into the binary so `skipper plan` / `skipper
-// apply` work without any sidecar file resolution. Callers receive a
+// The schema is embedded into the binary so `fline plan` / `fline apply`
+// work without any sidecar file resolution. Callers receive a
 // flat []Diagnostic — one per leaf-level validation failure with a
 // JSON-Pointer Path so editors and humans can both jump to the right
 // field.
@@ -24,7 +24,7 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
-// schema.json is a build-time copy of schemas/skipper.schema.json kept
+// schema.json is a build-time copy of schemas/flightline.schema.json kept
 // in this package for `//go:embed` (which forbids `..` traversal). The
 // Makefile target `sync-schema` keeps the two in lock-step; a CI guard
 // rejects diffs.
@@ -35,7 +35,7 @@ var embeddedSchemaJSON []byte
 // SchemaURL is the canonical $id of the embedded schema. Used when
 // emitting `# yaml-language-server: $schema=...` headers in fetched
 // state files.
-const SchemaURL = "https://schemas.corelift.io/skipper/v1alpha1/state.schema.json"
+const SchemaURL = "https://flightline.dev/schemas/v1alpha1/state.schema.json"
 
 var (
 	compiledSchemaOnce sync.Once

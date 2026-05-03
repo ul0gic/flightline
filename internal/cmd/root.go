@@ -1,4 +1,4 @@
-// Package cmd wires the cobra subcommand tree for skipper.
+// Package cmd wires the cobra subcommand tree for flightline.
 package cmd
 
 import (
@@ -11,9 +11,9 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "skipper",
+	Use:   "fline",
 	Short: "Single-binary Go CLI for App Store Connect",
-	Long: `Skipper turns App Store Connect into a structured, declarative surface —
+	Long: `Flightline turns App Store Connect into a structured, declarative surface —
 read the entire account state, lint a desired-state YAML against it, preflight
 every Apple rejection rule we know about, and apply changes idempotently —
 so submissions stop being a clerical landmine.`,
@@ -29,7 +29,7 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	rootCmd.PersistentFlags().String("output", "table", "output format: table | json")
-	rootCmd.PersistentFlags().String("config", "", "config file (default $HOME/.config/skipper/config.yaml)")
+	rootCmd.PersistentFlags().String("config", "", "config file (default $HOME/.config/flightline/config.yaml)")
 	rootCmd.PersistentFlags().String("log-level", "info", "log level: debug | info | warn | error")
 	rootCmd.PersistentFlags().Bool("no-color", false, "disable color output")
 	rootCmd.PersistentFlags().String("key-id", "", "App Store Connect API key ID")
@@ -43,20 +43,20 @@ func init() {
 }
 
 func initConfig() {
-	viper.SetEnvPrefix("SKIPPER")
+	viper.SetEnvPrefix("FLINE")
 	viper.AutomaticEnv()
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 
 	// App Store Connect creds via the same env names as the legacy `asc` tool,
-	// so users can move to skipper without touching ~/.zshrc.
-	_ = viper.BindEnv("key_id", "APP_STORE_CONNECT_KEY_ID", "SKIPPER_KEY_ID")
-	_ = viper.BindEnv("issuer_id", "APP_STORE_CONNECT_ISSUER_ID", "SKIPPER_ISSUER_ID")
-	_ = viper.BindEnv("vendor_number", "APP_STORE_CONNECT_VENDOR_NUMBER", "SKIPPER_VENDOR_NUMBER")
+	// so users can move to flightline without touching ~/.zshrc.
+	_ = viper.BindEnv("key_id", "APP_STORE_CONNECT_KEY_ID", "FLINE_KEY_ID")
+	_ = viper.BindEnv("issuer_id", "APP_STORE_CONNECT_ISSUER_ID", "FLINE_ISSUER_ID")
+	_ = viper.BindEnv("vendor_number", "APP_STORE_CONNECT_VENDOR_NUMBER", "FLINE_VENDOR_NUMBER")
 
 	if cfg, _ := rootCmd.PersistentFlags().GetString("config"); cfg != "" {
 		viper.SetConfigFile(cfg)
 		if err := viper.ReadInConfig(); err != nil {
-			fmt.Fprintf(os.Stderr, "skipper: config file %s not readable: %v\n", cfg, err)
+			fmt.Fprintf(os.Stderr, "fline: config file %s not readable: %v\n", cfg, err)
 			os.Exit(1)
 		}
 		return
@@ -64,6 +64,6 @@ func initConfig() {
 
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
-	viper.AddConfigPath("$HOME/.config/skipper")
+	viper.AddConfigPath("$HOME/.config/flightline")
 	_ = viper.ReadInConfig() // optional; absence is fine
 }

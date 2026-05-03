@@ -118,7 +118,7 @@ var (
 //     separate explicit pattern — see closed SEC-002 for context)
 //   - Issuer UUIDs (the App Store Connect issuer ID format)
 //
-// Exported as Redact() so the cmd-layer printer in cmd/skipper/main.go can
+// Exported as Redact() so the cmd-layer printer in cmd/fline/main.go can
 // apply it to ALL error output, not just APIError.Error().
 func Redact(s string) string {
 	s = jwtPattern.ReplaceAllString(s, "[REDACTED-JWT]")

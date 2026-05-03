@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // fixtureClient wires an asc.Client to an httptest server with an

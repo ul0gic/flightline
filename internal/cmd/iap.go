@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // IAPView is one row of the iap list/get output.
@@ -96,7 +96,7 @@ var iapCmd = &cobra.Command{
 	Long: `iap groups read commands over the /v2/inAppPurchases resource.
 
 Auto-renewable subscriptions live under a separate /v1/subscriptionGroups
-resource and are not handled here — see ` + "`skipper subscriptions`" + `.`,
+resource and are not handled here — see ` + "`fline subscriptions`" + `.`,
 }
 
 var iapListCmd = &cobra.Command{
@@ -105,9 +105,9 @@ var iapListCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runIAPList,
-	Example: `  skipper iap list com.example.myapp
-  skipper iap list com.example.myapp --type CONSUMABLE
-  skipper iap list com.example.myapp --output json | jq -r '.iaps[].attributes.productId'`,
+	Example: `  fline iap list com.example.myapp
+  fline iap list com.example.myapp --type CONSUMABLE
+  fline iap list com.example.myapp --output json | jq -r '.iaps[].attributes.productId'`,
 }
 
 var iapGetCmd = &cobra.Command{
@@ -116,12 +116,12 @@ var iapGetCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runIAPGet,
-	Example: `  skipper iap get com.example.myapp --product com.example.myapp.lifetime
-  skipper iap get com.example.myapp --product com.example.myapp.lifetime --output json`,
+	Example: `  fline iap get com.example.myapp --product com.example.myapp.lifetime
+  fline iap get com.example.myapp --product com.example.myapp.lifetime --output json`,
 }
 
 // iapLocalizationsCmd groups localizations subcommands. Wired under iapCmd
-// so the user-facing path is `skipper iap localizations list`.
+// so the user-facing path is `fline iap localizations list`.
 var iapLocalizationsCmd = &cobra.Command{
 	Use:   "localizations",
 	Short: "Manage and inspect IAP localizations",
@@ -133,8 +133,8 @@ var iapLocalizationsListCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runIAPLocalizationsList,
-	Example: `  skipper iap localizations list com.example.myapp --product com.example.myapp.lifetime
-  skipper iap localizations list com.example.myapp --product com.example.myapp.lifetime --output json`,
+	Example: `  fline iap localizations list com.example.myapp --product com.example.myapp.lifetime
+  fline iap localizations list com.example.myapp --product com.example.myapp.lifetime --output json`,
 }
 
 // Per-subcommand flag state. Separate variables so cobra defaults don't

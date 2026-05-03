@@ -32,7 +32,7 @@ const (
 )
 
 // CustomerReviewAttributes is the subset of Apple's CustomerReview.attributes
-// Skipper reads. Rating is 1..5 inclusive; territory is an ISO-3166 code via
+// Flightline reads. Rating is 1..5 inclusive; territory is an ISO-3166 code via
 // Apple's TerritoryCode enum (e.g. "USA", "GBR").
 type CustomerReviewAttributes struct {
 	Rating           int    `json:"rating,omitempty"`
@@ -44,7 +44,7 @@ type CustomerReviewAttributes struct {
 }
 
 // CustomerReviewResponseAttributes is the subset of Apple's
-// CustomerReviewResponse.attributes Skipper reads. State is one of
+// CustomerReviewResponse.attributes Flightline reads. State is one of
 // PUBLISHED | PENDING_PUBLISH.
 type CustomerReviewResponseAttributes struct {
 	ResponseBody     string `json:"responseBody,omitempty"`
@@ -53,7 +53,7 @@ type CustomerReviewResponseAttributes struct {
 }
 
 // CustomerReviewSummarizationAttributes is the subset of Apple's
-// CustomerReviewSummarization.attributes Skipper reads. Apple authors one
+// CustomerReviewSummarization.attributes Flightline reads. Apple authors one
 // summarization per (app, locale, platform); Text is the AI-generated
 // summary body in that locale.
 type CustomerReviewSummarizationAttributes struct {

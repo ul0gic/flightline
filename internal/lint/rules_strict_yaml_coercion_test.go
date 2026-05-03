@@ -18,7 +18,7 @@ func writeTempYAML(t *testing.T, body string) string {
 }
 
 func TestStrictYAMLCoercion_FiresOnUnquotedYesForBoolField(t *testing.T) {
-	p := writeTempYAML(t, `apiVersion: skipper.corelift.io/v1alpha1
+	p := writeTempYAML(t, `apiVersion: flightline.dev/v1alpha1
 kind: AppState
 metadata:
   bundleId: com.example.x
@@ -43,7 +43,7 @@ spec:
 }
 
 func TestStrictYAMLCoercion_FiresOnQuotedYesForBoolField(t *testing.T) {
-	p := writeTempYAML(t, `apiVersion: skipper.corelift.io/v1alpha1
+	p := writeTempYAML(t, `apiVersion: flightline.dev/v1alpha1
 kind: AppState
 metadata:
   bundleId: com.example.x
@@ -62,7 +62,7 @@ spec:
 }
 
 func TestStrictYAMLCoercion_NoOpOnTrueFalse(t *testing.T) {
-	p := writeTempYAML(t, `apiVersion: skipper.corelift.io/v1alpha1
+	p := writeTempYAML(t, `apiVersion: flightline.dev/v1alpha1
 kind: AppState
 metadata:
   bundleId: com.example.x
@@ -80,7 +80,7 @@ spec:
 func TestStrictYAMLCoercion_NoOpOnUnquotedYesForNonBoolField(t *testing.T) {
 	// `name` is a string field; `yes` written there is the user's actual
 	// content. We do not flag because that would be too noisy.
-	p := writeTempYAML(t, `apiVersion: skipper.corelift.io/v1alpha1
+	p := writeTempYAML(t, `apiVersion: flightline.dev/v1alpha1
 kind: AppState
 metadata:
   bundleId: com.example.x

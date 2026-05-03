@@ -10,11 +10,11 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // SalesReport is the cmd-layer view emitted as JSON. It carries the params
-// Skipper used to fetch the report (so the LLM consumer or downstream
+// Flightline used to fetch the report (so the LLM consumer or downstream
 // pipeline can correlate output with input) plus the typed rows. The shape
 // is the stable JSON contract for `--output json`.
 type SalesReport struct {
@@ -78,13 +78,13 @@ without one rather than erroring on the wire.`,
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runSales,
-	Example: `  skipper sales com.example.myapp --days 7
-  skipper sales com.example.myapp --month 2026-04
-  skipper sales com.example.myapp --week 2026-04-29
-  skipper sales com.example.myapp --year 2026
-  skipper sales com.example.myapp --report-type SUBSCRIPTION --month 2026-04
-  skipper sales com.example.myapp --days 30 --output json | jq '.summary'
-  skipper sales com.example.myapp --days 1 --output tsv > today.tsv`,
+	Example: `  fline sales com.example.myapp --days 7
+  fline sales com.example.myapp --month 2026-04
+  fline sales com.example.myapp --week 2026-04-29
+  fline sales com.example.myapp --year 2026
+  fline sales com.example.myapp --report-type SUBSCRIPTION --month 2026-04
+  fline sales com.example.myapp --days 30 --output json | jq '.summary'
+  fline sales com.example.myapp --days 1 --output tsv > today.tsv`,
 }
 
 var (

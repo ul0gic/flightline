@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // ReviewView is one row of the reviews list/get output. The optional Response
@@ -171,9 +171,9 @@ var reviewsListCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runReviewsList,
-	Example: `  skipper reviews list com.example.myapp
-  skipper reviews list com.example.myapp --territory USA --rating 1..3
-  skipper reviews list com.example.myapp --since 30d --output json | jq '.reviews[].attributes.body'`,
+	Example: `  fline reviews list com.example.myapp
+  fline reviews list com.example.myapp --territory USA --rating 1..3
+  fline reviews list com.example.myapp --since 30d --output json | jq '.reviews[].attributes.body'`,
 }
 
 var reviewsGetCmd = &cobra.Command{
@@ -182,8 +182,8 @@ var reviewsGetCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runReviewsGet,
-	Example: `  skipper reviews get 6e2b9b14-1234-4567-8910-abcdef012345
-  skipper reviews get 6e2b9b14-1234-4567-8910-abcdef012345 --output json`,
+	Example: `  fline reviews get 6e2b9b14-1234-4567-8910-abcdef012345
+  fline reviews get 6e2b9b14-1234-4567-8910-abcdef012345 --output json`,
 }
 
 var reviewsSummaryCmd = &cobra.Command{
@@ -192,8 +192,8 @@ var reviewsSummaryCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runReviewsSummary,
-	Example: `  skipper reviews summary com.example.myapp
-  skipper reviews summary com.example.myapp --output json | jq '.summarizations[].attributes.text'`,
+	Example: `  fline reviews summary com.example.myapp
+  fline reviews summary com.example.myapp --output json | jq '.summarizations[].attributes.text'`,
 }
 
 var (

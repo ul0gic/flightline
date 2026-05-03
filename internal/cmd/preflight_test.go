@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ul0gic/skipper/internal/asc"
-	"github.com/ul0gic/skipper/internal/lint"
+	"github.com/ul0gic/flightline/internal/asc"
+	"github.com/ul0gic/flightline/internal/lint"
 )
 
 // preflightFor runs the same rule pass runPreflight does, but bypasses

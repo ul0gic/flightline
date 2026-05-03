@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // PerformanceView is the read-side view for `performance app|build`.
@@ -111,9 +111,9 @@ var performanceAppCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runPerformanceApp,
-	Example: `  skipper performance app com.example.myapp
-  skipper performance app com.example.myapp --category MEMORY
-  skipper performance app com.example.myapp --output json | jq '.insights.regressions'`,
+	Example: `  fline performance app com.example.myapp
+  fline performance app com.example.myapp --category MEMORY
+  fline performance app com.example.myapp --output json | jq '.insights.regressions'`,
 }
 
 var performanceBuildCmd = &cobra.Command{
@@ -122,8 +122,8 @@ var performanceBuildCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runPerformanceBuild,
-	Example: `  skipper performance build com.example.myapp --build 42
-  skipper performance build com.example.myapp --build 42 --category HANG --output json`,
+	Example: `  fline performance build com.example.myapp --build 42
+  fline performance build com.example.myapp --build 42 --category HANG --output json`,
 }
 
 var (

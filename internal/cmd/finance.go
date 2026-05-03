@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // FinanceReport is the cmd-layer JSON contract for `finance ...`.
@@ -62,7 +62,7 @@ var financeCmd = &cobra.Command{
 	Long: `finance pulls finance/settlement reports from /v1/financeReports.
 
 Finance reports are MONTHLY or YEARLY (Apple does not produce daily/weekly
-finance reports — daily granularity belongs to ` + "`skipper sales`" + `).
+finance reports — daily granularity belongs to ` + "`fline sales`" + `).
 Each call is scoped to a region code: "US", "GB", "Z1" (worldwide), etc.
 Use --region to override the default ("Z1").
 
@@ -74,11 +74,11 @@ Vendor number is read from APP_STORE_CONNECT_VENDOR_NUMBER.`,
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runFinance,
-	Example: `  skipper finance com.example.myapp --month 2026-04
-  skipper finance com.example.myapp --year 2026
-  skipper finance com.example.myapp --month 2026-04 --region US
-  skipper finance com.example.myapp --month 2026-04 --output json | jq '.summary'
-  skipper finance com.example.myapp --month 2026-04 --output tsv > finance.tsv`,
+	Example: `  fline finance com.example.myapp --month 2026-04
+  fline finance com.example.myapp --year 2026
+  fline finance com.example.myapp --month 2026-04 --region US
+  fline finance com.example.myapp --month 2026-04 --output json | jq '.summary'
+  fline finance com.example.myapp --month 2026-04 --output tsv > finance.tsv`,
 }
 
 var (

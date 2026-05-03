@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // ReviewSubmissionView is one row of the review-submissions list output.
@@ -73,7 +73,7 @@ var reviewSubmissionsCmd = &cobra.Command{
 	Use:   "review-submissions",
 	Short: "Inspect App Store review submissions (modern /v1/reviewSubmissions)",
 	Long: `review-submissions reads from /v1/reviewSubmissions, the modern flow.
-Apple's /v1/appStoreVersionSubmissions is deprecated; Skipper uses the
+Apple's /v1/appStoreVersionSubmissions is deprecated; Flightline uses the
 modern endpoint exclusively.`,
 }
 
@@ -83,8 +83,8 @@ var reviewSubmissionsListCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runReviewSubmissionsList,
-	Example: `  skipper review-submissions list com.example.myapp
-  skipper review-submissions list com.example.myapp --output json | jq -r '.submissions[].attributes.state'`,
+	Example: `  fline review-submissions list com.example.myapp
+  fline review-submissions list com.example.myapp --output json | jq -r '.submissions[].attributes.state'`,
 }
 
 var reviewSubmissionsItemsCmd = &cobra.Command{
@@ -93,8 +93,8 @@ var reviewSubmissionsItemsCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runReviewSubmissionsItems,
-	Example: `  skipper review-submissions items com.example.myapp --submission abc123
-  skipper review-submissions items com.example.myapp --submission abc123 --output json`,
+	Example: `  fline review-submissions items com.example.myapp --submission abc123
+  fline review-submissions items com.example.myapp --submission abc123 --output json`,
 }
 
 var reviewSubmissionsItemsID string

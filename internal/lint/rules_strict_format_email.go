@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/ul0gic/skipper/internal/config"
+	"github.com/ul0gic/flightline/internal/config"
 )
 
 // strictFormatEmailRule fires when a contact-email field carries a value

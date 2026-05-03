@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // ExportComplianceWriteResult is the JSON-stable view returned by
@@ -81,8 +81,8 @@ Apple's two-tier model:
 
 Idempotent: reads the build's current answer; PATCH only when the requested
 value differs.`,
-	Example: `  skipper export-compliance set com.example.myapp --version 1.0.1 --uses-encryption false
-  skipper export-compliance set com.example.myapp --version 1.0.1 --uses-encryption true --output json`,
+	Example: `  fline export-compliance set com.example.myapp --version 1.0.1 --uses-encryption false
+  fline export-compliance set com.example.myapp --version 1.0.1 --uses-encryption true --output json`,
 }
 
 var (
@@ -145,7 +145,7 @@ func runExportComplianceSet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if buildID == "" {
-		return fmt.Errorf("export-compliance set: version %q has no build attached yet (use `skipper builds attach` first)", versionStr)
+		return fmt.Errorf("export-compliance set: version %q has no build attached yet (use `fline builds attach` first)", versionStr)
 	}
 
 	if boolPtrEq(current, desired) {

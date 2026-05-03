@@ -20,8 +20,8 @@ import (
 
 	yaml "go.yaml.in/yaml/v3"
 
-	"github.com/ul0gic/skipper/internal/config"
-	"github.com/ul0gic/skipper/internal/plan"
+	"github.com/ul0gic/flightline/internal/config"
+	"github.com/ul0gic/flightline/internal/plan"
 )
 
 // TestRoundTrip_FetchMarshalLoadRefetchDiffEmpty exercises the
@@ -140,7 +140,7 @@ func TestRoundTrip_AllSurfacesPopulated(t *testing.T) {
 	}
 
 	// Every L2 surface in the schema (privacyLabels intentionally
-	// absent — see PRD § "What Skipper is NOT" + ISSUE-002).
+	// absent — see PRD § "What Flightline is NOT" + ISSUE-002).
 	checks := []struct {
 		name string
 		ok   bool

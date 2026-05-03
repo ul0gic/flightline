@@ -10,7 +10,7 @@
 // across runs and CI diffs are clean.
 //
 // Idempotent: Diff(s, s) returns nil. Nil sub-specs in desired mean
-// "not managed" — Skipper leaves the surface alone.
+// "not managed" — Flightline leaves the surface alone.
 package plan
 
 import (
@@ -19,7 +19,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/ul0gic/skipper/internal/config"
+	"github.com/ul0gic/flightline/internal/config"
 )
 
 // Op is one of create / update / delete. Pricing-style "no-op idempotent"

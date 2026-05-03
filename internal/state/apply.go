@@ -12,7 +12,7 @@
 //  1. The L1 write functions already diff-then-PATCH (categories, age
 //     rating, version) and turn redundant calls into no-ops at the
 //     wire level.
-//  2. The checkpoint file at $XDG_CACHE_HOME/skipper/apply/<bundle>.json
+//  2. The checkpoint file at $XDG_CACHE_HOME/flightline/apply/<bundle>.json
 //     records every applied (Resource, Path, To) tuple — Resume mode
 //     skips matches without re-issuing the PATCH.
 //
@@ -34,8 +34,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/ul0gic/skipper/internal/asc"
-	"github.com/ul0gic/skipper/internal/plan"
+	"github.com/ul0gic/flightline/internal/asc"
+	"github.com/ul0gic/flightline/internal/plan"
 )
 
 // ApplyContext carries the per-invocation app/version coordinates the
@@ -63,7 +63,7 @@ type ApplyOpts struct {
 	// Confirm must be true for Apply to issue any write. Without
 	// Confirm the function returns an empty result and an error.
 	Confirm bool
-	// Resume loads the checkpoint at $XDG_CACHE_HOME/skipper/apply/<bundle>.json
+	// Resume loads the checkpoint at $XDG_CACHE_HOME/flightline/apply/<bundle>.json
 	// and skips changes already applied in a previous run.
 	Resume bool
 	// DryRun computes the dispatch path for each change without
@@ -185,7 +185,7 @@ func Apply(ctx context.Context, c *asc.Client, changes []plan.Change, opts Apply
 }
 
 // dispatch routes a single Change to its L1 write. The table is the
-// authoritative source for "what does Skipper actually know how to
+// authoritative source for "what does Flightline actually know how to
 // apply" — anything missing here surfaces as ErrUnmappedChange.
 //
 // Coverage matrix (one row per top-level spec surface):
@@ -440,7 +440,7 @@ func applyCheckpointPath(bundleID string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("state: resolve user cache dir: %w", err)
 	}
-	return filepath.Join(cache, "skipper", "apply", bundleID+".json"), nil
+	return filepath.Join(cache, "flightline", "apply", bundleID+".json"), nil
 }
 
 func checkpointKeys(changes []plan.Change) []checkpointKey {

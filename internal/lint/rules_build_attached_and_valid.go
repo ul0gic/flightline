@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // buildAttachedAndValidRule fires when the version under preflight either
@@ -65,7 +65,7 @@ func (r buildAttachedAndValidRule) Check(ctx CheckContext) []Diagnostic {
 		),
 		Path: "/spec/build",
 		FixHint: "wait for Apple to finish processing (PROCESSING -> VALID), or re-upload " +
-			"if the build is FAILED/INVALID. `skipper builds list <bundleId>` shows current state.",
+			"if the build is FAILED/INVALID. `fline builds list <bundleId>` shows current state.",
 		Reference: "PRD §L3 — build.attached-and-valid",
 	}}
 }
@@ -77,7 +77,7 @@ func (r buildAttachedAndValidRule) notAttachedDiag(ctx CheckContext) Diagnostic 
 		Message:  fmt.Sprintf("version %q has no build attached", ctx.Version),
 		Path:     "/spec/build",
 		FixHint: fmt.Sprintf(
-			"upload via Xcode/altool, wait for VALID, then `skipper builds attach %s --version %s --build <n>`.",
+			"upload via Xcode/altool, wait for VALID, then `fline builds attach %s --version %s --build <n>`.",
 			ctx.BundleID, ctx.Version,
 		),
 		Reference: "PRD §L3 — build.attached-and-valid",

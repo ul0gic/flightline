@@ -1,6 +1,6 @@
 package asc
 
-// TerritoryAttributes is the subset of Apple's Territory.attributes Skipper
+// TerritoryAttributes is the subset of Apple's Territory.attributes Flightline
 // reads. Territories are App Store regions (USA, GBR, JPN, …); the API
 // exposes only the ISO 4217 currency code per territory.
 //

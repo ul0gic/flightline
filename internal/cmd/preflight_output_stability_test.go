@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ul0gic/skipper/internal/lint"
+	"github.com/ul0gic/flightline/internal/lint"
 )
 
 // TestPreflightOutput_TopLevelKeysStable runs preflight against a

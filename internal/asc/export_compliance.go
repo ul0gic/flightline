@@ -15,7 +15,7 @@ const (
 )
 
 // AppEncryptionDeclarationAttributes is the subset of Apple's
-// AppEncryptionDeclaration.attributes Skipper reads. This is the
+// AppEncryptionDeclaration.attributes Flightline reads. This is the
 // per-app/per-build declaration submitted to Apple for full ECCN
 // classification when an app's encryption requires more than the simple
 // `usesNonExemptEncryption` boolean answer.

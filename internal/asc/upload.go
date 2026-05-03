@@ -18,7 +18,7 @@
 //     and matches; a mismatch flips assetDeliveryState.state to FAILED.
 //
 // Resumable. Between chunk PUTs we persist a checkpoint to
-// $XDG_CACHE_HOME/skipper/uploads/<assetId>.json (cache, not state — uploads
+// $XDG_CACHE_HOME/flightline/uploads/<assetId>.json (cache, not state — uploads
 // are recoverable from the file on disk + the Apple-assigned asset ID, no
 // need for state-tier durability). On Ctrl-C, a re-invocation with
 // ResumeFromCheckpoint=true skips chunks already uploaded and re-PUTs only
@@ -682,7 +682,7 @@ func sortedIndices(m map[int]struct{}) []int {
 // ---------------------------------------------------------------------------
 
 // persistCheckpoint atomically writes cp to
-// $XDG_CACHE_HOME/skipper/uploads/<assetId>.json. Same atomic-rename
+// $XDG_CACHE_HOME/flightline/uploads/<assetId>.json. Same atomic-rename
 // torture as PersistAsyncState — a Ctrl-C mid-write leaves the previous
 // checkpoint untouched.
 func persistCheckpoint(cp UploadCheckpoint) error {
@@ -737,7 +737,7 @@ func persistCheckpoint(cp UploadCheckpoint) error {
 	return nil
 }
 
-// loadCheckpoint reads the checkpoint at $XDG_CACHE_HOME/skipper/uploads/
+// loadCheckpoint reads the checkpoint at $XDG_CACHE_HOME/flightline/uploads/
 // <assetId>.json. Returns (zero, fs.ErrNotExist) when no checkpoint exists.
 // Returns ErrCheckpointCorrupt for malformed / future-schema files.
 func loadCheckpoint(assetID string) (UploadCheckpoint, error) {
@@ -864,22 +864,22 @@ func validateAssetIDForPath(assetID string) error {
 	return nil
 }
 
-// uploadCacheRoot returns $XDG_CACHE_HOME/skipper, falling back to
-// $HOME/.cache/skipper when XDG_CACHE_HOME is unset. Tests override via
-// SKIPPER_CACHE_HOME for hermetic behavior; that env var mirrors
-// SKIPPER_STATE_HOME (used by AsyncState) and is intentionally undocumented
+// uploadCacheRoot returns $XDG_CACHE_HOME/flightline, falling back to
+// $HOME/.cache/flightline when XDG_CACHE_HOME is unset. Tests override via
+// FLINE_CACHE_HOME for hermetic behavior; that env var mirrors
+// FLINE_STATE_HOME (used by AsyncState) and is intentionally undocumented
 // in user-facing surfaces — it's a test escape hatch only.
 func uploadCacheRoot() (string, error) {
-	if override := os.Getenv("SKIPPER_CACHE_HOME"); override != "" {
+	if override := os.Getenv("FLINE_CACHE_HOME"); override != "" {
 		return override, nil
 	}
 	if xdg := os.Getenv("XDG_CACHE_HOME"); xdg != "" {
-		return filepath.Join(xdg, "skipper"), nil
+		return filepath.Join(xdg, "flightline"), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("asc: resolve home dir: %w", err)
 	}
 	_ = runtime.GOOS
-	return filepath.Join(home, ".cache", "skipper"), nil
+	return filepath.Join(home, ".cache", "flightline"), nil
 }

@@ -1,7 +1,7 @@
 package asc
 
 // AppCategoryAttributes is the subset of Apple's AppCategory.attributes
-// Skipper reads. AppCategory resources are hierarchical: top-level categories
+// Flightline reads. AppCategory resources are hierarchical: top-level categories
 // (e.g. "Games", "Productivity") plus per-platform subcategories. The
 // `platforms` array lists the platforms a category is valid on.
 //

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/ul0gic/skipper/internal/asc"
-	"github.com/ul0gic/skipper/internal/config"
+	"github.com/ul0gic/flightline/internal/asc"
+	"github.com/ul0gic/flightline/internal/config"
 )
 
 // versionAgeRatingAnsweredRule fires when the age-rating questionnaire is
@@ -104,7 +104,7 @@ func (r versionAgeRatingAnsweredRule) checkLive(ctx CheckContext) []Diagnostic {
 			Message:  fmt.Sprintf("live age-rating field %q is not answered", field),
 			Path:     "/spec/ageRating/" + field,
 			FixHint: "answer the prompt in App Store Connect or via " +
-				"`skipper age-rating set <bundleId> --version <v> --from age.yaml`.",
+				"`fline age-rating set <bundleId> --version <v> --from age.yaml`.",
 			Reference: "PRD §L3 — version.age-rating-answered",
 		})
 	}
@@ -156,7 +156,7 @@ func unansweredAgeRatingFields(ar *config.AgeRatingSpec) []string {
 // so the Path matches the offline diagnostic.
 func unansweredLiveAgeRatingFields(a asc.AgeRatingDeclarationAttributes) []string {
 	// Mapping: schema field name -> Apple wire field check.
-	// Skipper's projectAgeRating already does this re-mapping in reverse;
+	// Flightline's projectAgeRating already does this re-mapping in reverse;
 	// we duplicate the small subset here rather than depend on it (lint must
 	// stay independent of internal/state).
 	missing := make([]string, 0, 16)

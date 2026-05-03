@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // screenshots upload is the cmd-layer wrapper around (*asc.Client).Upload.
@@ -67,13 +67,13 @@ func isValidDeviceSet(s string) bool {
 }
 
 // screenshotSetAttrs mirrors AppScreenshotSet.attributes — only the field
-// Skipper reads. Type is the Apple-side display type enum.
+// Flightline reads. Type is the Apple-side display type enum.
 type screenshotSetAttrs struct {
 	ScreenshotDisplayType string `json:"screenshotDisplayType,omitempty"`
 }
 
 // existingScreenshotAttrs mirrors AppScreenshot.attributes — only the
-// fields Skipper reads to decide whether a file is already uploaded.
+// fields Flightline reads to decide whether a file is already uploaded.
 type existingScreenshotAttrs struct {
 	FileName           string `json:"fileName,omitempty"`
 	SourceFileChecksum string `json:"sourceFileChecksum,omitempty"`
@@ -130,9 +130,9 @@ var screenshotsUploadCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.MinimumNArgs(2),
 	RunE:         runScreenshotsUpload,
-	Example: `  skipper screenshots upload com.example.myapp --version 1.0.1 --locale en-US --device-set APP_IPHONE_67 ./shots/iphone-67/*.png
-  skipper screenshots upload com.example.myapp --version 1.0.1 --locale en-US --device-set APP_IPAD_PRO_3GEN_129 ./shots/ipad/01.png ./shots/ipad/02.png
-  skipper screenshots upload com.example.myapp --version 1.0.1 --locale en-US --device-set APP_IPHONE_67 --resume ./shots/01.png`,
+	Example: `  fline screenshots upload com.example.myapp --version 1.0.1 --locale en-US --device-set APP_IPHONE_67 ./shots/iphone-67/*.png
+  fline screenshots upload com.example.myapp --version 1.0.1 --locale en-US --device-set APP_IPAD_PRO_3GEN_129 ./shots/ipad/01.png ./shots/ipad/02.png
+  fline screenshots upload com.example.myapp --version 1.0.1 --locale en-US --device-set APP_IPHONE_67 --resume ./shots/01.png`,
 }
 
 var (
@@ -182,7 +182,7 @@ func validateScreenshotsUploadFlags(args []string) (screenshotsUploadInput, erro
 		return in, fmt.Errorf("screenshots: --locale is required")
 	}
 	if !isValidDeviceSet(in.deviceSet) {
-		return in, fmt.Errorf("screenshots: --device-set %q is not a recognised ScreenshotDisplayType (see `skipper screenshots upload --help`)", in.deviceSet)
+		return in, fmt.Errorf("screenshots: --device-set %q is not a recognised ScreenshotDisplayType (see `fline screenshots upload --help`)", in.deviceSet)
 	}
 	if len(in.files) == 0 {
 		return in, fmt.Errorf("screenshots: at least one file path is required")

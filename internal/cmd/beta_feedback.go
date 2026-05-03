@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // BetaFeedbackCrashView is one row of the beta-feedback crash list output.
@@ -121,9 +121,9 @@ var betaFeedbackCrashCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runBetaFeedbackCrash,
-	Example: `  skipper beta-feedback crash com.example.myapp
-  skipper beta-feedback crash com.example.myapp --build 42
-  skipper beta-feedback crash com.example.myapp --output json | jq '.submissions[].attributes.deviceModel'`,
+	Example: `  fline beta-feedback crash com.example.myapp
+  fline beta-feedback crash com.example.myapp --build 42
+  fline beta-feedback crash com.example.myapp --output json | jq '.submissions[].attributes.deviceModel'`,
 }
 
 var betaFeedbackScreenshotCmd = &cobra.Command{
@@ -132,8 +132,8 @@ var betaFeedbackScreenshotCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runBetaFeedbackScreenshot,
-	Example: `  skipper beta-feedback screenshot com.example.myapp
-  skipper beta-feedback screenshot com.example.myapp --build 42 --output json`,
+	Example: `  fline beta-feedback screenshot com.example.myapp
+  fline beta-feedback screenshot com.example.myapp --build 42 --output json`,
 }
 
 var betaFeedbackDownloadCmd = &cobra.Command{
@@ -142,9 +142,9 @@ var betaFeedbackDownloadCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runBetaFeedbackDownload,
-	Example: `  skipper beta-feedback download CRASH-1234 --out crash.txt
-  skipper beta-feedback download SCREENSHOT-5678 --type screenshot --out shot.png
-  skipper beta-feedback download CRASH-1234 --output json`,
+	Example: `  fline beta-feedback download CRASH-1234 --out crash.txt
+  fline beta-feedback download SCREENSHOT-5678 --type screenshot --out shot.png
+  fline beta-feedback download CRASH-1234 --output json`,
 }
 
 var (

@@ -9,11 +9,11 @@ import (
 
 	"github.com/spf13/viper"
 
-	"github.com/ul0gic/skipper/internal/lint"
+	"github.com/ul0gic/flightline/internal/lint"
 )
 
 // stableLintTopLevelKeys is the locked set of keys at the top level of
-// `skipper lint --output json`. Adding fields is fine; removing or
+// `fline lint --output json`. Adding fields is fine; removing or
 // renaming is a breaking change.
 var stableLintTopLevelKeys = []string{
 	"bundleId",
@@ -52,7 +52,7 @@ var stableSeverityValues = []string{"error", "info", "warning"}
 // multiple rules and asserts the top-level JSON keys are exactly the
 // stable set.
 func TestLintOutput_TopLevelKeysStable(t *testing.T) {
-	body := `apiVersion: skipper.corelift.io/v1alpha1
+	body := `apiVersion: flightline.dev/v1alpha1
 kind: AppState
 metadata:
   bundleId: com.example.stable
@@ -115,7 +115,7 @@ func TestLintOutput_SummaryKeysStable(t *testing.T) {
 // reference). Asserts the union of observed diagnostic keys is exactly
 // the stable set.
 func TestLintOutput_DiagnosticKeysStable(t *testing.T) {
-	body := `apiVersion: skipper.corelift.io/v1alpha1
+	body := `apiVersion: flightline.dev/v1alpha1
 kind: AppState
 metadata:
   bundleId: com.example.stable
@@ -183,7 +183,7 @@ spec:
 // diagnostics at error and info severity and asserts the wire form is
 // the lowercase token. This guards the Severity.MarshalJSON contract.
 func TestLintOutput_SeverityValuesStable(t *testing.T) {
-	body := `apiVersion: skipper.corelift.io/v1alpha1
+	body := `apiVersion: flightline.dev/v1alpha1
 kind: AppState
 metadata:
   bundleId: com.example.stable

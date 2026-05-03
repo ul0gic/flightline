@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/spf13/viper"
-	"github.com/ul0gic/skipper/internal/asc"
-	"github.com/ul0gic/skipper/internal/auth"
+	"github.com/ul0gic/flightline/internal/asc"
+	"github.com/ul0gic/flightline/internal/auth"
 )
 
 // errMissingCreds is the canonical "creds aren't configured" error. The

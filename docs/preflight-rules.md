@@ -1,11 +1,11 @@
-# Skipper Preflight Rules
+# Flightline Preflight Rules
 
-Skipper's L3 layer catches the clerical mistakes that cause Apple to reject a release. Every rule in this document encodes a real rejection pattern — either from Apple's documented guidelines or from production experience.
+Flightline's L3 layer catches the clerical mistakes that cause Apple to reject a release. Every rule in this document encodes a real rejection pattern — either from Apple's documented guidelines or from production experience.
 
 Two commands run the rules:
 
-- **`skipper lint <state.yaml>`** — offline. Validates the state file against the JSON Schema and runs every Offline and Both-mode rule. No network required. Run this in CI on every commit that touches `state.yaml`.
-- **`skipper preflight <bundleId> --version <v>`** — live. Reads the actual ASC API state for the specified bundle and version, then runs every Live and Both-mode rule. Requires a valid `.p8` credential. Run this just before `skipper submit`.
+- **`fline lint <state.yaml>`** — offline. Validates the state file against the JSON Schema and runs every Offline and Both-mode rule. No network required. Run this in CI on every commit that touches `state.yaml`.
+- **`fline preflight <bundleId> --version <v>`** — live. Reads the actual ASC API state for the specified bundle and version, then runs every Live and Both-mode rule. Requires a valid `.p8` credential. Run this just before `fline submit`.
 
 Both commands emit a stable JSON contract via `--output json`:
 
@@ -17,7 +17,7 @@ Both commands emit a stable JSON contract via `--output json`:
       "severity": "error",
       "message": "IAP \"com.example.lifetime\" is READY_TO_SUBMIT but not in review submission abc123",
       "path": "/spec/iap/products/com.example.lifetime",
-      "fixHint": "add the IAP to the submission: `skipper review-submissions items ...`",
+      "fixHint": "add the IAP to the submission: `fline review-submissions items ...`",
       "reference": "PRD §L3 — IAP attached-to-review-submission"
     }
   ]
@@ -73,8 +73,8 @@ Rules are sorted alphabetically by ID. The runner also executes them in this ord
   - The version has no build attached (the `/v1/appStoreVersions/{id}/build` relationship resolves to empty or 404).
   - A build is attached but its `processingState` is not `VALID` (e.g., still `PROCESSING`, or `FAILED`/`INVALID`).
 - **How to fix:**
-  - Upload the build via Xcode or `altool`, wait for Apple to finish processing (the `processingState` transitions `PROCESSING` → `VALID`), then attach it: `skipper builds attach <bundleId> --version <v> --build <buildNumber>`.
-  - If the build is `FAILED` or `INVALID`, re-archive and re-upload. `skipper builds list <bundleId>` shows current state for every uploaded build.
+  - Upload the build via Xcode or `altool`, wait for Apple to finish processing (the `processingState` transitions `PROCESSING` → `VALID`), then attach it: `fline builds attach <bundleId> --version <v> --build <buildNumber>`.
+  - If the build is `FAILED` or `INVALID`, re-archive and re-upload. `fline builds list <bundleId>` shows current state for every uploaded build.
 - **Reference:** PRD §L3 — build.attached-and-valid
 
 **Example diagnostic JSON:**
@@ -85,7 +85,7 @@ Rules are sorted alphabetically by ID. The runner also executes them in this ord
   "severity": "error",
   "message": "version \"1.2.0\" has no build attached",
   "path": "/spec/build",
-  "fixHint": "upload via Xcode/altool, wait for VALID, then `skipper builds attach com.example.myapp --version 1.2.0 --build <n>`.",
+  "fixHint": "upload via Xcode/altool, wait for VALID, then `fline builds attach com.example.myapp --version 1.2.0 --build <n>`.",
   "reference": "PRD §L3 — build.attached-and-valid"
 }
 ```
@@ -98,7 +98,7 @@ Or, when a build is attached but still processing:
   "severity": "error",
   "message": "build \"1.2.0\" is attached but processingState=\"PROCESSING\" (must be VALID)",
   "path": "/spec/build",
-  "fixHint": "wait for Apple to finish processing (PROCESSING -> VALID), or re-upload if the build is FAILED/INVALID. `skipper builds list <bundleId>` shows current state.",
+  "fixHint": "wait for Apple to finish processing (PROCESSING -> VALID), or re-upload if the build is FAILED/INVALID. `fline builds list <bundleId>` shows current state.",
   "reference": "PRD §L3 — build.attached-and-valid"
 }
 ```
@@ -113,7 +113,7 @@ Or, when a build is attached but still processing:
 - **Why it matters:** This is the #1 IAP rejection cause. Developers mark an IAP ready, assume "ready" means "submitted," and then the app goes through review without the IAP attached. Apple either rejects the app ("IAP referenced but not in review") or approves the app with the IAP silently marked `SCHEDULED-but-not-live`. The IAP never goes live. The rule catches this before you submit.
 - **When it fires:** An IAP product has `state=READY_TO_SUBMIT` but its resource ID does not appear in the open review submission's items (`/v1/reviewSubmissions/{id}/items`). Also fires when there is no open review submission at all.
 - **How to fix:**
-  - Inspect the current submission items: `skipper review-submissions items <bundleId> --submission <submissionId>`.
+  - Inspect the current submission items: `fline review-submissions items <bundleId> --submission <submissionId>`.
   - Attach the IAP through App Store Connect (Submission > Add Items) or via the review-submissions write surface.
   - If there is no open submission, create one first.
 - **Reference:** PRD §L3 — IAP attached-to-review-submission
@@ -126,7 +126,7 @@ Or, when a build is attached but still processing:
   "severity": "error",
   "message": "IAP \"com.example.lifetime\" is READY_TO_SUBMIT but not in review submission abc123def456",
   "path": "/spec/iap/products/com.example.lifetime",
-  "fixHint": "add the IAP to the submission: `skipper review-submissions items com.example.myapp --submission abc123def456` to inspect, then attach via App Store Connect or the submissions write surface.",
+  "fixHint": "add the IAP to the submission: `fline review-submissions items com.example.myapp --submission abc123def456` to inspect, then attach via App Store Connect or the submissions write surface.",
   "reference": "PRD §L3 — IAP attached-to-review-submission"
 }
 ```
@@ -139,7 +139,7 @@ When there is no open submission:
   "severity": "error",
   "message": "IAP \"com.example.lifetime\" is READY_TO_SUBMIT but no open review submission found for this app",
   "path": "/spec/iap/products/com.example.lifetime",
-  "fixHint": "create or open a review submission for the app and attach the IAP product. `skipper review-submissions list <bundleId>` shows current submissions.",
+  "fixHint": "create or open a review submission for the app and attach the IAP product. `fline review-submissions list <bundleId>` shows current submissions.",
   "reference": "PRD §L3 — IAP attached-to-review-submission"
 }
 ```
@@ -152,7 +152,7 @@ When there is no open submission:
 - **Severity:** Error
 - **What it checks:** Whether any IAP's review screenshot shares a `sourceFileChecksum` with any of the app's store screenshots. Apple Guideline 2.3.2 explicitly prohibits reusing a store screenshot as IAP promotional art.
 - **Why it matters:** Guideline 2.3.2 is a hard rejection. Apple's reviewer checks whether the IAP "promotional" image is distinct from the app's store screenshots. Developers who drag-and-drop a screenshot to the IAP review screenshot field to save time will hit this.
-- **API note:** Apple's public API does not expose the IAP "promotional artwork" (the StoreKit promoted-purchase image) directly. The closest accessible asset is the review screenshot at `/v2/inAppPurchases/{id}/appStoreReviewScreenshot`. Skipper checks for checksum equality between that asset and the app's store screenshots — which catches the exact misuse pattern (reusing a screenshot file across surfaces) regardless of which field it landed on. When Apple exposes promotional-artwork hashes via the API, a sibling check will be added.
+- **API note:** Apple's public API does not expose the IAP "promotional artwork" (the StoreKit promoted-purchase image) directly. The closest accessible asset is the review screenshot at `/v2/inAppPurchases/{id}/appStoreReviewScreenshot`. Flightline checks for checksum equality between that asset and the app's store screenshots — which catches the exact misuse pattern (reusing a screenshot file across surfaces) regardless of which field it landed on. When Apple exposes promotional-artwork hashes via the API, a sibling check will be added.
 - **When it fires:** An IAP's review screenshot `sourceFileChecksum` matches any screenshot in the app's store screenshot sets (any locale, any device class, any version).
 - **How to fix:** Replace the IAP review screenshot with a unique image that is not reused from the app's store listing. The image should specifically represent the IAP purchase, not the app in general.
 - **Reference:** Apple Guideline 2.3.2
@@ -179,7 +179,7 @@ When there is no open submission:
 - **What it checks:** Whether every IAP product that is approaching review has an App Store review screenshot attached.
 - **Why it matters:** Apple requires a review screenshot for any IAP submitted for review. The screenshot is attached via a 3-levels-deep tab in App Store Connect that is easy to miss. Missing it is a hard rejection cause with no ambiguity — the submission is returned immediately.
 - **When it fires:** An IAP is in one of the states where Apple will imminently review it (`READY_TO_SUBMIT`, `WAITING_FOR_REVIEW`, `IN_REVIEW`, `DEVELOPER_ACTION_NEEDED`, `PENDING_BINARY_APPROVAL`) and the IAP's `/v2/inAppPurchases/{id}/appStoreReviewScreenshot` relationship resolves to null or 404.
-- **How to fix:** Upload the review screenshot: `skipper iap review-screenshot upload <bundleId> --product <productId> <file>`. The screenshot should show the IAP purchase within the app context.
+- **How to fix:** Upload the review screenshot: `fline iap review-screenshot upload <bundleId> --product <productId> <file>`. The screenshot should show the IAP purchase within the app context.
 - **Reference:** PRD §L3 — IAP review-screenshot-exists
 
 **Example diagnostic JSON:**
@@ -190,7 +190,7 @@ When there is no open submission:
   "severity": "error",
   "message": "IAP \"com.example.lifetime\" has no App Store review screenshot attached",
   "path": "/spec/iap/products/com.example.lifetime/reviewScreenshot",
-  "fixHint": "upload one: `skipper iap review-screenshot upload com.example.myapp --product com.example.lifetime <file>`",
+  "fixHint": "upload one: `fline iap review-screenshot upload com.example.myapp --product com.example.lifetime <file>`",
   "reference": "PRD §L3 — IAP review-screenshot-exists"
 }
 ```
@@ -232,7 +232,7 @@ When there is no open submission:
   - **Offline:** A locale in `spec.screenshots.locales` has no entry (or an empty array) for `APP_IPHONE_69` or `APP_IPHONE_67`.
   - **Live:** A locale on the live App Store version has no screenshot set for `APP_IPHONE_69` or `APP_IPHONE_67`.
 - **How to fix:**
-  - Upload the missing screenshots: `skipper screenshots upload <bundleId> --version <v> --locale <locale> --device-set APP_IPHONE_69 <files...>`.
+  - Upload the missing screenshots: `fline screenshots upload <bundleId> --version <v> --locale <locale> --device-set APP_IPHONE_69 <files...>`.
   - Screenshot dimensions: 6.9" requires 1320×2868 or 2868×1320 (portrait/landscape); 6.7" requires 1290×2796 or 2796×1290.
 - **Reference:** PRD §L3 — screenshots.required-devices
 
@@ -257,7 +257,7 @@ Live variant:
   "severity": "error",
   "message": "locale \"en-US\" has no live screenshots for required device APP_IPHONE_67",
   "path": "/spec/screenshots/locales/en-US/APP_IPHONE_67",
-  "fixHint": "upload screenshots for APP_IPHONE_67 in locale en-US — `skipper screenshots upload <bundleId> --version <v> --locale en-US --device-set APP_IPHONE_67 ...`",
+  "fixHint": "upload screenshots for APP_IPHONE_67 in locale en-US — `fline screenshots upload <bundleId> --version <v> --locale en-US --device-set APP_IPHONE_67 ...`",
   "reference": "PRD §L3 — screenshots.required-devices"
 }
 ```
@@ -421,7 +421,7 @@ Tester variant:
 - **How to fix:**
   - Add or complete the `spec.ageRating` block in your state file. Every frequency-enum field accepts `NONE`, `INFREQUENT_OR_MILD`, or `FREQUENT_OR_INTENSE`. Every boolean prompt accepts `true` or `false`. `NONE` and `false` are valid — they mean "this content type is absent from the app."
   - See [docs/state-yaml.md#spec-agerating](./state-yaml.md) for the full field list.
-  - For live failures: answer the prompts in App Store Connect or via `skipper age-rating set <bundleId> --version <v> --from age.yaml`.
+  - For live failures: answer the prompts in App Store Connect or via `fline age-rating set <bundleId> --version <v> --from age.yaml`.
 - **Reference:** PRD §L3 — version.age-rating-answered
 
 **Example diagnostic JSON** (missing block):
@@ -465,7 +465,7 @@ Specific field missing:
   - Most apps: set `spec.exportCompliance.usesNonExemptEncryption: false`. This is correct for apps that don't use non-exempt encryption (which is the vast majority of apps — standard HTTPS/TLS is exempt).
   - Apps using non-exempt encryption (custom crypto, certain VPN implementations): set `usesNonExemptEncryption: true` and complete the supplemental declaration fields.
   - Alternatively, set `ITSAppUsesNonExemptEncryption` in the app's `Info.plist` to answer it at the build level. The ASC per-version field and the `Info.plist` key are equivalent; whichever you set, only one needs to be set.
-  - For live failures: `skipper export-compliance set <bundleId> --version <v> --uses-non-exempt-encryption=false`.
+  - For live failures: `fline export-compliance set <bundleId> --version <v> --uses-non-exempt-encryption=false`.
 - **Reference:** PRD §L3 — version.export-compliance-answered
 
 **Example diagnostic JSON** (offline, block present but unanswered):
@@ -489,7 +489,7 @@ Live variant:
   "severity": "error",
   "message": "the build attached to this version has not declared usesNonExemptEncryption",
   "path": "/spec/exportCompliance/usesNonExemptEncryption",
-  "fixHint": "answer the export-compliance question in App Store Connect, or `skipper export-compliance set <bundleId> --version <v> --uses-non-exempt-encryption=false`.",
+  "fixHint": "answer the export-compliance question in App Store Connect, or `fline export-compliance set <bundleId> --version <v> --uses-non-exempt-encryption=false`.",
   "reference": "PRD §L3 — version.export-compliance-answered"
 }
 ```
@@ -540,24 +540,24 @@ After writing the rule, add it to the quick-index table in `docs/preflight-rules
 
 ## What rules cannot check
 
-Two categories of rejection are outside Skipper's reach as of ASC API v4.3:
+Two categories of rejection are outside Flightline's reach as of ASC API v4.3:
 
 ### Resolution-center reviewer messages
 
 Apple does not expose the reviewer-written rejection text via the public API. The text lives in App Store Connect's Resolution Center (an inbox-style web surface) and has no API endpoint in the v4.3 spec.
 
-`skipper rejection <bundleId> --version <v>` reports the API-visible rejection state: the version state, review submission state, and per-item states. For the reviewer's actual written reason, open App Store Connect > your app > App Review > Resolution Center.
+`fline rejection <bundleId> --version <v>` reports the API-visible rejection state: the version state, review submission state, and per-item states. For the reviewer's actual written reason, open App Store Connect > your app > App Review > Resolution Center.
 
 This is a known gap. See `.project/issues/closed/ISSUE-001-oapi-codegen-collisions.md` for related background on the API surface coverage decisions.
 
 ### Privacy nutrition labels (`appPrivacyDetails`)
 
-Privacy nutrition labels are entirely absent from the ASC API v4.3 spec. The `appPrivacyDetails` resource does not exist in `openapi.oas.json`. As a result, Skipper cannot read or write privacy labels, and no lint rule can check their completeness.
+Privacy nutrition labels are entirely absent from the ASC API v4.3 spec. The `appPrivacyDetails` resource does not exist in `openapi.oas.json`. As a result, Flightline cannot read or write privacy labels, and no lint rule can check their completeness.
 
-Manage privacy labels in the App Store Connect web UI (App > App Privacy). `skipper privacy-labels get` returns a typed diagnostic explaining the gap rather than silently returning empty data.
+Manage privacy labels in the App Store Connect web UI (App > App Privacy). `fline privacy-labels get` returns a typed diagnostic explaining the gap rather than silently returning empty data.
 
-Track Apple's spec versions. If a future ASC API version adds `appPrivacyDetails` endpoints, Skipper will wire them and the gap rules will be upgraded accordingly.
+Track Apple's spec versions. If a future ASC API version adds `appPrivacyDetails` endpoints, Flightline will wire them and the gap rules will be upgraded accordingly.
 
 ### App Store Review Guidelines: subjective judgments
 
-Rules reducible to API-checkable state (missing assets, unanswered questions, attachment relationships) are Skipper's domain. Rules that depend on subjective design or content judgments (Guideline 4.0 Design, metadata keyword stuffing, content quality) are not checkable via API. No rule in this set tries to second-guess a human reviewer.
+Rules reducible to API-checkable state (missing assets, unanswered questions, attachment relationships) are Flightline's domain. Rules that depend on subjective design or content judgments (Guideline 4.0 Design, metadata keyword stuffing, content quality) are not checkable via API. No rule in this set tries to second-guess a human reviewer.

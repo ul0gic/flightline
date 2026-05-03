@@ -51,7 +51,7 @@ func newTestClient(t *testing.T, srv *httptest.Server) *Client {
 		IssuerID:   "11111111-2222-3333-4444-555555555555",
 		KeyPath:    keyPath,
 		HTTPClient: srv.Client(),
-		UserAgent:  "skipper-test/1.0",
+		UserAgent:  "flightline-test/1.0",
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -85,8 +85,8 @@ func TestNew_DefaultsApplied(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	if c.userAgent != "skipper/dev" {
-		t.Errorf("UserAgent default = %q, want skipper/dev", c.userAgent)
+	if c.userAgent != "flightline/dev" {
+		t.Errorf("UserAgent default = %q, want flightline/dev", c.userAgent)
 	}
 	if c.http == nil {
 		t.Error("HTTPClient should default to non-nil")

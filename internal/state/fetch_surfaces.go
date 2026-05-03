@@ -16,8 +16,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/ul0gic/skipper/internal/asc"
-	"github.com/ul0gic/skipper/internal/config"
+	"github.com/ul0gic/flightline/internal/asc"
+	"github.com/ul0gic/flightline/internal/config"
 )
 
 // --- build number ----------------------------------------------------------

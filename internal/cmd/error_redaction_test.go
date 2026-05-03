@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // jwtPatternCmd matches a 3-segment JWT (eyJ.eyJ.sig). Mirrors the

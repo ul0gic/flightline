@@ -1,4 +1,4 @@
-apiVersion: skipper.corelift.io/v1alpha1
+apiVersion: flightline.dev/v1alpha1
 kind: AppState
 metadata:
   bundleId: com.example.agerating

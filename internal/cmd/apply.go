@@ -1,4 +1,4 @@
-// apply.go — `skipper apply <state.yaml> [--confirm] [--resume] [--dry-run]`.
+// apply.go — `fline apply <state.yaml> [--confirm] [--resume] [--dry-run]`.
 //
 // Without --confirm, apply prints the plan and refuses to write — the
 // terraform-style safety gate. With --confirm, it dispatches each
@@ -14,9 +14,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/ul0gic/skipper/internal/config"
-	"github.com/ul0gic/skipper/internal/plan"
-	"github.com/ul0gic/skipper/internal/state"
+	"github.com/ul0gic/flightline/internal/config"
+	"github.com/ul0gic/flightline/internal/plan"
+	"github.com/ul0gic/flightline/internal/state"
 )
 
 // ApplyResult is the JSON-stable envelope `apply` emits in --output
@@ -65,10 +65,10 @@ success so a Ctrl-C / crash mid-apply resumes cleanly via --resume.
 for preview without --confirm.
 
 Examples:
-  skipper apply state.yaml                 # plan only, refuses to write
-  skipper apply state.yaml --confirm       # write changes
-  skipper apply state.yaml --confirm --resume   # continue after Ctrl-C
-  skipper apply state.yaml --dry-run --output json`,
+  fline apply state.yaml                 # plan only, refuses to write
+  fline apply state.yaml --confirm       # write changes
+  fline apply state.yaml --confirm --resume   # continue after Ctrl-C
+  fline apply state.yaml --dry-run --output json`,
 		Args: cobra.ExactArgs(1),
 		RunE: runApply,
 	}
@@ -124,7 +124,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 
 	// Without --confirm and without --dry-run, apply is plan + refuse.
 	if !confirm && !dryRun {
-		fmt.Fprintln(os.Stderr, "skipper: apply without --confirm prints the plan and exits — pass --confirm to write.")
+		fmt.Fprintln(os.Stderr, "fline: apply without --confirm prints the plan and exits — pass --confirm to write.")
 		return Render(&PlanResult{
 			BundleID: desired.Metadata.BundleID,
 			Version:  version,
@@ -144,7 +144,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 		Resume:  resume,
 		DryRun:  dryRun,
 		Logger: func(c plan.Change, status string) {
-			fmt.Fprintf(os.Stderr, "skipper: %s %s %s\n", status, c.Op, c.Path)
+			fmt.Fprintf(os.Stderr, "fline: %s %s %s\n", status, c.Op, c.Path)
 		},
 	})
 	out := &ApplyResult{

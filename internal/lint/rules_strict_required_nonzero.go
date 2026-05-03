@@ -11,7 +11,7 @@ import (
 // or missing in a context where the schema's `required` list cannot detect
 // the absence. Specifically:
 //
-//   - schemas/skipper.schema.json declares `required: ["email"]` on
+//   - schemas/flightline.schema.json declares `required: ["email"]` on
 //     testflight tester rows.
 //   - The Go decode target uses `Email string` (no `,omitempty`) so the
 //     marshaled JSON always contains `"email": ""` when the YAML omits the

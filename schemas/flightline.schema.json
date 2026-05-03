@@ -1,15 +1,15 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.corelift.io/skipper/v1alpha1/state.schema.json",
-  "title": "Skipper AppState",
-  "description": "Declarative desired state for an App Store Connect app version. Authored as YAML, validated against this schema, applied via `skipper apply` against the live ASC API.\n\nSee https://github.com/ul0gic/skipper for the lifecycle (fetch -> edit -> lint -> plan -> preflight -> apply -> submit).",
+  "$id": "https://flightline.dev/schemas/v1alpha1/state.schema.json",
+  "title": "Flightline AppState",
+  "description": "Declarative desired state for an App Store Connect app version. Authored as YAML, validated against this schema, applied via `fline apply` against the live ASC API.\n\nSee https://github.com/ul0gic/flightline for the lifecycle (fetch -> edit -> lint -> plan -> preflight -> apply -> submit).",
   "type": "object",
   "additionalProperties": false,
   "required": ["apiVersion", "kind", "metadata", "spec"],
   "properties": {
     "apiVersion": {
       "description": "Schema version. Bumped on breaking changes.",
-      "const": "skipper.corelift.io/v1alpha1"
+      "const": "flightline.dev/v1alpha1"
     },
     "kind": {
       "description": "Resource kind. Currently AppState only; SubmissionState may be added later.",
@@ -25,7 +25,7 @@
       "required": ["bundleId", "version"],
       "properties": {
         "bundleId": {
-          "description": "App bundle identifier (e.g. com.under5.passdmv). Must already exist in App Store Connect; Skipper does not create apps.",
+          "description": "App bundle identifier (e.g. com.under5.passdmv). Must already exist in App Store Connect; Flightline does not create apps.",
           "type": "string",
           "pattern": "^[a-zA-Z0-9._-]+$",
           "minLength": 3
@@ -92,10 +92,10 @@
     "buildSpec": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Build attached to this version. Builds must be uploaded via Xcode/altool before Skipper can attach them.",
+      "description": "Build attached to this version. Builds must be uploaded via Xcode/altool before Flightline can attach them.",
       "properties": {
         "number": {
-          "description": "Build number (CFBundleVersion). Skipper looks up the build by version+number and attaches by ID.",
+          "description": "Build number (CFBundleVersion). Flightline looks up the build by version+number and attaches by ID.",
           "type": "string"
         }
       }
@@ -104,7 +104,7 @@
     "metadataSpec": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Per-locale store metadata. Keys are Apple locale codes (en-US, es-MX, fr-FR, etc.). Some fields live on appStoreVersionLocalization, others on appInfoLocalization — Skipper handles the cross-resource routing.",
+      "description": "Per-locale store metadata. Keys are Apple locale codes (en-US, es-MX, fr-FR, etc.). Some fields live on appStoreVersionLocalization, others on appInfoLocalization — Flightline handles the cross-resource routing.",
       "properties": {
         "locales": {
           "type": "object",
@@ -137,7 +137,7 @@
     "screenshotsSpec": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Per-locale, per-device-class screenshots. Skipper computes MD5 of each file and skips slots whose sourceFileChecksum already matches.",
+      "description": "Per-locale, per-device-class screenshots. Flightline computes MD5 of each file and skips slots whose sourceFileChecksum already matches.",
       "properties": {
         "locales": {
           "type": "object",
@@ -251,7 +251,7 @@
         "gambling":                         { "type": "boolean" },
         "unrestrictedWebAccess":            { "type": "boolean" },
         "kidsAgeBand":                      { "enum": ["FIVE_AND_UNDER", "SIX_TO_EIGHT", "NINE_TO_ELEVEN", null] },
-        "seventeenPlus":                    { "type": "boolean", "description": "Read-only. Apple derives the 17+ rating from the other questionnaire answers; this field cannot be set directly. Skipper returns an error if this appears in a change set. May appear in fetched state files as documentation of the current computed rating." }
+        "seventeenPlus":                    { "type": "boolean", "description": "Read-only. Apple derives the 17+ rating from the other questionnaire answers; this field cannot be set directly. Flightline returns an error if this appears in a change set. May appear in fetched state files as documentation of the current computed rating." }
       }
     },
 
@@ -289,10 +289,10 @@
     "reviewerDemoSpec": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Login info for App Review. Skipper never logs the password; use passwordRef (env var) or passwordFile (path).",
+      "description": "Login info for App Review. Flightline never logs the password; use passwordRef (env var) or passwordFile (path).",
       "properties": {
         "username":       { "type": "string" },
-        "passwordRef":    { "type": "string", "pattern": "^env:[A-Z_][A-Z0-9_]*$", "description": "Env var reference, e.g. env:DEMO_PASSWORD. Skipper resolves at apply time." },
+        "passwordRef":    { "type": "string", "pattern": "^env:[A-Z_][A-Z0-9_]*$", "description": "Env var reference, e.g. env:DEMO_PASSWORD. Flightline resolves at apply time." },
         "passwordFile":   { "type": "string", "description": "Path to a file containing the password. Trailing newline trimmed." },
         "notes":          { "type": "string", "maxLength": 4000 },
         "contactName":    { "type": "string" },

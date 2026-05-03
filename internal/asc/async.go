@@ -92,7 +92,7 @@ const (
 )
 
 // ---------------------------------------------------------------------------
-// Typed attributes mirroring Apple's wire shape (subset Skipper actually uses)
+// Typed attributes mirroring Apple's wire shape (subset Flightline actually uses)
 // ---------------------------------------------------------------------------
 
 // AnalyticsReportRequestAttributes mirrors AnalyticsReportRequest.attributes

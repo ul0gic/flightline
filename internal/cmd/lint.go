@@ -1,4 +1,4 @@
-// lint.go — `skipper lint <state.yaml>`.
+// lint.go — `fline lint <state.yaml>`.
 //
 // Offline-only preflight: load the state YAML, run every Mode=Offline rule
 // in internal/lint, render diagnostics. Exit codes:
@@ -7,7 +7,7 @@
 //	1 — at least one error-severity diagnostic
 //	2 — only warnings (no errors)
 //
-// Output modes match the rest of Skipper: --output table | json. JSON is
+// Output modes match the rest of Flightline: --output table | json. JSON is
 // the LLM-stable contract; table is colorized humans.
 
 package cmd
@@ -20,8 +20,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/ul0gic/skipper/internal/config"
-	"github.com/ul0gic/skipper/internal/lint"
+	"github.com/ul0gic/flightline/internal/config"
+	"github.com/ul0gic/flightline/internal/lint"
 )
 
 // LintResult is the JSON-stable envelope `lint` and `preflight` emit.
@@ -63,11 +63,11 @@ func (r *LintResult) TableRows() (headers []string, rows [][]string) {
 
 var lintCmd = &cobra.Command{
 	Use:          "lint <state.yaml>",
-	Short:        "Lint a state.yaml against Skipper's offline preflight rules",
+	Short:        "Lint a state.yaml against Flightline's offline preflight rules",
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runLint,
-	Long: `lint runs every Skipper preflight rule that does not require live ASC
+	Long: `lint runs every Flightline preflight rule that does not require live ASC
 access against the supplied state.yaml. The check covers schema gaps the
 JSON Schema validator cannot express (yes/no coercion, required-but-empty
 fields, format: email shape) plus structural rules (localizations
@@ -80,9 +80,9 @@ Exit codes:
 
 Use ` + "`--output json`" + ` for stable LLM/CI consumption; the table form is for
 humans.`,
-	Example: `  skipper lint state.yaml
-  skipper lint state.yaml --output json | jq '.diagnostics[] | select(.severity=="error")'
-  skipper lint state.yaml --output json | jq -r '.summary'`,
+	Example: `  fline lint state.yaml
+  fline lint state.yaml --output json | jq '.diagnostics[] | select(.severity=="error")'
+  fline lint state.yaml --output json | jq -r '.summary'`,
 }
 
 func init() {
@@ -172,8 +172,8 @@ func mergeSchemaIntoLint(schema []config.Diagnostic, rules []lint.Diagnostic) []
 			Message:  d.Message,
 			Path:     d.Path,
 			FixHint: "fix the field to match the embedded JSON Schema. " +
-				"`skipper lint <file>` shows every error before any wire call.",
-			Reference: "schemas/skipper.schema.json",
+				"`fline lint <file>` shows every error before any wire call.",
+			Reference: "schemas/flightline.schema.json",
 		})
 	}
 	out = append(out, rules...)

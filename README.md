@@ -1,18 +1,20 @@
 <div align="center">
 
-# Skipper
+# Flightline
 
-**App Store Connect, scriptable end-to-end.**
+**App Store as Code.**
 
-[![CI](https://github.com/ul0gic/skipper/actions/workflows/ci.yml/badge.svg)](https://github.com/ul0gic/skipper/actions/workflows/ci.yml)
+The first declarative tool for App Store Connect — fetch live state, edit YAML, lint, plan, apply.
+
+[![CI](https://github.com/ul0gic/flightline/actions/workflows/ci.yml/badge.svg)](https://github.com/ul0gic/flightline/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Go Reference](https://pkg.go.dev/badge/github.com/ul0gic/skipper.svg)](https://pkg.go.dev/github.com/ul0gic/skipper)
-[![Go Report Card](https://goreportcard.com/badge/github.com/ul0gic/skipper)](https://goreportcard.com/report/github.com/ul0gic/skipper)
+[![Go Reference](https://pkg.go.dev/badge/github.com/ul0gic/flightline.svg)](https://pkg.go.dev/github.com/ul0gic/flightline)
+[![Go Report Card](https://goreportcard.com/badge/github.com/ul0gic/flightline)](https://goreportcard.com/report/github.com/ul0gic/flightline)
 [![Go Version](https://img.shields.io/badge/go-1.26%2B-00ADD8.svg)](https://go.dev/doc/go1.26)
 
 </div>
 
-Skipper is a single-binary Go CLI that makes App Store Connect scriptable end-to-end. Declare your release state in YAML, lint it, run preflight checks against Apple's rejection rules, and apply changes idempotently. Read sales, analytics, reviews, subscription state, beta feedback, and performance metrics from the terminal. The ASC web UI becomes optional.
+Like Terraform for cloud infrastructure or Pulumi for Kubernetes, Flightline manages your App Store presence as declarative state. A single Go binary that fetches live App Store Connect state into YAML, runs preflight checks against Apple's rejection rules, and applies changes idempotently. The same tool reads sales, analytics, reviews, subscription state, beta feedback, and performance metrics from the terminal. The ASC web UI becomes optional.
 
 This is a personal tool open-sourced for sharing. No SaaS layer, no telemetry, no accounts. Just a binary that talks to Apple's API.
 
@@ -20,7 +22,8 @@ This is a personal tool open-sourced for sharing. No SaaS layer, no telemetry, n
 
 ## Table of Contents
 
-- [Why Skipper](#why-skipper)
+- [Why Flightline](#why-flightline)
+- [Position](#position)
 - [What it does today](#what-it-does-today-v050-beta)
 - [Architecture](#architecture)
 - [The lifecycle](#the-lifecycle)
@@ -38,7 +41,9 @@ This is a personal tool open-sourced for sharing. No SaaS layer, no telemetry, n
 
 ---
 
-## Why Skipper
+## Why Flightline
+
+Every other modern platform has "as Code" tooling: Terraform for cloud, Pulumi for Kubernetes, Crossplane for control planes, Helm for releases. The App Store doesn't. Until now.
 
 Apple's App Store Connect has two failure modes that cost real time.
 
@@ -46,7 +51,23 @@ Apple's App Store Connect has two failure modes that cost real time.
 
 **Observation friction.** Sales, downloads, conversion, reviews, subscription churn, beta crashes, performance metrics — each on a different ASC web surface, none piped, none scriptable, none LLM-readable. You spend hours per week clicking through screens to answer "how is my app doing."
 
-Skipper addresses both. The authoring half lets you declare release state in YAML next to your app source, diff it against live ASC state, and apply changes idempotently. The observation half gives you composable terminal commands you can pipe to `jq`, feed to LLM prompts, or cron-schedule as snapshots. Neither half is bonus — both are first-class.
+Flightline addresses both. The authoring half lets you declare release state in YAML next to your app source, diff it against live ASC state, and apply changes idempotently. The observation half gives you composable terminal commands you can pipe to `jq`, feed to LLM prompts, or cron-schedule as snapshots. Neither half is bonus — both are first-class.
+
+---
+
+## Position
+
+Flightline slots into the established "as Code" lineage. Same shape: declarative state, idempotent reconciliation, drift detection, version control as the source of truth.
+
+| Tool | Domain | "as Code" for |
+|---|---|---|
+| Terraform | AWS, GCP, Azure, on-prem | Infrastructure |
+| Pulumi | Cloud + Kubernetes (general-purpose languages) | Infrastructure |
+| Crossplane | Multi-cloud control planes | Resources |
+| Helm | Kubernetes | Releases |
+| **Flightline** | **App Store Connect** | **App Store** |
+
+If you've used any of those, the workflow rhymes: `fetch` to capture live state, `plan` to diff, `apply` to converge. The substrate is different — Apple's API instead of a cloud — and the failure mode being prevented is App Store rejection rather than a bad cloud rollout, but the discipline is the same.
 
 ---
 
@@ -82,19 +103,19 @@ All three layers are complete: L1 (API CLI), L2 (state-as-code), and L3 (preflig
 | Analytics reports | ✅ | — | — | — |
 | Privacy nutrition labels | portal-only¹ | — | — | — |
 
-¹ `appPrivacyDetails` is absent from ASC API v4.3. `skipper privacy-labels get` returns a typed diagnostic explaining the gap rather than silently failing.
+¹ `appPrivacyDetails` is absent from ASC API v4.3. `fline privacy-labels get` returns a typed diagnostic explaining the gap rather than silently failing.
 
 ---
 
 ## Architecture
 
-Skipper is a cobra subcommand tree backed by a hand-rolled HTTP+JSON client against Apple's API. There is no codegen — Apple's OpenAPI spec triggers cascading type-name collisions in every Go generator evaluated. The spec is committed as authoritative reference and queried via `jq` during development.
+Flightline is a cobra subcommand tree backed by a hand-rolled HTTP+JSON client against Apple's API. There is no codegen — Apple's OpenAPI spec triggers cascading type-name collisions in every Go generator evaluated. The spec is committed as authoritative reference and queried via `jq` during development.
 
 ```mermaid
 flowchart TB
     User["You\n(or LLM / cron)"]
     YAML["state.yaml"]
-    CLI["skipper CLI\ncmd/skipper/main.go"]
+    CLI["fline CLI\ncmd/fline/main.go"]
     Lint["internal/lint\n12 preflight rules"]
     Plan["internal/plan\ndiff engine"]
     State["internal/state\nfetch / apply"]
@@ -103,9 +124,9 @@ flowchart TB
     Apple[("Apple ASC API\napi.appstoreconnect.apple.com")]
 
     User -->|"edit"| YAML
-    User -->|"skipper lint / preflight"| CLI
-    User -->|"skipper plan / apply"| CLI
-    User -->|"skipper sales / reviews / ..."| CLI
+    User -->|"fline lint / preflight"| CLI
+    User -->|"fline plan / apply"| CLI
+    User -->|"fline sales / reviews / ..."| CLI
     YAML --> CLI
     CLI --> Lint
     CLI --> Plan
@@ -126,7 +147,7 @@ L2 — state-as-code  (internal/state/) ─── declare → diff → apply
 L1 — API CLI        (internal/asc/)   ─── every ASC surface as a terminal command
 ```
 
-Each layer is useful standalone. You can use `skipper sales` and `skipper reviews` without ever touching a `state.yaml`. You can use L2 without running preflight. L3 preflight can catch issues even if you manage writes manually.
+Each layer is useful standalone. You can use `fline sales` and `fline reviews` without ever touching a `state.yaml`. You can use L2 without running preflight. L3 preflight can catch issues even if you manage writes manually.
 
 ---
 
@@ -158,15 +179,15 @@ Steps 1–5 are read-only and reversible. Step 6 patches ASC but does not submit
 ### Observation (stop opening the web UI)
 
 ```bash
-skipper sales com.under5.passdmv --days 30
-skipper finance com.under5.passdmv --month 2026-04
-skipper subscriptions list com.under5.passdmv
-skipper reviews list com.under5.passdmv --rating 1 --rating 2 --rating 3
-skipper reviews summary com.under5.passdmv
-skipper analytics request com.under5.passdmv --wait
-skipper beta-feedback crash com.under5.passdmv
-skipper diagnostics list com.under5.passdmv
-skipper performance app com.under5.passdmv
+fline sales com.under5.passdmv --days 30
+fline finance com.under5.passdmv --month 2026-04
+fline subscriptions list com.under5.passdmv
+fline reviews list com.under5.passdmv --rating 1 --rating 2 --rating 3
+fline reviews summary com.under5.passdmv
+fline analytics request com.under5.passdmv --wait
+fline beta-feedback crash com.under5.passdmv
+fline diagnostics list com.under5.passdmv
+fline performance app com.under5.passdmv
 ```
 
 All observation commands support `--output json` for piping to `jq` or feeding to LLM prompts.
@@ -178,7 +199,7 @@ All observation commands support `--output json` for piping to `jq` or feeding t
 **Go install (available now):**
 
 ```bash
-go install github.com/ul0gic/skipper@latest
+go install github.com/ul0gic/flightline@latest
 ```
 
 Requires Go 1.26 or later. The binary lands in your `GOBIN` (typically `~/go/bin`).
@@ -197,7 +218,7 @@ mv ~/Downloads/AuthKey_XXXXXXXXXX.p8 ~/.appstoreconnect/
 chmod 600 ~/.appstoreconnect/AuthKey_XXXXXXXXXX.p8
 ```
 
-Skipper refuses to load a `.p8` file with permissions wider than 600 and tells you exactly how to fix it.
+Flightline refuses to load a `.p8` file with permissions wider than 600 and tells you exactly how to fix it.
 
 **Set environment variables** (add to `~/.zshrc` or `~/.bashrc`):
 
@@ -207,7 +228,7 @@ export APP_STORE_CONNECT_ISSUER_ID="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 export APP_STORE_CONNECT_VENDOR_NUMBER="XXXXXXXX"   # for sales/finance reports
 ```
 
-You can also set these via CLI flags (`--key-id`, `--issuer-id`) or a config file at `~/.config/skipper/config.yaml`. See [Configuration precedence](#configuration-precedence).
+You can also set these via CLI flags (`--key-id`, `--issuer-id`) or a config file at `~/.config/flightline/config.yaml`. See [Configuration precedence](#configuration-precedence).
 
 ---
 
@@ -217,19 +238,19 @@ Five commands that verify the install works and cover both pillars:
 
 ```bash
 # Verify auth
-skipper whoami
+fline whoami
 
 # List your apps
-skipper apps list
+fline apps list
 
 # Inspect a version
-skipper versions get com.under5.passdmv --version 1.0
+fline versions get com.under5.passdmv --version 1.0
 
 # Diagnose a rejection (if the version is in REJECTED state)
-skipper rejection com.under5.passdmv --version 1.0
+fline rejection com.under5.passdmv --version 1.0
 
 # Run offline preflight against a state file
-skipper lint state.yaml
+fline lint state.yaml
 ```
 
 Replace `com.under5.passdmv` with your bundle ID. For the full state-as-code walkthrough (fetch → edit → plan → apply), see [docs/state-yaml-quickstart.md](docs/state-yaml-quickstart.md).
@@ -242,83 +263,83 @@ Replace `com.under5.passdmv` with your bundle ID. For the full state-as-code wal
 
 ```bash
 # Versions
-skipper versions list com.under5.passdmv
-skipper versions get com.under5.passdmv --version 1.1
-skipper versions create com.under5.passdmv --version 1.1 --copyright "2026 ..."
-skipper versions update com.under5.passdmv --version 1.1 --release-type MANUAL
+fline versions list com.under5.passdmv
+fline versions get com.under5.passdmv --version 1.1
+fline versions create com.under5.passdmv --version 1.1 --copyright "2026 ..."
+fline versions update com.under5.passdmv --version 1.1 --release-type MANUAL
 
 # Metadata and localizations
-skipper metadata set com.under5.passdmv --version 1.1 \
+fline metadata set com.under5.passdmv --version 1.1 \
   --locale en-US --name "PassDMV" --subtitle "..."
 
 # Screenshots
-skipper screenshots upload com.under5.passdmv --version 1.1 \
+fline screenshots upload com.under5.passdmv --version 1.1 \
   --display-type APP_IPHONE_69 --file ./screenshots/iphone.png
 
 # IAPs
-skipper iap list com.under5.passdmv
-skipper iap create com.under5.passdmv --reference-name "Lifetime" \
+fline iap list com.under5.passdmv
+fline iap create com.under5.passdmv --reference-name "Lifetime" \
   --product-id com.under5.passdmv.lifetime --type NON_CONSUMABLE
 
 # Age rating and compliance
-skipper age-rating set com.under5.passdmv --version 1.1 --from-file rating.json
-skipper export-compliance set com.under5.passdmv --version 1.1 \
+fline age-rating set com.under5.passdmv --version 1.1 --from-file rating.json
+fline export-compliance set com.under5.passdmv --version 1.1 \
   --uses-non-exempt-encryption false
 
 # Review submissions
-skipper review-submissions list com.under5.passdmv
-skipper review-submissions items com.under5.passdmv --submission <id>
+fline review-submissions list com.under5.passdmv
+fline review-submissions items com.under5.passdmv --submission <id>
 
 # Diagnose a rejection
-skipper rejection com.under5.passdmv --version 1.1
+fline rejection com.under5.passdmv --version 1.1
 ```
 
 ### Observation — read account state
 
 ```bash
 # Customer reviews
-skipper reviews list com.under5.passdmv --rating 1 --rating 2
-skipper reviews summary com.under5.passdmv
+fline reviews list com.under5.passdmv --rating 1 --rating 2
+fline reviews summary com.under5.passdmv
 
 # Sales and finance reports
-skipper sales com.under5.passdmv --days 30
-skipper sales com.under5.passdmv --month 2026-04 --output json
-skipper finance com.under5.passdmv --month 2026-04
+fline sales com.under5.passdmv --days 30
+fline sales com.under5.passdmv --month 2026-04 --output json
+fline finance com.under5.passdmv --month 2026-04
 
 # Subscription reports
-skipper subscriptions list com.under5.passdmv
-skipper subscriptions reports com.under5.passdmv --type summary --range P30D
+fline subscriptions list com.under5.passdmv
+fline subscriptions reports com.under5.passdmv --type summary --range P30D
 
 # Analytics (async — request, poll, download)
-skipper analytics request com.under5.passdmv --access-type ONE_TIME_SNAPSHOT --wait
-skipper analytics list-instances --report-id <id>
-skipper analytics download --instance <id> --out report.csv
+fline analytics request com.under5.passdmv --access-type ONE_TIME_SNAPSHOT --wait
+fline analytics list-instances --report-id <id>
+fline analytics download --instance <id> --out report.csv
 
 # TestFlight feedback and crash diagnostics
-skipper beta-feedback crash com.under5.passdmv
-skipper beta-feedback screenshot com.under5.passdmv
-skipper diagnostics list com.under5.passdmv
-skipper diagnostics get com.under5.passdmv --signature <id>
+fline beta-feedback crash com.under5.passdmv
+fline beta-feedback screenshot com.under5.passdmv
+fline diagnostics list com.under5.passdmv
+fline diagnostics get com.under5.passdmv --signature <id>
 
 # Performance metrics
-skipper performance app com.under5.passdmv
-skipper performance build com.under5.passdmv --build <id>
+fline performance app com.under5.passdmv
+fline performance build com.under5.passdmv --build <id>
 ```
 
 ### State as Code — declare, diff, apply
 
 ```bash
 # Snapshot live ASC state into a YAML file
-skipper fetch com.under5.passdmv > state.yaml
+fline fetch com.under5.passdmv > state.yaml
 
 # Preview what would change (no writes)
-skipper plan state.yaml
+fline plan state.yaml
 
 # Apply changes idempotently (safe to re-run)
-skipper apply state.yaml --confirm
+fline apply state.yaml --confirm
 
 # Resume a partially-applied run after interruption
-skipper apply state.yaml --confirm --resume
+fline apply state.yaml --confirm --resume
 ```
 
 See [docs/state-yaml.md](docs/state-yaml.md) for the full v1alpha1 schema reference and [docs/state-yaml-quickstart.md](docs/state-yaml-quickstart.md) for a step-by-step walkthrough.
@@ -327,16 +348,16 @@ See [docs/state-yaml.md](docs/state-yaml.md) for the full v1alpha1 schema refere
 
 ```bash
 # Offline: validates state.yaml against JSON Schema + format rules
-skipper lint state.yaml
+fline lint state.yaml
 
 # Live: reads ASC state, runs all 12 rules, reports pass/fail
-skipper preflight com.under5.passdmv --version 1.1
+fline preflight com.under5.passdmv --version 1.1
 
 # Cross-check live state against a state file
-skipper preflight com.under5.passdmv --version 1.1 --state-file state.yaml
+fline preflight com.under5.passdmv --version 1.1 --state-file state.yaml
 
 # JSON output for CI integration
-skipper preflight com.under5.passdmv --version 1.1 --output json | jq '.diagnostics'
+fline preflight com.under5.passdmv --version 1.1 --output json | jq '.diagnostics'
 ```
 
 See [docs/preflight-rules.md](docs/preflight-rules.md) for every rule with mode, severity, fix hints, and examples.
@@ -348,7 +369,7 @@ See [docs/preflight-rules.md](docs/preflight-rules.md) for every rule with mode,
 Every command supports `--output table` (default) and `--output json`.
 
 ```bash
-skipper apps list --output table
+fline apps list --output table
 ```
 
 ```
@@ -357,7 +378,7 @@ com.under5.passdmv         PassDMV      READY_FOR_SALE
 ```
 
 ```bash
-skipper apps list --output json
+fline apps list --output json
 ```
 
 ```json
@@ -380,11 +401,11 @@ The JSON shape is a stable contract. Adding fields is backward-compatible; remov
 From highest to lowest priority:
 
 1. CLI flags (`--key-id`, `--issuer-id`, etc.)
-2. Environment variables (`APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`, `APP_STORE_CONNECT_VENDOR_NUMBER`, `APP_STORE_CONNECT_KEY_PATH`, `SKIPPER_*`)
-3. Config file (`~/.config/skipper/config.yaml`)
+2. Environment variables (`APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`, `APP_STORE_CONNECT_VENDOR_NUMBER`, `APP_STORE_CONNECT_KEY_PATH`, `FLINE_*`)
+3. Config file (`~/.config/flightline/config.yaml`)
 4. Defaults
 
-**Config file example** (`~/.config/skipper/config.yaml`):
+**Config file example** (`~/.config/flightline/config.yaml`):
 
 ```yaml
 key-id: XXXXXXXXXX
@@ -397,18 +418,18 @@ output: table
 
 ## What it doesn't do
 
-**Not Fastlane.** No pipeline DSL, no build orchestration. Skipper is the ASC config and reporting layer. `xcodebuild`, Xcode Cloud, and Fastlane still own compilation, signing, and binary upload.
+**Not Fastlane.** No pipeline DSL, no build orchestration. Flightline is the ASC config and reporting layer. `xcodebuild`, Xcode Cloud, and Fastlane still own compilation, signing, and binary upload.
 
-**Not a build tool.** Skipper doesn't compile, archive, or upload `.ipa` files. You point a build at a version with `builds attach`; Skipper handles everything from that point forward.
+**Not a build tool.** Flightline doesn't compile, archive, or upload `.ipa` files. You point a build at a version with `builds attach`; Flightline handles everything from that point forward.
 
-**Not a screenshot generator.** Skipper uploads screenshots you provide via `screenshots upload`.
+**Not a screenshot generator.** Flightline uploads screenshots you provide via `screenshots upload`.
 
 **Not a SaaS.** No backend, no telemetry, no accounts. The binary talks directly to Apple's API using your credentials.
 
-**Two known portal-only surfaces** — Apple's public API does not expose these. Skipper tells you explicitly when you hit them rather than silently failing:
+**Two known portal-only surfaces** — Apple's public API does not expose these. Flightline tells you explicitly when you hit them rather than silently failing:
 
-- **Resolution-center reviewer messages** — the rejection text written by Apple's reviewers is not in the v4.3 API. `skipper rejection` reports every API-visible state field and tells you to check the portal for the actual message.
-- **Privacy nutrition labels** (`appPrivacyDetails`) — entirely absent from ASC API v4.3. `skipper privacy-labels get` returns a typed `supported: false` diagnostic. Skipper will wire this when Apple adds the endpoint to the spec.
+- **Resolution-center reviewer messages** — the rejection text written by Apple's reviewers is not in the v4.3 API. `fline rejection` reports every API-visible state field and tells you to check the portal for the actual message.
+- **Privacy nutrition labels** (`appPrivacyDetails`) — entirely absent from ASC API v4.3. `fline privacy-labels get` returns a typed `supported: false` diagnostic. Flightline will wire this when Apple adds the endpoint to the spec.
 
 ---
 
@@ -425,7 +446,7 @@ output: table
 ## Development
 
 ```bash
-make build    # produces ./bin/skipper
+make build    # produces ./bin/fline
 make test     # go test ./... -race
 make vet      # go vet ./...
 make lint     # golangci-lint run

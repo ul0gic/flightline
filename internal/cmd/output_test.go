@@ -17,12 +17,12 @@ func (v fakeView) TableRows() (headers []string, rows [][]string) {
 
 func TestRender_JSON(t *testing.T) {
 	var buf bytes.Buffer
-	v := map[string]any{"name": "skipper", "ok": true}
+	v := map[string]any{"name": "flightline", "ok": true}
 	if err := renderTo(&buf, v, "json", true); err != nil {
 		t.Fatalf("renderTo: %v", err)
 	}
 	out := buf.String()
-	if !strings.Contains(out, `"name": "skipper"`) {
+	if !strings.Contains(out, `"name": "flightline"`) {
 		t.Errorf("json output missing name: %q", out)
 	}
 	if !strings.Contains(out, `"ok": true`) {

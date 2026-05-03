@@ -1,5 +1,5 @@
 {
   "diagnostics": [
-    { "stage": "schema", "path": "/apiVersion", "messageContains": "must be 'skipper.corelift.io/v1alpha1'" }
+    { "stage": "schema", "path": "/apiVersion", "messageContains": "must be 'flightline.dev/v1alpha1'" }
   ]
 }

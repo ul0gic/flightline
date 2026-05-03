@@ -6,10 +6,10 @@ import (
 	"net/url"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// AppAttributes is the subset of Apple's App.attributes Skipper reads.
+// AppAttributes is the subset of Apple's App.attributes Flightline reads.
 //
 // Field names match Apple's wire casing exactly (`bundleId`, not `bundle_id`).
 // JSON output is a stable contract — adding fields is OK; renaming is a break.
@@ -77,9 +77,9 @@ var appsListCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.NoArgs,
 	RunE:         runAppsList,
-	Example: `  skipper apps list
-  skipper apps list --output json | jq -r '.apps[].bundleId'
-  skipper apps list --limit 50`,
+	Example: `  fline apps list
+  fline apps list --output json | jq -r '.apps[].bundleId'
+  fline apps list --limit 50`,
 }
 
 var appsGetCmd = &cobra.Command{
@@ -88,13 +88,13 @@ var appsGetCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runAppsGet,
-	Example: `  skipper apps get com.example.myapp
-  skipper apps get com.example.myapp --output json | jq .attributes.name`,
+	Example: `  fline apps get com.example.myapp
+  fline apps get com.example.myapp --output json | jq .attributes.name`,
 }
 
 // listLimit caps how many apps are emitted in `apps list`. 0 means no cap
 // (paging continues until Apple says stop). For the personal-account scale
-// where Skipper lives this is fine; we'll add cursor support later if needed.
+// where Flightline lives this is fine; we'll add cursor support later if needed.
 var listLimit int
 
 func init() {

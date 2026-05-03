@@ -5,7 +5,7 @@ import (
 	"net/url"
 	"sort"
 
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // screenshotsRequiredDevicesRule fires when a locale is missing one of the
@@ -101,7 +101,7 @@ func (r screenshotsRequiredDevicesRule) checkLive(ctx CheckContext) []Diagnostic
 					Message:  fmt.Sprintf("locale %q has no live screenshots for required device %s", loc.Attributes.Locale, dev),
 					Path:     "/spec/screenshots/locales/" + loc.Attributes.Locale + "/" + dev,
 					FixHint: fmt.Sprintf(
-						"upload screenshots for %s in locale %s — `skipper screenshots upload <bundleId> --version <v> --locale %s --device-set %s ...`",
+						"upload screenshots for %s in locale %s — `fline screenshots upload <bundleId> --version <v> --locale %s --device-set %s ...`",
 						dev, loc.Attributes.Locale, loc.Attributes.Locale, dev,
 					),
 					Reference: "PRD §L3 — screenshots.required-devices",

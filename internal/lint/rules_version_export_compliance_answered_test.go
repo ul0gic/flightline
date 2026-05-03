@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ul0gic/skipper/internal/config"
+	"github.com/ul0gic/flightline/internal/config"
 )
 
 func TestVersionExportComplianceAnswered_OfflineUnmanagedNoOp(t *testing.T) {

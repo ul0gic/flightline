@@ -1,4 +1,4 @@
-// plan.go — `skipper plan <state.yaml>`. Read-only: load file, fetch
+// plan.go — `fline plan <state.yaml>`. Read-only: load file, fetch
 // live ASC state, run the diff engine, print the change set.
 //
 // Output:
@@ -18,9 +18,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/ul0gic/skipper/internal/config"
-	"github.com/ul0gic/skipper/internal/plan"
-	"github.com/ul0gic/skipper/internal/state"
+	"github.com/ul0gic/flightline/internal/config"
+	"github.com/ul0gic/flightline/internal/plan"
+	"github.com/ul0gic/flightline/internal/state"
 )
 
 // PlanResult is the JSON-stable envelope the `plan` command emits in
@@ -70,9 +70,9 @@ unless --exit-on-changes is set, in which case the command returns
 exit code 2 when changes exist (useful in CI hooks).
 
 Examples:
-  skipper plan state.yaml
-  skipper plan state.yaml --output json | jq '.changes | length'
-  skipper plan state.yaml --exit-on-changes`,
+  fline plan state.yaml
+  fline plan state.yaml --output json | jq '.changes | length'
+  fline plan state.yaml --exit-on-changes`,
 		Args: cobra.ExactArgs(1),
 		RunE: runPlan,
 	}
@@ -135,7 +135,7 @@ func runPlan(cmd *cobra.Command, args []string) error {
 		// cobra's RunE doesn't carry an explicit exit code, so we
 		// fprintln a marker to stderr and return os.Exit. Going
 		// through main's printer would lose the exit code.
-		fmt.Fprintf(os.Stderr, "skipper: %d change(s) — exiting 2 per --exit-on-changes\n", len(changes))
+		fmt.Fprintf(os.Stderr, "fline: %d change(s) — exiting 2 per --exit-on-changes\n", len(changes))
 		os.Exit(2)
 	}
 	return nil

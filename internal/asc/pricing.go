@@ -1,7 +1,7 @@
 package asc
 
 // Apple's App Store pricing model has been reworked in v4.x. The relevant
-// resources Skipper reads:
+// resources Flightline reads:
 //
 //   - AppPriceSchedule: the per-app schedule resource. Has a baseTerritory
 //     (the territory that anchors price equalization) and two collections of
@@ -29,13 +29,13 @@ package asc
 //	jq '.components.schemas.TerritoryAvailability.properties.attributes.properties' openapi.oas.json
 
 // AppPriceScheduleAttributes is the subset of Apple's AppPriceSchedule
-// attribute block Skipper reads. Apple's spec exposes no attributes on this
+// attribute block Flightline reads. Apple's spec exposes no attributes on this
 // resource — all interesting state lives in the relationships (baseTerritory,
 // manualPrices, automaticPrices) — but we declare the struct so Get[T]
 // decoding follows the rest of the codebase.
 type AppPriceScheduleAttributes struct{}
 
-// AppPriceAttributes is the subset of Apple's AppPriceV2.attributes Skipper
+// AppPriceAttributes is the subset of Apple's AppPriceV2.attributes Flightline
 // reads. One entry on a price schedule's manual or automatic prices array.
 //
 // Source: jq '.components.schemas.AppPriceV2.properties.attributes.properties' openapi.oas.json
@@ -51,21 +51,21 @@ type AppPriceAttributes struct {
 }
 
 // AppPricePointAttributes is the subset of Apple's AppPricePointV3.attributes
-// Skipper reads. The actual customer-facing price and developer proceeds for
+// Flightline reads. The actual customer-facing price and developer proceeds for
 // a (territory, tier) tuple.
 //
 // Source: jq '.components.schemas.AppPricePointV3.properties.attributes.properties' openapi.oas.json
 //
 // Both fields are decimal strings (e.g. "9.99"), not floats — Apple chose
 // this on the wire to avoid float-precision drift across currencies. Treat
-// as opaque tokens; do not parse as float64 in Skipper.
+// as opaque tokens; do not parse as float64 in Flightline.
 type AppPricePointAttributes struct {
 	CustomerPrice string `json:"customerPrice,omitempty"`
 	Proceeds      string `json:"proceeds,omitempty"`
 }
 
 // AppAvailabilityAttributes is the subset of Apple's AppAvailabilityV2
-// attribute block Skipper reads. The single boolean controls whether Apple
+// attribute block Flightline reads. The single boolean controls whether Apple
 // auto-releases the app in newly-onboarded territories; per-territory
 // availability lives in the territoryAvailabilities relationship.
 //
@@ -75,7 +75,7 @@ type AppAvailabilityAttributes struct {
 }
 
 // TerritoryAvailabilityAttributes is the subset of Apple's
-// TerritoryAvailability.attributes Skipper reads. One entry per territory
+// TerritoryAvailability.attributes Flightline reads. One entry per territory
 // the app is configured for.
 //
 // Source: jq '.components.schemas.TerritoryAvailability.properties.attributes.properties' openapi.oas.json

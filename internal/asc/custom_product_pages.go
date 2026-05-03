@@ -34,7 +34,7 @@ const (
 )
 
 // AppCustomProductPageAttributes is the subset of Apple's
-// AppCustomProductPage.attributes Skipper reads. Name is the
+// AppCustomProductPage.attributes Flightline reads. Name is the
 // developer-friendly label; URL is the ad-targetable App Store URL Apple
 // computes; Visible toggles whether the page is live.
 type AppCustomProductPageAttributes struct {
@@ -44,7 +44,7 @@ type AppCustomProductPageAttributes struct {
 }
 
 // AppCustomProductPageVersionAttributes is the subset of Apple's
-// AppCustomProductPageVersion.attributes Skipper reads. Each page can have
+// AppCustomProductPageVersion.attributes Flightline reads. Each page can have
 // multiple versions; the "live" version is the one in the APPROVED state
 // (or the last APPROVED before a REPLACED_WITH_NEW_VERSION).
 //
@@ -57,7 +57,7 @@ type AppCustomProductPageVersionAttributes struct {
 }
 
 // AppCustomProductPageLocalizationAttributes is the subset of Apple's
-// AppCustomProductPageLocalization.attributes Skipper reads. Per-locale
+// AppCustomProductPageLocalization.attributes Flightline reads. Per-locale
 // promotional text shown above the screenshot set on the custom page.
 //
 // Locale is Apple format (e.g. "en-US", "fr-FR"). The screenshot/preview

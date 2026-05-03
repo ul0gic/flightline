@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 func TestTerritoryView_JSONShape(t *testing.T) {
@@ -220,7 +220,7 @@ func TestTerritories_CacheStaleEntryMisses(t *testing.T) {
 
 // TestTerritories_CacheVersionMismatchMisses asserts that a cache file with an
 // older version envelope is treated as a miss — guards against on-disk
-// schema drift between Skipper releases.
+// schema drift between Flightline releases.
 func TestTerritories_CacheVersionMismatchMisses(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "territories.json")
@@ -255,7 +255,7 @@ func TestTerritories_CacheCorruptMisses(t *testing.T) {
 // TestTerritoriesCachePath_ResolvesUnderXDG sets XDG_CACHE_HOME and verifies
 // the path lands under it. macOS ignores XDG_CACHE_HOME (os.UserCacheDir uses
 // $HOME/Library/Caches), so on darwin we fall back to a HOME-anchored
-// assertion. Either way the path must end in skipper/territories.json.
+// assertion. Either way the path must end in flightline/territories.json.
 func TestTerritoriesCachePath_ResolvesUnderXDG(t *testing.T) {
 	t.Setenv("XDG_CACHE_HOME", filepath.Join(t.TempDir(), "xdg-cache"))
 	t.Setenv("HOME", t.TempDir())
@@ -264,7 +264,7 @@ func TestTerritoriesCachePath_ResolvesUnderXDG(t *testing.T) {
 	if err != nil {
 		t.Fatalf("territoriesCachePath: %v", err)
 	}
-	if !strings.HasSuffix(p, filepath.Join("skipper", "territories.json")) {
-		t.Errorf("path %q does not end with skipper/territories.json", p)
+	if !strings.HasSuffix(p, filepath.Join("flightline", "territories.json")) {
+		t.Errorf("path %q does not end with flightline/territories.json", p)
 	}
 }

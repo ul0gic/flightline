@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/ul0gic/skipper/internal/plan"
-	"github.com/ul0gic/skipper/internal/state"
+	"github.com/ul0gic/flightline/internal/plan"
+	"github.com/ul0gic/flightline/internal/state"
 )
 
 // TestApplyResult_TableEmpty — no changes renders the (none) row.

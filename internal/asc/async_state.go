@@ -9,7 +9,7 @@ package asc
 //
 // On-disk layout:
 //
-//   $XDG_STATE_HOME/skipper/<bundleId>/<reportClass>.json
+//   $XDG_STATE_HOME/flightline/<bundleId>/<reportClass>.json
 //
 // where <reportClass> ∈ {"analytics", "sales", "finance"} and bundleId is
 // the dotted reverse-DNS app identifier (e.g. "com.example.app"). The path
@@ -19,7 +19,7 @@ package asc
 //
 // XDG_STATE_HOME is the standard for "data files held to know how to restore
 // previous state of the application" (per the XDG base-dir spec). On macOS
-// and Linux, $HOME/.local/state/skipper/ is the canonical fallback. We do
+// and Linux, $HOME/.local/state/flightline/ is the canonical fallback. We do
 // NOT use os.UserCacheDir(): cache implies the OS may delete it, and losing
 // a multi-hour analytics request mid-poll is exactly what we're guarding
 // against.
@@ -37,8 +37,8 @@ import (
 
 // AsyncStateSchemaVersion is the on-disk JSON schema version. Bump when the
 // shape of AsyncState changes; LoadAsyncState rejects files with an
-// unrecognised SchemaVersion (forward-incompat by design — a Skipper from
-// the future shouldn't silently misread state from an older Skipper).
+// unrecognised SchemaVersion (forward-incompat by design — a Flightline from
+// the future shouldn't silently misread state from an older Flightline).
 const AsyncStateSchemaVersion = 1
 
 // ReportClass enumerates the three async-poll report families. Used as the
@@ -94,7 +94,7 @@ type AsyncState struct {
 var ErrStateCorrupt = errors.New("asc: async state file is corrupt or unreadable")
 
 // PersistAsyncState writes state to disk under
-// $XDG_STATE_HOME/skipper/<bundleId>/<reportClass>.json using an atomic
+// $XDG_STATE_HOME/flightline/<bundleId>/<reportClass>.json using an atomic
 // rename. If a Ctrl-C lands mid-write, the original file is preserved
 // untouched.
 //
@@ -204,7 +204,7 @@ func LoadAsyncState(bundleID string, reportClass ReportClass) (AsyncState, error
 
 // StateFilePath returns the absolute on-disk path where (bundleID,
 // reportClass) state would live. Exposed for tests and for diagnostic
-// commands like `skipper analytics resume --where`. Validates that
+// commands like `fline analytics resume --where`. Validates that
 // bundleID is well-formed (no path traversal).
 func StateFilePath(bundleID string, reportClass ReportClass) (string, error) {
 	return stateFilePath(bundleID, reportClass)
@@ -258,27 +258,27 @@ func validateReportClass(c ReportClass) error {
 	}
 }
 
-// stateRoot returns $XDG_STATE_HOME/skipper, falling back to
-// $HOME/.local/state/skipper when XDG_STATE_HOME is unset (per the XDG
-// base-dir spec). Tests override via SKIPPER_STATE_HOME for hermetic
+// stateRoot returns $XDG_STATE_HOME/flightline, falling back to
+// $HOME/.local/state/flightline when XDG_STATE_HOME is unset (per the XDG
+// base-dir spec). Tests override via FLINE_STATE_HOME for hermetic
 // behavior; that env var is intentionally undocumented in user-facing
 // surfaces — it's a test escape hatch only.
 func stateRoot() (string, error) {
 	// Test escape hatch — first because it must override even XDG values.
-	if override := os.Getenv("SKIPPER_STATE_HOME"); override != "" {
+	if override := os.Getenv("FLINE_STATE_HOME"); override != "" {
 		return override, nil
 	}
 	if xdg := os.Getenv("XDG_STATE_HOME"); xdg != "" {
-		return filepath.Join(xdg, "skipper"), nil
+		return filepath.Join(xdg, "flightline"), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("asc: resolve home dir: %w", err)
 	}
 	// On Windows the XDG fallback isn't standard; we still write under
-	// $USERPROFILE/.local/state/skipper for consistency with the rest of
-	// Skipper's macOS/Linux-first ergonomics. Cross-platform polish is a
+	// $USERPROFILE/.local/state/flightline for consistency with the rest of
+	// Flightline's macOS/Linux-first ergonomics. Cross-platform polish is a
 	// separate concern.
 	_ = runtime.GOOS
-	return filepath.Join(home, ".local", "state", "skipper"), nil
+	return filepath.Join(home, ".local", "state", "flightline"), nil
 }

@@ -1,4 +1,4 @@
-apiVersion: skipper.corelift.io/v1alpha1
+apiVersion: flightline.dev/v1alpha1
 kind: AppState
 metadata:
   bundleId: com.example.full
@@ -18,7 +18,7 @@ spec:
         name: "Full Example"
         subtitle: "Every spec field"
         description: |
-          A comprehensive Skipper state file exercising every spec.* section.
+          A comprehensive Flightline state file exercising every spec.* section.
         keywords: "full,example,every,field"
         whatsNew: "Initial 1.2.3 release."
         promotionalText: "Promo text."

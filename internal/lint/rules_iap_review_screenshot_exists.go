@@ -5,7 +5,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // iapReviewScreenshotExistsRule fires when an IAP product has no App Store
@@ -74,7 +74,7 @@ func (r iapReviewScreenshotExistsRule) Check(ctx CheckContext) []Diagnostic {
 			Message:  fmt.Sprintf("IAP %q has no App Store review screenshot attached", iap.Attributes.ProductID),
 			Path:     "/spec/iap/products/" + iap.Attributes.ProductID + "/reviewScreenshot",
 			FixHint: fmt.Sprintf(
-				"upload one: `skipper iap review-screenshot upload %s --product %s <file>`",
+				"upload one: `fline iap review-screenshot upload %s --product %s <file>`",
 				ctx.BundleID, iap.Attributes.ProductID,
 			),
 			Reference: "PRD §L3 — IAP review-screenshot-exists",

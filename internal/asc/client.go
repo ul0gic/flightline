@@ -1,4 +1,4 @@
-// Package asc is Skipper's hand-rolled App Store Connect API client.
+// Package asc is Flightline's hand-rolled App Store Connect API client.
 //
 // The client wraps stdlib net/http with auth injection (ES256 JWT, IEEE P1363
 // raw signature, fresh per request), Apple's errors[] envelope decoding, and
@@ -22,15 +22,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ul0gic/skipper/internal/auth"
+	"github.com/ul0gic/flightline/internal/auth"
 )
 
 // baseURL is the only host this client talks to. Hardcoded to defeat
 // accidental env-var hijack to a logging proxy or a test rig in production.
 const baseURL = "https://api.appstoreconnect.apple.com"
 
-// defaultUserAgent identifies skipper to Apple. Bumped per release.
-const defaultUserAgent = "skipper/dev"
+// defaultUserAgent identifies flightline to Apple. Bumped per release.
+const defaultUserAgent = "flightline/dev"
 
 // defaultTimeout is generous because Apple's writes occasionally take 30+
 // seconds during peak hours and async-poll endpoints can be slow.
@@ -47,7 +47,7 @@ type Options struct {
 	IssuerID string
 	// KeyPath is the absolute path to AuthKey_<KEY_ID>.p8 (mode 0600).
 	KeyPath string
-	// UserAgent is sent on every request. Defaults to "skipper/dev".
+	// UserAgent is sent on every request. Defaults to "flightline/dev".
 	UserAgent string
 	// HTTPClient overrides the default 60s-timeout client. Tests inject this
 	// to point at httptest.NewServer.

@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // VersionView is one row of the versions list/get output. Embeds the wire
@@ -94,9 +94,9 @@ var versionsListCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runVersionsList,
-	Example: `  skipper versions list com.example.myapp
-  skipper versions list com.example.myapp --platform IOS
-  skipper versions list com.example.myapp --output json | jq -r '.versions[].versionString'`,
+	Example: `  fline versions list com.example.myapp
+  fline versions list com.example.myapp --platform IOS
+  fline versions list com.example.myapp --output json | jq -r '.versions[].versionString'`,
 }
 
 var versionsGetCmd = &cobra.Command{
@@ -105,8 +105,8 @@ var versionsGetCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runVersionsGet,
-	Example: `  skipper versions get com.example.myapp --version 1.0.1
-  skipper versions get com.example.myapp --version 1.0.1 --platform IOS --output json`,
+	Example: `  fline versions get com.example.myapp --version 1.0.1
+  fline versions get com.example.myapp --version 1.0.1 --platform IOS --output json`,
 }
 
 var versionsCreateCmd = &cobra.Command{
@@ -115,9 +115,9 @@ var versionsCreateCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runVersionsCreate,
-	Example: `  skipper versions create com.example.myapp --version 1.0.1
-  skipper versions create com.example.myapp --version 1.0.1 --platform IOS --release-type MANUAL
-  skipper versions create com.example.myapp --version 1.0.1 --copyright "(c) 2025 Example LLC"`,
+	Example: `  fline versions create com.example.myapp --version 1.0.1
+  fline versions create com.example.myapp --version 1.0.1 --platform IOS --release-type MANUAL
+  fline versions create com.example.myapp --version 1.0.1 --copyright "(c) 2025 Example LLC"`,
 }
 
 var versionsUpdateCmd = &cobra.Command{
@@ -126,9 +126,9 @@ var versionsUpdateCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runVersionsUpdate,
-	Example: `  skipper versions update com.example.myapp --version 1.0.1 --release-type AFTER_APPROVAL
-  skipper versions update com.example.myapp --version 1.0.1 --copyright "(c) 2025 Example LLC"
-  skipper versions update com.example.myapp --version 1.0.1 --earliest-release-date 2025-06-01T08:00:00-07:00`,
+	Example: `  fline versions update com.example.myapp --version 1.0.1 --release-type AFTER_APPROVAL
+  fline versions update com.example.myapp --version 1.0.1 --copyright "(c) 2025 Example LLC"
+  fline versions update com.example.myapp --version 1.0.1 --earliest-release-date 2025-06-01T08:00:00-07:00`,
 }
 
 // Per-subcommand flag state. Separate variables so cobra default values don't

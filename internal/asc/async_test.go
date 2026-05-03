@@ -5,7 +5,7 @@ package asc
 // The wrapper is fixture-driven via a programmable httptest.Server (defined
 // inline below — the route table needs to mutate response bodies between
 // polls, which the JSON-file-backed fixtureServer in fixture_test.go can't
-// express). State-persistence tests use t.TempDir() + SKIPPER_STATE_HOME to
+// express). State-persistence tests use t.TempDir() + FLINE_STATE_HOME to
 // keep them hermetic.
 
 import (
@@ -306,7 +306,7 @@ func asyncFixtureClient(t *testing.T, f *asyncFixture) *Client {
 		IssuerID:   "11111111-2222-3333-4444-555555555555",
 		KeyPath:    keyPath,
 		HTTPClient: f.srv.Client(),
-		UserAgent:  "skipper-test/1.0",
+		UserAgent:  "flightline-test/1.0",
 	})
 	if err != nil {
 		t.Fatalf("asyncFixtureClient: %v", err)
@@ -695,11 +695,11 @@ func TestFetchFinanceReport_RejectsMissingFilters(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // withStateRoot points stateRoot() at t.TempDir() for the duration of the
-// test via the SKIPPER_STATE_HOME escape hatch.
+// test via the FLINE_STATE_HOME escape hatch.
 func withStateRoot(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	t.Setenv("SKIPPER_STATE_HOME", dir)
+	t.Setenv("FLINE_STATE_HOME", dir)
 	return dir
 }
 

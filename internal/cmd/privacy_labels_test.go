@@ -89,7 +89,7 @@ func TestPrivacyLabelsCommands_RegisteredOnRoot(t *testing.T) {
 
 // TestPrivacyLabelsSet_SameDiagnosticAsGet asserts the write-side stub returns
 // byte-for-byte the same JSON as the read-side stub. ISSUE-002 resolution:
-// Skipper does not fabricate an endpoint; both surfaces report
+// Flightline does not fabricate an endpoint; both surfaces report
 // supported=false with the same reason+reference so consumers branch on a
 // single contract.
 func TestPrivacyLabelsSet_SameDiagnosticAsGet(t *testing.T) {

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ul0gic/skipper/internal/config"
+	"github.com/ul0gic/flightline/internal/config"
 )
 
 // expectedDiagnostic describes one diagnostic we expect a fail.yaml fixture

@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // SubscriptionGroupView is one row of the subscriptions list output. It
@@ -141,8 +141,8 @@ var subscriptionsListCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runSubscriptionsList,
-	Example: `  skipper subscriptions list com.example.myapp
-  skipper subscriptions list com.example.myapp --output json | jq '.groups[].memberCount'`,
+	Example: `  fline subscriptions list com.example.myapp
+  fline subscriptions list com.example.myapp --output json | jq '.groups[].memberCount'`,
 }
 
 var subscriptionsGetCmd = &cobra.Command{
@@ -151,8 +151,8 @@ var subscriptionsGetCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runSubscriptionsGet,
-	Example: `  skipper subscriptions get com.example.myapp --product com.example.pro.monthly
-  skipper subscriptions get com.example.myapp --product com.example.pro.monthly --output json`,
+	Example: `  fline subscriptions get com.example.myapp --product com.example.pro.monthly
+  fline subscriptions get com.example.myapp --product com.example.pro.monthly --output json`,
 }
 
 var (

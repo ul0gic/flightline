@@ -3,8 +3,8 @@ package asc
 import "encoding/json"
 
 // Apple's App Store Connect API uses JSON:API-style envelopes. These generic
-// containers cover every endpoint Skipper touches; per-resource files declare
-// only the *Attributes struct (e.g. AppAttributes) carrying the fields Skipper
+// containers cover every endpoint Flightline touches; per-resource files declare
+// only the *Attributes struct (e.g. AppAttributes) carrying the fields Flightline
 // actually reads or writes.
 //
 // Fields are tagged to match Apple's wire casing exactly (`bundleId`, not

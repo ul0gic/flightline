@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ul0gic/skipper/internal/plan"
+	"github.com/ul0gic/flightline/internal/plan"
 )
 
 // TestPlanResult_TableRowsHeaders — the JSON-stable contract: column

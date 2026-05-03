@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ul0gic/skipper/internal/config"
+	"github.com/ul0gic/flightline/internal/config"
 )
 
 // TestWriteStateYAML_HeaderPresent — every fetched state.yaml must
@@ -14,7 +14,7 @@ func TestWriteStateYAML_HeaderPresent(t *testing.T) {
 	cp := "© 2026"
 	cpPtr := &cp
 	st := &config.State{
-		APIVersion: "skipper.corelift.io/v1alpha1",
+		APIVersion: "flightline.dev/v1alpha1",
 		Kind:       "AppState",
 		Metadata:   config.StateMetadata{BundleID: "com.example.app", Version: "1.0"},
 		Spec:       config.StateSpec{Version: &config.VersionSpec{Copyright: cpPtr}},
@@ -28,7 +28,7 @@ func TestWriteStateYAML_HeaderPresent(t *testing.T) {
 	if !strings.HasPrefix(out, "# yaml-language-server: $schema=") {
 		t.Fatalf("output missing schema header:\n%s", out)
 	}
-	if !strings.Contains(out, "apiVersion: skipper.corelift.io/v1alpha1") {
+	if !strings.Contains(out, "apiVersion: flightline.dev/v1alpha1") {
 		t.Errorf("apiVersion missing in YAML:\n%s", out)
 	}
 	if !strings.Contains(out, "© 2026") {

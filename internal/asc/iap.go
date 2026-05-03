@@ -34,7 +34,7 @@ const (
 	IAPLocalizationStateRejected             = "REJECTED"
 )
 
-// IAPAttributes is the subset of Apple's InAppPurchaseV2.attributes Skipper
+// IAPAttributes is the subset of Apple's InAppPurchaseV2.attributes Flightline
 // reads.
 //
 // Source: jq '.components.schemas.InAppPurchaseV2.properties.attributes.properties' openapi.oas.json
@@ -65,7 +65,7 @@ type IAPAttributes struct {
 }
 
 // IAPLocalizationAttributes is the subset of Apple's
-// InAppPurchaseLocalization.attributes Skipper reads.
+// InAppPurchaseLocalization.attributes Flightline reads.
 //
 // Source: jq '.components.schemas.InAppPurchaseLocalization.properties.attributes.properties' openapi.oas.json
 //
@@ -79,11 +79,11 @@ type IAPLocalizationAttributes struct {
 }
 
 // IAPReviewScreenshotAttributes is the subset of Apple's
-// InAppPurchaseAppStoreReviewScreenshot.attributes Skipper reads.
+// InAppPurchaseAppStoreReviewScreenshot.attributes Flightline reads.
 //
 // Source: jq '.components.schemas.InAppPurchaseAppStoreReviewScreenshot.properties.attributes.properties' openapi.oas.json
 //
-// Skipper exposes the screenshot's filename, size, asset-delivery state, and
+// Flightline exposes the screenshot's filename, size, asset-delivery state, and
 // the templated image URL so callers can fetch the rendered preview without
 // reaching into the upload-operations array. AssetDeliveryState is Apple's
 // AppMediaAssetState envelope: a string state plus optional errors/warnings.

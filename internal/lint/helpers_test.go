@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // newTestClient builds an asc.Client wired to srv via Options.BaseURL.
@@ -44,7 +44,7 @@ func newTestClient(t *testing.T, srv *httptest.Server) *asc.Client {
 		KeyPath:    keyPath,
 		HTTPClient: srv.Client(),
 		BaseURL:    srv.URL,
-		UserAgent:  "skipper-lint-test/1.0",
+		UserAgent:  "flightline-lint-test/1.0",
 	})
 	if err != nil {
 		t.Fatalf("asc.New: %v", err)

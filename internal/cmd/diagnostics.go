@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // DiagnosticSignatureView is one row of the diagnostics list output.
@@ -138,9 +138,9 @@ var diagnosticsListCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runDiagnosticsList,
-	Example: `  skipper diagnostics list com.example.myapp --build 42
-  skipper diagnostics list com.example.myapp --build 42 --type HANGS
-  skipper diagnostics list com.example.myapp --build 42 --output json | jq '.signatures[].attributes.weight'`,
+	Example: `  fline diagnostics list com.example.myapp --build 42
+  fline diagnostics list com.example.myapp --build 42 --type HANGS
+  fline diagnostics list com.example.myapp --build 42 --output json | jq '.signatures[].attributes.weight'`,
 }
 
 var diagnosticsGetCmd = &cobra.Command{
@@ -149,8 +149,8 @@ var diagnosticsGetCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runDiagnosticsGet,
-	Example: `  skipper diagnostics get DIAG-SIG-1234
-  skipper diagnostics get DIAG-SIG-1234 --output json`,
+	Example: `  fline diagnostics get DIAG-SIG-1234
+  fline diagnostics get DIAG-SIG-1234 --output json`,
 }
 
 var (

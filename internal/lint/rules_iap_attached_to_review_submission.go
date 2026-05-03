@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/ul0gic/skipper/internal/asc"
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // iapAttachedToReviewSubmissionRule fires when an IAP product is in
@@ -108,7 +108,7 @@ func (r iapAttachedToReviewSubmissionRule) unattachedDiagnostics(bundleID, subID
 			),
 			Path: "/spec/iap/products/" + iap.Attributes.ProductID,
 			FixHint: fmt.Sprintf(
-				"add the IAP to the submission: `skipper review-submissions items %s --submission %s` to inspect, then attach via App Store Connect or the submissions write surface.",
+				"add the IAP to the submission: `fline review-submissions items %s --submission %s` to inspect, then attach via App Store Connect or the submissions write surface.",
 				bundleID, subID,
 			),
 			Reference: "PRD §L3 — IAP attached-to-review-submission",
@@ -249,7 +249,7 @@ func iapUnattachedDiagnostics(ruleID string, ready []asc.Resource[asc.IAPAttribu
 			),
 			Path: "/spec/iap/products/" + iap.Attributes.ProductID,
 			FixHint: "create or open a review submission for the app and attach the IAP product. " +
-				"`skipper review-submissions list <bundleId>` shows current submissions.",
+				"`fline review-submissions list <bundleId>` shows current submissions.",
 			Reference: "PRD §L3 — IAP attached-to-review-submission",
 		})
 	}
