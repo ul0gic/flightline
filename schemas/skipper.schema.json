@@ -1,0 +1,419 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.corelift.io/skipper/v1alpha1/state.schema.json",
+  "title": "Skipper AppState",
+  "description": "Declarative desired state for an App Store Connect app version. Authored as YAML, validated against this schema, applied via `skipper apply` against the live ASC API.\n\nSee https://github.com/ul0gic/skipper for the lifecycle (fetch -> edit -> lint -> plan -> preflight -> apply -> submit).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": {
+      "description": "Schema version. Bumped on breaking changes.",
+      "const": "skipper.corelift.io/v1alpha1"
+    },
+    "kind": {
+      "description": "Resource kind. Currently AppState only; SubmissionState may be added later.",
+      "const": "AppState"
+    },
+    "metadata": { "$ref": "#/$defs/metadata" },
+    "spec":     { "$ref": "#/$defs/spec" }
+  },
+  "$defs": {
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bundleId", "version"],
+      "properties": {
+        "bundleId": {
+          "description": "App bundle identifier (e.g. com.under5.passdmv). Must already exist in App Store Connect; Skipper does not create apps.",
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9._-]+$",
+          "minLength": 3
+        },
+        "version": {
+          "description": "Marketing version string (CFBundleShortVersionString). Apple requires monotonic dotted-decimal (e.g. 1.0.1, 1.1, 2.0).",
+          "type": "string",
+          "pattern": "^[0-9]+(\\.[0-9]+)*$"
+        },
+        "platform": {
+          "description": "Apple platform. Defaults to IOS when absent.",
+          "enum": ["IOS", "MAC_OS", "TV_OS", "VISION_OS"],
+          "default": "IOS"
+        }
+      }
+    },
+
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Desired state. Each top-level child maps to one ASC surface. Omitted children are not managed by this state file.",
+      "properties": {
+        "version":            { "$ref": "#/$defs/versionSpec" },
+        "build":              { "$ref": "#/$defs/buildSpec" },
+        "metadata":           { "$ref": "#/$defs/metadataSpec" },
+        "screenshots":        { "$ref": "#/$defs/screenshotsSpec" },
+        "iap":                { "$ref": "#/$defs/iapSpec" },
+        "ageRating":          { "$ref": "#/$defs/ageRatingSpec" },
+        "exportCompliance":   { "$ref": "#/$defs/exportComplianceSpec" },
+        "reviewerDemo":       { "$ref": "#/$defs/reviewerDemoSpec" },
+        "categories":         { "$ref": "#/$defs/categoriesSpec" },
+        "pricing":            { "$ref": "#/$defs/pricingSpec" },
+        "testflight":         { "$ref": "#/$defs/testflightSpec" },
+        "customProductPages": { "$ref": "#/$defs/customProductPagesSpec" }
+      }
+    },
+
+    "versionSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "App Store version configuration. See /v1/appStoreVersions in openapi.oas.json.",
+      "properties": {
+        "releaseType": {
+          "description": "How the version releases once approved.",
+          "enum": ["MANUAL", "AFTER_APPROVAL", "SCHEDULED"]
+        },
+        "earliestReleaseDate": {
+          "description": "Required when releaseType=SCHEDULED. ISO 8601 timestamp.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "copyright": {
+          "description": "Copyright string. Apple displays this on the App Store listing.",
+          "type": "string",
+          "maxLength": 100
+        },
+        "downloadable": {
+          "description": "Whether the build is downloadable (TestFlight or App Store).",
+          "type": "boolean"
+        }
+      }
+    },
+
+    "buildSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Build attached to this version. Builds must be uploaded via Xcode/altool before Skipper can attach them.",
+      "properties": {
+        "number": {
+          "description": "Build number (CFBundleVersion). Skipper looks up the build by version+number and attaches by ID.",
+          "type": "string"
+        }
+      }
+    },
+
+    "metadataSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-locale store metadata. Keys are Apple locale codes (en-US, es-MX, fr-FR, etc.). Some fields live on appStoreVersionLocalization, others on appInfoLocalization — Skipper handles the cross-resource routing.",
+      "properties": {
+        "locales": {
+          "type": "object",
+          "minProperties": 1,
+          "patternProperties": {
+            "^[a-z]{2}(-[A-Z]{2})?$": { "$ref": "#/$defs/metadataLocale" }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+
+    "metadataLocale": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "One locale's metadata. All fields are optional — only set what you want managed.",
+      "properties": {
+        "name":             { "type": "string", "maxLength": 30, "description": "App name. Apple App Store enforces 30-char ceiling." },
+        "subtitle":         { "type": "string", "maxLength": 30, "description": "App subtitle." },
+        "description":      { "type": "string", "maxLength": 4000, "description": "Long description (App Store listing body)." },
+        "keywords":         { "type": "string", "maxLength": 100, "description": "Comma-separated keywords. No spaces around commas." },
+        "whatsNew":         { "type": "string", "maxLength": 4000, "description": "What's New text for this version." },
+        "promotionalText":  { "type": "string", "maxLength": 170, "description": "Promotional text. Can be updated without resubmission — useful for time-sensitive copy." },
+        "marketingUrl":     { "type": "string", "format": "uri" },
+        "supportUrl":       { "type": "string", "format": "uri" },
+        "privacyPolicyUrl": { "type": "string", "format": "uri" }
+      }
+    },
+
+    "screenshotsSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-locale, per-device-class screenshots. Skipper computes MD5 of each file and skips slots whose sourceFileChecksum already matches.",
+      "properties": {
+        "locales": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-z]{2}(-[A-Z]{2})?$": {
+              "type": "object",
+              "patternProperties": {
+                "^APP_(IPHONE_(67|69|65|61|55)|IPAD_PRO_(3GEN_129|3GEN_11)|APPLE_TV|APPLE_WATCH|APPLE_VISION_PRO)$": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 10,
+                  "items": { "$ref": "#/$defs/screenshotFile" }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+
+    "screenshotFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "path": {
+          "description": "Path to PNG/JPG. Relative paths resolve against the state file's directory.",
+          "type": "string",
+          "minLength": 1
+        },
+        "alt": {
+          "description": "Optional alt text (Apple does not currently surface this; reserved).",
+          "type": "string"
+        }
+      }
+    },
+
+    "iapSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "In-app purchases keyed by productId. Subscriptions live under spec.testflight or a future spec.subscriptions; this is for non-renewing IAPs (consumable, non-consumable, non-renewing).",
+      "properties": {
+        "products": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-zA-Z0-9._-]+$": { "$ref": "#/$defs/iapProduct" }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+
+    "iapProduct": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "enum": ["CONSUMABLE", "NON_CONSUMABLE", "NON_RENEWING_SUBSCRIPTION"],
+          "description": "AUTO_RENEWABLE_SUBSCRIPTION lives in the subscription group surface, not here."
+        },
+        "name":           { "type": "string", "description": "Apple-facing reference name (not localized; appears in ASC). Localized names live under localizations." },
+        "familySharable": { "type": "boolean" },
+        "contentHosting": { "enum": ["HOSTED", "NON_HOSTED"] },
+        "reviewNote":     { "type": "string", "maxLength": 4000 },
+        "reviewScreenshot": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path"],
+          "properties": {
+            "path": { "type": "string", "minLength": 1 }
+          }
+        },
+        "localizations": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-z]{2}(-[A-Z]{2})?$": { "$ref": "#/$defs/iapLocalization" }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+
+    "iapLocalization": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name":        { "type": "string", "maxLength": 30 },
+        "description": { "type": "string", "maxLength": 45 }
+      }
+    },
+
+    "ageRatingSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Apple's full age-rating questionnaire. Each field is the answer to a category. Field names match Apple's AgeRatingDeclaration attributes — see openapi.oas.json.",
+      "properties": {
+        "cartoonOrFantasyViolence":         { "$ref": "#/$defs/ageRatingFrequency" },
+        "realisticViolence":                { "$ref": "#/$defs/ageRatingFrequency" },
+        "prolongedGraphicSadisticRealisticViolence": { "type": "boolean" },
+        "profanityOrCrudeHumor":            { "$ref": "#/$defs/ageRatingFrequency" },
+        "matureSuggestiveThemes":           { "$ref": "#/$defs/ageRatingFrequency" },
+        "horrorOrFearThemes":               { "$ref": "#/$defs/ageRatingFrequency" },
+        "medicalOrTreatmentInformation":    { "$ref": "#/$defs/ageRatingFrequency" },
+        "alcoholTobaccoOrDrugUseOrReferences": { "$ref": "#/$defs/ageRatingFrequency" },
+        "contestsAndGambling":              { "$ref": "#/$defs/ageRatingFrequency" },
+        "sexualContentOrNudity":            { "$ref": "#/$defs/ageRatingFrequency" },
+        "sexualContentGraphicAndNudity":    { "$ref": "#/$defs/ageRatingFrequency" },
+        "gambling":                         { "type": "boolean" },
+        "unrestrictedWebAccess":            { "type": "boolean" },
+        "kidsAgeBand":                      { "enum": ["FIVE_AND_UNDER", "SIX_TO_EIGHT", "NINE_TO_ELEVEN", null] },
+        "seventeenPlus":                    { "type": "boolean" }
+      }
+    },
+
+    "ageRatingFrequency": {
+      "enum": ["NONE", "INFREQUENT_OR_MILD", "FREQUENT_OR_INTENSE"]
+    },
+
+    "exportComplianceSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-build encryption declaration. The simple boolean is on the build; full ECCN classification (rare) lives under declaration.",
+      "properties": {
+        "usesNonExemptEncryption": {
+          "description": "Per-build flag. Most apps that don't use cryptography beyond TLS set this false.",
+          "type": "boolean"
+        },
+        "declaration": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Required only when usesNonExemptEncryption=true and the app needs full ECCN classification.",
+          "properties": {
+            "containsProprietaryCryptography": { "type": "boolean" },
+            "containsThirdPartyCryptography":  { "type": "boolean" },
+            "availableOnFrenchStore":          { "type": "boolean" },
+            "usesEncryption":                  { "type": "boolean" },
+            "exempt":                          { "type": "boolean" },
+            "eccn":                            { "type": "string" },
+            "documentName":                    { "type": "string" },
+            "documentUrl":                     { "type": "string", "format": "uri" }
+          }
+        }
+      }
+    },
+
+    "reviewerDemoSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Login info for App Review. Skipper never logs the password; use passwordRef (env var) or passwordFile (path).",
+      "properties": {
+        "username":       { "type": "string" },
+        "passwordRef":    { "type": "string", "pattern": "^env:[A-Z_][A-Z0-9_]*$", "description": "Env var reference, e.g. env:DEMO_PASSWORD. Skipper resolves at apply time." },
+        "passwordFile":   { "type": "string", "description": "Path to a file containing the password. Trailing newline trimmed." },
+        "notes":          { "type": "string", "maxLength": 4000 },
+        "contactName":    { "type": "string" },
+        "contactEmail":   { "type": "string", "format": "email" },
+        "contactPhone":   { "type": "string" }
+      },
+      "oneOf": [
+        { "required": ["passwordRef"] },
+        { "required": ["passwordFile"] },
+        { "not": { "anyOf": [{ "required": ["passwordRef"] }, { "required": ["passwordFile"] }] } }
+      ]
+    },
+
+    "categoriesSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "primary":              { "type": "string", "description": "Primary category id (e.g. BUSINESS, GAMES). See /v1/appCategories." },
+        "secondary":            { "type": "string", "description": "Secondary category id." },
+        "primarySubcategories": {
+          "type": "array",
+          "items":   { "type": "string" },
+          "maxItems": 2
+        },
+        "secondarySubcategories": {
+          "type": "array",
+          "items":   { "type": "string" },
+          "maxItems": 2
+        }
+      }
+    },
+
+    "pricingSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Single base-territory + price-point mapping. Manual per-territory overrides are an L2 v1.x extension.",
+      "properties": {
+        "baseTerritory":   { "type": "string", "description": "ISO 3166-1 alpha-3 territory code (e.g. USA, GBR, JPN)." },
+        "appPricePointId": { "type": "string", "description": "Apple's appPricePoint ID. See /v1/appPricePoints." }
+      }
+    },
+
+    "testflightSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "TestFlight configuration. Tester management is opt-in; only groups listed here are managed.",
+      "properties": {
+        "groups": {
+          "type": "object",
+          "patternProperties": {
+            "^[A-Za-z0-9 _-]+$": { "$ref": "#/$defs/testflightGroup" }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+
+    "testflightGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "isInternal":      { "type": "boolean", "description": "Internal groups (your team) vs external (public/non-team testers)." },
+        "publicLink":      { "type": "boolean", "description": "Whether Apple generates a public link for this external group." },
+        "publicLinkLimit": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "testers": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/testflightTester" }
+        }
+      }
+    },
+
+    "testflightTester": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["email"],
+      "properties": {
+        "email":     { "type": "string", "format": "email" },
+        "firstName": { "type": "string" },
+        "lastName":  { "type": "string" }
+      }
+    },
+
+    "customProductPagesSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Custom Product Pages — alt screenshots/descriptions for ad-driven traffic.",
+      "patternProperties": {
+        "^[A-Za-z0-9 _-]+$": { "$ref": "#/$defs/customProductPage" }
+      },
+      "additionalProperties": false
+    },
+
+    "customProductPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "visible": { "type": "boolean" },
+        "localizations": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-z]{2}(-[A-Z]{2})?$": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "promotionalText": { "type": "string", "maxLength": 170 },
+                "screenshots": {
+                  "type": "object",
+                  "patternProperties": {
+                    "^APP_(IPHONE_(67|69|65|61|55)|IPAD_PRO_(3GEN_129|3GEN_11))$": {
+                      "type": "array",
+                      "items": { "$ref": "#/$defs/screenshotFile" }
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  }
+}

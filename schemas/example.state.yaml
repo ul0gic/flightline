@@ -1,0 +1,119 @@
+# yaml-language-server: $schema=./skipper.schema.json
+#
+# Example Skipper AppState. Every field is optional unless noted; this file
+# illustrates the full v1alpha1 schema. Real configs typically only fill the
+# subsections that need managing.
+
+apiVersion: skipper.corelift.io/v1alpha1
+kind: AppState
+
+metadata:
+  bundleId: com.under5.passdmv
+  version: "1.0.1"
+  platform: IOS
+
+spec:
+  version:
+    releaseType: AFTER_APPROVAL
+    copyright: "© 2026 CoreLift LLC"
+
+  build:
+    number: "42"
+
+  metadata:
+    locales:
+      en-US:
+        name: ".PassDMV: California"
+        subtitle: "Pass the test, first try"
+        description: |
+          California DMV practice tests with the latest official questions.
+          Track your progress, focus on weak areas, and pass with confidence.
+        keywords: "DMV,driver,test,license,California,permit,practice"
+        whatsNew: |
+          v1.0.1 — bug fixes, improved test coverage, faster question loading.
+        promotionalText: "Free updates as the DMV question bank evolves."
+        marketingUrl: "https://under5.com/passdmv"
+        supportUrl: "https://under5.com/passdmv/support"
+        privacyPolicyUrl: "https://under5.com/passdmv/privacy"
+
+  screenshots:
+    locales:
+      en-US:
+        APP_IPHONE_69:
+          - path: ./screenshots/iphone69-1.png
+          - path: ./screenshots/iphone69-2.png
+          - path: ./screenshots/iphone69-3.png
+        APP_IPHONE_67:
+          - path: ./screenshots/iphone67-1.png
+          - path: ./screenshots/iphone67-2.png
+
+  iap:
+    products:
+      com.under5.passdmv.lifetime:
+        type: NON_CONSUMABLE
+        name: "Lifetime Access"
+        familySharable: false
+        contentHosting: NON_HOSTED
+        reviewNote: |
+          Tap "Unlock Full Access" on the home screen. Apple sandbox tester:
+          provided in App Review reviewer-demo info.
+        reviewScreenshot:
+          path: ./review-screenshots/lifetime.png
+        localizations:
+          en-US:
+            name: "Lifetime Access"
+            description: "Unlock all DMV practice tests forever."
+
+  ageRating:
+    cartoonOrFantasyViolence: NONE
+    realisticViolence: NONE
+    profanityOrCrudeHumor: NONE
+    matureSuggestiveThemes: NONE
+    horrorOrFearThemes: NONE
+    medicalOrTreatmentInformation: NONE
+    alcoholTobaccoOrDrugUseOrReferences: NONE
+    contestsAndGambling: NONE
+    sexualContentOrNudity: NONE
+    sexualContentGraphicAndNudity: NONE
+    gambling: false
+    unrestrictedWebAccess: false
+    seventeenPlus: false
+
+  exportCompliance:
+    usesNonExemptEncryption: false
+
+  reviewerDemo:
+    username: "demo@under5.com"
+    passwordRef: env:PASSDMV_DEMO_PASSWORD
+    notes: |
+      Tap any practice test to start. The Lifetime Access IAP unlock screen
+      appears after the second free question. Use the sandbox tester account
+      to exercise the IAP path.
+    contactName: "Joel Nuts"
+    contactEmail: "devteam@corelift.io"
+    contactPhone: "+1-555-0100"
+
+  categories:
+    primary: EDUCATION
+    secondary: REFERENCE
+
+  pricing:
+    baseTerritory: USA
+    appPricePointId: "FREE"
+
+  testflight:
+    groups:
+      friends-and-family:
+        isInternal: false
+        publicLink: false
+        testers:
+          - email: tester1@example.com
+            firstName: Test
+            lastName: One
+
+  customProductPages:
+    summer-discovery-2026:
+      visible: true
+      localizations:
+        en-US:
+          promotionalText: "Pass your DMV test before the road trip."
