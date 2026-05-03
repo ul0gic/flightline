@@ -74,38 +74,44 @@ If you've used any of those, the workflow rhymes: `fetch` to capture live state,
 
 ## What it does today (v0.5.0-beta)
 
-All three layers are complete: L1 (API CLI), L2 (state-as-code), and L3 (preflight rules).
+All three layers are complete: L1 (API CLI), L2 (state-as-code), and L3 (preflight rules). The columns below split the management surface (L1 read/write CLI verbs) from the as-Code surface (L2 fetch/plan/apply) so you can see what's drivable from a `state.yaml` versus what's CLI-only.
 
 | Surface | L1 read | L1 write | L2 state-as-code | L3 preflight rule |
 |---|:---:|:---:|:---:|:---:|
 | Apps | ✅ | — | — | — |
 | Versions | ✅ | ✅ | ✅ | ✅ |
-| Builds | ✅ | ✅ | ✅ | ✅ |
+| Builds (incl. attach) | ✅ | ✅ | ✅ | ✅ |
 | Metadata + localizations | ✅ | ✅ | ✅ | ✅ |
-| Screenshots | ✅ | ✅ | ✅ | ✅ |
-| App Previews | ✅ | ✅ | ✅ | — |
-| IAPs | ✅ | ✅ | ✅ | ✅ (3 rules) |
-| Subscription groups | ✅ | ✅ | ✅ | — |
-| Review submissions | ✅ | ✅ | ✅ | — |
+| Screenshots | ✅ | ✅ | ✅ ¹ | ✅ |
+| IAPs (incl. review screenshot) | ✅ | ✅ | ✅ ¹ | ✅ (3 rules) |
 | Age rating | ✅ | ✅ | ✅ | ✅ |
 | Export compliance | ✅ | ✅ | ✅ | ✅ |
 | Reviewer demo info | ✅ | ✅ | ✅ | — |
 | Categories | ✅ | ✅ | ✅ | — |
 | Pricing | ✅ | ✅ | ✅ | — |
-| TestFlight | ✅ | ✅ | ✅ (partial) | ✅ |
-| Custom product pages | ✅ | ✅ | ✅ | — |
-| Customer reviews | ✅ | ✅ (respond) | — | — |
-| Beta feedback | ✅ | — | — | — |
+| Custom product pages | ✅ | ✅ | ✅ ¹ | — |
+| TestFlight (groups, testers, beta-review submit) | ✅ | ✅ | ✅ (partial) | ✅ |
+| Subscription groups | ✅ | — ² | — ² | — |
+| Review submissions (App Store Review) | ✅ | — ³ | — ³ | — |
+| Customer reviews | ✅ | — ⁴ | — | — |
+| Beta feedback (crash + screenshot) | ✅ | — | — | — |
 | Diagnostic signatures | ✅ | — | — | — |
 | Performance metrics | ✅ | — | — | — |
 | Sales reports | ✅ | — | — | — |
 | Finance reports | ✅ | — | — | — |
 | Subscription reports | ✅ | — | — | — |
 | Analytics reports | ✅ | — | — | — |
-| Privacy nutrition labels | portal-only¹ | — | — | — |
+| Privacy nutrition labels | portal-only ⁵ | — | — | — |
 
-¹ `appPrivacyDetails` is absent from ASC API v4.3. `fline privacy-labels get` returns a typed diagnostic explaining the gap rather than silently failing.
+¹ Asset uploads (screenshots, IAP review screenshots, CPP screenshots) work via L1 verbs (`fline screenshots upload`, `fline iap review-screenshot upload`, `fline custom-product-pages screenshots upload`). The `apply` orchestrator currently emits a typed error pointing at the L1 verb instead of driving the multipart upload itself — config fields converge through `apply`, asset bytes do not.
 
+² Subscriptions are read-only in v1 (`fline subscriptions list/get/reports`). Subscription writes (groups, products, prices, intro offers, promotional offers) are deferred — no near-term plan.
+
+³ App Store Review submission (the actual "ship this version" verb) is **intentionally manual in v1**. `fline review-submissions list` and `fline review-submissions items` show submission state read-only; the create-and-submit flow happens in the ASC web portal. Rationale: review submission is a high-stakes, non-reversible action where double-checking in the portal is the safer default while the rest of the toolchain matures.
+
+⁴ `fline reviews list/get/summary` is read-only. Replying to reviews is not implemented.
+
+⁵ `appPrivacyDetails` is absent from ASC API v4.3. `fline privacy-labels get` returns a typed `supported: false` diagnostic explaining the gap rather than silently failing. Flightline will wire this when Apple adds the endpoint to the spec.
 ---
 
 ## Architecture
@@ -478,10 +484,13 @@ output: table
 
 **Not a SaaS.** No backend, no telemetry, no accounts. The binary talks directly to Apple's API using your credentials.
 
-**Two known portal-only surfaces** — Apple's public API does not expose these. Flightline tells you explicitly when you hit them rather than silently failing:
+**Not the App Store Review submit button — by design.** Flightline preps everything that goes into a submission (build attach, metadata, screenshots, IAPs, age rating, export compliance, demo creds), and `fline preflight` will tell you whether the version is submission-ready, but the final "Submit for Review" click happens in the ASC web portal. Review submission is high-stakes and non-reversible; keeping the human-in-the-loop step in the portal where you can also see the full submission summary is the safer default for v1. May be wired as `fline review-submissions submit` in a later version once the rest of the toolchain has more real-world miles on it.
+
+**Three portal-only surfaces** — Apple's public API does not expose these. Flightline tells you explicitly when you hit them rather than silently failing:
 
 - **Resolution-center reviewer messages** — the rejection text written by Apple's reviewers is not in the v4.3 API. `fline rejection` reports every API-visible state field and tells you to check the portal for the actual message.
 - **Privacy nutrition labels** (`appPrivacyDetails`) — entirely absent from ASC API v4.3. `fline privacy-labels get` returns a typed `supported: false` diagnostic. Flightline will wire this when Apple adds the endpoint to the spec.
+- **App Store Review submission** (covered above) — wired as a deliberate human-in-the-loop step, not an API gap.
 
 ---
 
