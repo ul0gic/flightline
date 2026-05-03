@@ -284,6 +284,15 @@ func applyReviewerDemoField(ctx context.Context, c *asc.Client, actx ApplyContex
 	if platform == "" {
 		platform = "IOS"
 	}
+	// Resolve the wire-key + value (incl. password lookup) BEFORE any
+	// HTTP work so an unset env var fails fast with an actionable
+	// error instead of bottoming out in resolveAppID.
+	leaf := strings.TrimPrefix(ch.Path, "/spec/reviewerDemo/")
+	wire, val, err := reviewerDemoWireForLeaf(leaf, ch.To, actx.StateDir)
+	if err != nil {
+		return err
+	}
+
 	appID, err := resolveAppID(ctx, c, actx.BundleID)
 	if err != nil {
 		return err
@@ -293,12 +302,6 @@ func applyReviewerDemoField(ctx context.Context, c *asc.Client, actx ApplyContex
 		return err
 	}
 	detailID, err := fetchOrCreateReviewDetail(ctx, c, versionID)
-	if err != nil {
-		return err
-	}
-
-	leaf := strings.TrimPrefix(ch.Path, "/spec/reviewerDemo/")
-	wire, val, err := reviewerDemoWireForLeaf(leaf, ch.To, actx.StateDir)
 	if err != nil {
 		return err
 	}
