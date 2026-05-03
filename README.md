@@ -35,6 +35,7 @@ This is a personal tool open-sourced for sharing. No SaaS layer, no telemetry, n
 - [Configuration precedence](#configuration-precedence)
 - [What it doesn't do](#what-it-doesnt-do)
 - [Documentation](#documentation)
+- [Building from source](#building-from-source)
 - [Development](#development)
 - [Status](#status)
 - [License](#license)
@@ -196,39 +197,90 @@ All observation commands support `--output json` for piping to `jq` or feeding t
 
 ## Install
 
-**Go install (available now):**
-
 ```bash
-go install github.com/ul0gic/flightline@latest
+brew install ul0gic/flightline/fline
 ```
 
-Requires Go 1.26 or later. The binary lands in your `GOBIN` (typically `~/go/bin`).
+macOS only. App Store Connect work requires a Mac, so that's where Flightline runs. Apple Silicon and Intel are both supported.
 
-**Homebrew tap and prebuilt binaries** ship at v1.0.0 (Phase 6).
+Verify the install:
+
+```bash
+fline --version
+fline --help
+```
+
+Homebrew is the only supported install method for end users. For CI runners on Linux or air-gapped environments, pre-built `.tar.gz` binaries (`darwin/arm64`, `darwin/amd64`, `linux/amd64`) are attached to every [GitHub Release](https://github.com/ul0gic/flightline/releases). To compile from source, see [Building from source](#building-from-source).
+
+> **Note:** Homebrew tap ships at v1.0.0. Until then, install via [Building from source](#building-from-source).
 
 ---
 
 ## Setup
 
-**Place your `.p8` API key:**
+Flightline talks to App Store Connect using an API key you generate in the developer portal. One-time setup, four steps.
+
+### 1. Generate an API key
+
+In a browser, go to https://appstoreconnect.apple.com/access/integrations/api and:
+
+1. Click **+** to create a new key
+2. Name it (e.g., `flightline`)
+3. Grant role **App Manager** (or **Admin** if you also need finance reports)
+4. Click **Generate**, then **Download API Key** — you can only download the `.p8` file once
+5. Note the **Key ID** (10 characters, e.g., `ABCD1234EF`) and **Issuer ID** (UUID, e.g., `12345678-90ab-cdef-1234-567890abcdef`)
+
+### 2. Install the key file
 
 ```bash
 mkdir -p ~/.appstoreconnect
-mv ~/Downloads/AuthKey_XXXXXXXXXX.p8 ~/.appstoreconnect/
-chmod 600 ~/.appstoreconnect/AuthKey_XXXXXXXXXX.p8
+mv ~/Downloads/AuthKey_ABCD1234EF.p8 ~/.appstoreconnect/
+chmod 600 ~/.appstoreconnect/AuthKey_ABCD1234EF.p8
 ```
 
-Flightline refuses to load a `.p8` file with permissions wider than 600 and tells you exactly how to fix it.
+Replace `ABCD1234EF` with your actual Key ID. Flightline refuses to load a `.p8` with permissions wider than `600` and prints the exact `chmod` command to fix it.
 
-**Set environment variables** (add to `~/.zshrc` or `~/.bashrc`):
+### 3. Export credentials
+
+Add to `~/.zshrc` (or `~/.bashrc`):
 
 ```bash
-export APP_STORE_CONNECT_KEY_ID="XXXXXXXXXX"        # 10-character key ID
-export APP_STORE_CONNECT_ISSUER_ID="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-export APP_STORE_CONNECT_VENDOR_NUMBER="XXXXXXXX"   # for sales/finance reports
+export APP_STORE_CONNECT_KEY_ID="ABCD1234EF"
+export APP_STORE_CONNECT_ISSUER_ID="12345678-90ab-cdef-1234-567890abcdef"
+export APP_STORE_CONNECT_VENDOR_NUMBER="12345678"
 ```
 
-You can also set these via CLI flags (`--key-id`, `--issuer-id`) or a config file at `~/.config/flightline/config.yaml`. See [Configuration precedence](#configuration-precedence).
+The vendor number is required for sales and finance reports only. Reload your shell:
+
+```bash
+source ~/.zshrc
+```
+
+### 4. Verify auth
+
+```bash
+fline whoami
+```
+
+Expected output:
+
+```
+FIELD          VALUE
+KEY_ID         ABCD1234EF
+ISSUER_ID      12345678-90ab-cdef-1234-567890abcdef
+VENDOR_NUMBER  12345678
+AUTHORIZED     true
+API_BASE_URL   https://api.appstoreconnect.apple.com
+```
+
+If `whoami` errors, the message will tell you what's wrong: missing env var, `.p8` not found, wrong permissions, or invalid key. The redacted error includes a hint pointing at the exact fix.
+
+**Alternative configuration paths** (lower precedence than env vars):
+
+- CLI flags: `--key-id`, `--issuer-id` on every command
+- Config file: `~/.config/flightline/config.yaml`
+
+See [Configuration precedence](#configuration-precedence) for the resolution order.
 
 ---
 
@@ -408,9 +460,9 @@ From highest to lowest priority:
 **Config file example** (`~/.config/flightline/config.yaml`):
 
 ```yaml
-key-id: XXXXXXXXXX
-issuer-id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-vendor-number: "XXXXXXXX"
+key-id: ABCD1234EF
+issuer-id: 12345678-90ab-cdef-1234-567890abcdef
+vendor-number: "12345678"
 output: table
 ```
 
@@ -440,6 +492,35 @@ output: table
 | [docs/state-yaml.md](docs/state-yaml.md) | Full v1alpha1 reference: every field, type, constraint, and gotcha |
 | [docs/state-yaml-quickstart.md](docs/state-yaml-quickstart.md) | Fetch → edit → plan → apply walkthrough using passdmv |
 | [docs/preflight-rules.md](docs/preflight-rules.md) | All 12 preflight rules: mode, severity, what/why/when/how, fix hints |
+
+---
+
+## Building from source
+
+Requires Go 1.26 or later.
+
+### Clone and build
+
+```bash
+git clone https://github.com/ul0gic/flightline.git
+cd flightline
+make build
+./bin/fline --version
+```
+
+The binary is at `./bin/fline`. Move it onto your `PATH` if you want it system-wide:
+
+```bash
+sudo mv ./bin/fline /usr/local/bin/fline
+```
+
+### Or via `go install`
+
+```bash
+go install github.com/ul0gic/flightline/cmd/fline@latest
+```
+
+The binary lands in `$GOBIN` (typically `~/go/bin`). Make sure `~/go/bin` is on your `PATH`.
 
 ---
 
