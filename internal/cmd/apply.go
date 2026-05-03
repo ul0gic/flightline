@@ -10,6 +10,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -131,14 +132,17 @@ func runApply(cmd *cobra.Command, args []string) error {
 		}, outputMode())
 	}
 
-	state.SetApplyContext(desired.Metadata.BundleID, version, platform)
-	defer state.ResetApplyContext()
-
+	stateDir, _ := filepath.Abs(filepath.Dir(stateFile))
 	res, err := state.Apply(cmd.Context(), c, changes, state.ApplyOpts{
-		Confirm:  confirm,
-		Resume:   resume,
-		DryRun:   dryRun,
-		BundleID: desired.Metadata.BundleID,
+		Context: state.ApplyContext{
+			BundleID: desired.Metadata.BundleID,
+			Version:  version,
+			Platform: platform,
+			StateDir: stateDir,
+		},
+		Confirm: confirm,
+		Resume:  resume,
+		DryRun:  dryRun,
 		Logger: func(c plan.Change, status string) {
 			fmt.Fprintf(os.Stderr, "skipper: %s %s %s\n", status, c.Op, c.Path)
 		},

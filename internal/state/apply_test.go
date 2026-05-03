@@ -28,13 +28,27 @@ func withTempCacheDir(t *testing.T) string {
 	return dir
 }
 
+func defaultApplyCtx() ApplyContext {
+	return ApplyContext{BundleID: "com.example.app", Version: "1.0", Platform: "IOS"}
+}
+
 func TestApply_RequiresConfirm(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {}))
 	defer srv.Close()
 	c := fixtureClient(t, srv)
-	_, err := Apply(context.Background(), c, nil, ApplyOpts{BundleID: "x"})
+	_, err := Apply(context.Background(), c, nil, ApplyOpts{Context: defaultApplyCtx()})
 	if err == nil || !strings.Contains(err.Error(), "confirm") {
 		t.Errorf("expected confirm-required error; got %v", err)
+	}
+}
+
+func TestApply_RequiresBundleID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {}))
+	defer srv.Close()
+	c := fixtureClient(t, srv)
+	_, err := Apply(context.Background(), c, nil, ApplyOpts{Confirm: true})
+	if err == nil || !strings.Contains(err.Error(), "BundleID") {
+		t.Errorf("expected BundleID-required error; got %v", err)
 	}
 }
 
@@ -47,7 +61,7 @@ func TestApply_EmptyChanges(t *testing.T) {
 	}))
 	defer srv.Close()
 	c := fixtureClient(t, srv)
-	res, err := Apply(context.Background(), c, nil, ApplyOpts{BundleID: "com.example.app", Confirm: true})
+	res, err := Apply(context.Background(), c, nil, ApplyOpts{Context: defaultApplyCtx(), Confirm: true})
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
@@ -63,9 +77,6 @@ func TestApply_EmptyChanges(t *testing.T) {
 // versions + PATCH version. Three calls total; the last is the PATCH.
 func TestApply_VersionCopyrightOneCall(t *testing.T) {
 	withTempCacheDir(t)
-	SetApplyContext("com.example.app", "1.0", "IOS")
-	defer ResetApplyContext()
-
 	var patches int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -93,7 +104,7 @@ func TestApply_VersionCopyrightOneCall(t *testing.T) {
 		From: "old", To: "© 2026",
 	}}
 	res, err := Apply(context.Background(), c, changes, ApplyOpts{
-		BundleID: "com.example.app", Confirm: true,
+		Context: defaultApplyCtx(), Confirm: true,
 	})
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
@@ -111,9 +122,6 @@ func TestApply_VersionCopyrightOneCall(t *testing.T) {
 // PATCHes issued.
 func TestApply_ResumeSkipsApplied(t *testing.T) {
 	withTempCacheDir(t)
-	SetApplyContext("com.example.app", "1.0", "IOS")
-	defer ResetApplyContext()
-
 	var patches int32
 	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPatch {
@@ -122,7 +130,6 @@ func TestApply_ResumeSkipsApplied(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	// Seed a checkpoint that already includes the change.
 	cp := applyCheckpoint{
 		SchemaVersion: applyCheckpointSchemaVersion,
 		BundleID:      "com.example.app",
@@ -150,7 +157,7 @@ func TestApply_ResumeSkipsApplied(t *testing.T) {
 		From: "old", To: "© 2026",
 	}}
 	res, err := Apply(context.Background(), c, changes, ApplyOpts{
-		BundleID: "com.example.app", Confirm: true, Resume: true,
+		Context: defaultApplyCtx(), Confirm: true, Resume: true,
 	})
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
@@ -167,9 +174,6 @@ func TestApply_ResumeSkipsApplied(t *testing.T) {
 // hits the wire.
 func TestApply_DryRunIssuesNoCalls(t *testing.T) {
 	withTempCacheDir(t)
-	SetApplyContext("com.example.app", "1.0", "IOS")
-	defer ResetApplyContext()
-
 	var calls int32
 	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		atomic.AddInt32(&calls, 1)
@@ -182,7 +186,7 @@ func TestApply_DryRunIssuesNoCalls(t *testing.T) {
 		From: "old", To: "© 2026",
 	}}
 	res, err := Apply(context.Background(), c, changes, ApplyOpts{
-		BundleID: "com.example.app", DryRun: true,
+		Context: defaultApplyCtx(), DryRun: true,
 	})
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
@@ -195,23 +199,21 @@ func TestApply_DryRunIssuesNoCalls(t *testing.T) {
 	}
 }
 
-// TestApply_UnmappedSurfacesError — the dispatch table must reject
-// unmapped paths cleanly so users see what's not implemented.
+// TestApply_UnmappedSurfacesError — a path the dispatch table doesn't
+// recognise must surface as ErrUnmappedChange. /spec/futureSurface/foo
+// is intentionally outside every covered prefix.
 func TestApply_UnmappedSurfacesError(t *testing.T) {
 	withTempCacheDir(t)
-	SetApplyContext("com.example.app", "1.0", "IOS")
-	defer ResetApplyContext()
-
 	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {}))
 	defer srv.Close()
 
 	c := fixtureClient(t, srv)
 	changes := []plan.Change{{
-		Op: plan.OpUpdate, Resource: "iap.com.x.y", Path: "/spec/iap/products/com.x.y/name",
-		To: "Lifetime",
+		Op: plan.OpUpdate, Resource: "futureSurface", Path: "/spec/futureSurface/foo",
+		To: "x",
 	}}
 	res, err := Apply(context.Background(), c, changes, ApplyOpts{
-		BundleID: "com.example.app", Confirm: true,
+		Context: defaultApplyCtx(), Confirm: true,
 	})
 	if err == nil {
 		t.Fatal("expected error for unmapped change")
