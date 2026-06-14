@@ -11,6 +11,9 @@ web/
 /dist/
 *.exe
 
+# pnpm store (leaks to repo root when pnpm runs in web/)
+.pnpm-store/
+
 # Coverage
 coverage.out
 coverage.html

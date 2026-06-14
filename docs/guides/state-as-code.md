@@ -1,4 +1,4 @@
-# Flightline AppState: Quickstart
+# State as Code: a 5-minute walkthrough
 
 ## What you'll do
 
@@ -261,25 +261,23 @@ Steps 1–5 are reversible. Step 6 is the only point of no return.
 
 ### Screenshots and IAP review screenshots
 
-`flightline apply` cannot yet drive binary asset uploads (screenshots, IAP review screenshots, Custom Product Page screenshots). The diff engine compares checksums correctly, and `flightline plan` shows what would change, but `flightline apply` returns a typed error for these paths and directs you to the L1 verbs:
+`flightline apply` cannot yet drive binary asset uploads (screenshots, IAP review screenshots, Custom Product Page screenshots). The diff engine compares checksums correctly, and `flightline plan` shows what would change, but `flightline apply` returns a typed error for these paths and directs you to the L1 upload verbs. Upload the assets first, then run `apply` for everything else:
 
 ```bash
-# Upload screenshots directly via L1
 flightline screenshots upload com.under5.passdmv \
   --version 1.0.1 --locale en-US --device-set APP_IPHONE_67 \
   ./screenshots/iphone67-1.png
 
-# Then re-run apply for everything else
 flightline apply state.yaml --confirm
 ```
 
-This is tracked in [QA-010](../.project/issues/open/QA-010-orchestrator-upload-integration.md). The full orchestrator integration (with checksum-skip and chunked upload resume) lands when that closes.
+See [Uploading assets](./uploading-assets.md) for the full upload workflow (device sets, the MD5 skip behavior, resume). This is tracked in [QA-010](../../.project/issues/open/QA-010-orchestrator-upload-integration.md); the orchestrator integration (checksum-skip and chunked upload resume) lands when that closes.
 
 ### Privacy nutrition labels
 
 Privacy nutrition labels are not manageable via the App Store Connect API (v4.3). The API has no endpoint for `appPrivacyDetails`. Manage them in the App Store Connect web UI.
 
-`flightline privacy-labels get <bundleId>` returns a diagnostic explaining this gap, it does not fail silently. See [ISSUE-002](../.project/issues/closed/ISSUE-002-privacy-labels-not-in-asc-api.md).
+`flightline privacy-labels get <bundleId>` returns a diagnostic explaining this gap, it does not fail silently. See [ISSUE-002](../../.project/issues/closed/ISSUE-002-privacy-labels-not-in-asc-api.md).
 
 ---
 
@@ -346,7 +344,8 @@ The `seventeenPlus` field in `spec.ageRating` is Apple-computed from your questi
 
 ## See also
 
-- [Field reference](./state-yaml.md), every field, every constraint, every gotcha
-- [PRD Lifecycle](../.project/prd.md#lifecycle), the full authoring loop
+- [Field reference](../reference/state-yaml.md), every field, every constraint, every gotcha
+- [Uploading assets](./uploading-assets.md), the screenshot and IAP review-screenshot upload workflow
+- [PRD Lifecycle](../../.project/prd.md#lifecycle), the full authoring loop
 - Schema: `schemas/flightline.schema.json` (or `https://flightline.dev/schemas/v1alpha1/state.schema.json`)
 - `flightline --help`, `flightline fetch --help`, `flightline plan --help`, `flightline apply --help`

@@ -10,7 +10,7 @@ The schema URL is `https://flightline.dev/schemas/v1alpha1/state.schema.json`. F
 
 **This reference covers v1alpha1.** The `apiVersion` constant locks that. If a future release bumps to `v1beta1`, the diff will be explicit and documented.
 
-See [docs/state-yaml-quickstart.md](./state-yaml-quickstart.md) for a 5-minute walkthrough.
+See [the state-as-code guide](../guides/state-as-code.md) for a 5-minute walkthrough.
 
 ---
 
@@ -63,7 +63,7 @@ metadata:
 | `version` | string | yes |, | `^[0-9]+(\.[0-9]+)*$` | Marketing version (CFBundleShortVersionString). Leading zeros rejected, `01.0` fails schema. Quote it: `"1.0"`. |
 | `platform` | enum | no | `IOS` | `IOS`, `MAC_OS`, `TV_OS`, `VISION_OS` | Defaults to `IOS` when absent. Must match the platform your build targets. |
 
-**PRD lifecycle step:** `metadata.bundleId` + `metadata.version` are the identity keys Flightline uses at every step of the [authoring loop](../.project/prd.md#lifecycle) (fetch → lint → plan → apply → preflight → submit).
+**PRD lifecycle step:** `metadata.bundleId` + `metadata.version` are the identity keys Flightline uses at every step of the [authoring loop](../../.project/prd.md#lifecycle) (fetch → lint → plan → apply → preflight → submit).
 
 ---
 
@@ -197,7 +197,7 @@ Each device slot accepts 1–10 screenshots (`minItems: 1`, `maxItems: 10`).
 
 **Required devices for new submissions.** Apple requires at least 6.9" and 6.7" screenshots for new iOS app submissions. The L3 preflight rule `screenshots.requiredDevices` (Phase 5) catches this offline.
 
-**Current limitation.** `flightline apply` cannot yet drive the multipart binary upload for screenshots. The diff engine and fetch projection are correct, apply will surface a typed error pointing you to the L1 verb (`flightline screenshots upload`). This is tracked in [QA-010](../.project/issues/open/QA-010-orchestrator-upload-integration.md). Use `flightline screenshots upload` directly for now; the state file's screenshot section is still useful for tracking what should be there.
+**Current limitation.** `flightline apply` cannot yet drive the multipart binary upload for screenshots. The diff engine and fetch projection are correct, apply will surface a typed error pointing you to the L1 verb (`flightline screenshots upload`). This is tracked in [QA-010](../../.project/issues/open/QA-010-orchestrator-upload-integration.md). Use `flightline screenshots upload` directly for now; the state file's screenshot section is still useful for tracking what should be there.
 
 ---
 
@@ -247,7 +247,7 @@ reviewScreenshot:
 |-------|------|----------|--------|
 | `path` | string | yes | Relative to state file directory. The L3 preflight rule `iap.reviewScreenshot.exists` (Phase 5) checks this is populated. Missing review screenshots are a common rejection cause. |
 
-**Current limitation.** Like app screenshots, the `reviewScreenshot` binary upload is not yet driven by `flightline apply`. Use `flightline iap update --review-screenshot upload` until [QA-010](../.project/issues/open/QA-010-orchestrator-upload-integration.md) lands.
+**Current limitation.** Like app screenshots, the `reviewScreenshot` binary upload is not yet driven by `flightline apply`. Use `flightline iap review-screenshot upload <bundleId> --product <productId> --file <path>` until [QA-010](../../.project/issues/open/QA-010-orchestrator-upload-integration.md) lands.
 
 ### iapLocalization fields
 
@@ -486,7 +486,7 @@ spec:
 
 **Device classes for CPPs.** CPPs support a subset of device classes: `APP_IPHONE_67`, `APP_IPHONE_69`, `APP_IPHONE_65`, `APP_IPHONE_61`, `APP_IPHONE_55`, `APP_IPAD_PRO_3GEN_129`, `APP_IPAD_PRO_3GEN_11`. TV, Watch, and Vision Pro device classes are not supported on CPPs.
 
-**Current limitation.** CPP screenshot binary uploads are not yet driven by `flightline apply`, same as main screenshots. See [QA-010](../.project/issues/open/QA-010-orchestrator-upload-integration.md).
+**Current limitation.** CPP screenshot binary uploads are not yet driven by `flightline apply`, same as main screenshots. See [QA-010](../../.project/issues/open/QA-010-orchestrator-upload-integration.md).
 
 ---
 
@@ -498,7 +498,7 @@ spec:
 
 Flightline ships a `flightline privacy-labels get <bundleId>` stub that returns a typed diagnostic explaining the gap. The JSON contract has `supported: false` and a pointer to the portal.
 
-Manage privacy labels in the App Store Connect web UI. See [ISSUE-002](../.project/issues/closed/ISSUE-002-privacy-labels-not-in-asc-api.md) for full context.
+Manage privacy labels in the App Store Connect web UI. See [ISSUE-002](../../.project/issues/closed/ISSUE-002-privacy-labels-not-in-asc-api.md) for full context.
 
 ### Asset upload paths (screenshots, IAP review screenshots, CPP screenshots)
 
@@ -506,10 +506,10 @@ The `flightline apply` orchestrator does not yet drive multipart binary uploads.
 
 ```
 flightline screenshots upload <bundleId> --version <v> --locale <l> --device-set <d> <path>
-flightline iap update <productId> --review-screenshot <path>
+flightline iap review-screenshot upload <bundleId> --product <productId> --file <path>
 ```
 
-This is tracked in [QA-010](../.project/issues/open/QA-010-orchestrator-upload-integration.md). The full apply orchestration (including checksum-skip and resume) lands when that issue closes.
+This is tracked in [QA-010](../../.project/issues/open/QA-010-orchestrator-upload-integration.md). The full apply orchestration (including checksum-skip and resume) lands when that issue closes.
 
 ---
 
@@ -558,7 +558,7 @@ If you omit `spec.screenshots` entirely, Flightline will not touch your screensh
 
 ## See also
 
-- [Quickstart](./state-yaml-quickstart.md), 5-minute fetch → edit → plan → apply walkthrough
-- [Schema source](../schemas/flightline.schema.json), the JSON Schema 2020-12 contract
-- [PRD Lifecycle](../.project/prd.md#lifecycle), the full authoring loop (lint → plan → apply → preflight → submit)
+- [State-as-code guide](../guides/state-as-code.md), 5-minute fetch → edit → plan → apply walkthrough
+- [Schema source](../../schemas/flightline.schema.json), the JSON Schema 2020-12 contract
+- [PRD Lifecycle](../../.project/prd.md#lifecycle), the full authoring loop (lint → plan → apply → preflight → submit)
 - `flightline --help`, `flightline fetch --help`, `flightline plan --help`, `flightline apply --help`

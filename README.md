@@ -222,69 +222,23 @@ flightline --help
 
 ## Setup
 
-Flightline talks to App Store Connect using an API key you generate in the developer portal. One-time setup, four steps.
+Flightline authenticates with an App Store Connect API key (a `.p8` private key it signs an ES256 JWT with), not your Apple ID. One-time setup:
 
-### 1. Generate an API key
+1. **Generate a key.** App Store Connect > Users and Access > Integrations > App Store Connect API > **+**. Grant role **App Manager** (or **Admin** for finance reports). Click **Generate**, then **Download API Key**: the `.p8` downloads only once. Note the **Key ID** and **Issuer ID**.
+2. **Place the key.** Move it to `~/.appstoreconnect/AuthKey_<KEY_ID>.p8` and `chmod 600` it. Flightline refuses a `.p8` with permissions wider than `600` and prints the exact fix.
+3. **Export credentials.** In `~/.zshrc` (or `~/.bashrc`):
 
-In a browser, go to https://appstoreconnect.apple.com/access/integrations/api and:
+   ```bash
+   export APP_STORE_CONNECT_KEY_ID="ABCD1234EF"
+   export APP_STORE_CONNECT_ISSUER_ID="12345678-90ab-cdef-1234-567890abcdef"
+   export APP_STORE_CONNECT_VENDOR_NUMBER="12345678"   # sales/finance only
+   ```
 
-1. Click **+** to create a new key
-2. Name it (e.g., `flightline`)
-3. Grant role **App Manager** (or **Admin** if you also need finance reports)
-4. Click **Generate**, then **Download API Key**: you can only download the `.p8` file once
-5. Note the **Key ID** (10 characters, e.g., `ABCD1234EF`) and **Issuer ID** (UUID, e.g., `12345678-90ab-cdef-1234-567890abcdef`)
+4. **Verify.** Run `flightline whoami`; `AUTHORIZED true` means you are set.
 
-### 2. Install the key file
+For the full walkthrough (roles, troubleshooting 401/403/chmod, alternative config paths), see [docs/getting-started/apple-api-key.md](docs/getting-started/apple-api-key.md).
 
-```bash
-mkdir -p ~/.appstoreconnect
-mv ~/Downloads/AuthKey_ABCD1234EF.p8 ~/.appstoreconnect/
-chmod 600 ~/.appstoreconnect/AuthKey_ABCD1234EF.p8
-```
-
-Replace `ABCD1234EF` with your actual Key ID. Flightline refuses to load a `.p8` with permissions wider than `600` and prints the exact `chmod` command to fix it.
-
-### 3. Export credentials
-
-Add to `~/.zshrc` (or `~/.bashrc`):
-
-```bash
-export APP_STORE_CONNECT_KEY_ID="ABCD1234EF"
-export APP_STORE_CONNECT_ISSUER_ID="12345678-90ab-cdef-1234-567890abcdef"
-export APP_STORE_CONNECT_VENDOR_NUMBER="12345678"
-```
-
-The vendor number is required for sales and finance reports only. Reload your shell:
-
-```bash
-source ~/.zshrc
-```
-
-### 4. Verify auth
-
-```bash
-flightline whoami
-```
-
-Expected output:
-
-```
-FIELD          VALUE
-KEY_ID         ABCD1234EF
-ISSUER_ID      12345678-90ab-cdef-1234-567890abcdef
-VENDOR_NUMBER  12345678
-AUTHORIZED     true
-API_BASE_URL   https://api.appstoreconnect.apple.com
-```
-
-If `whoami` errors, the message will tell you what's wrong: missing env var, `.p8` not found, wrong permissions, or invalid key. The redacted error includes a hint pointing at the exact fix.
-
-**Alternative configuration paths** (lower precedence than env vars):
-
-- CLI flags: `--key-id`, `--issuer-id` on every command
-- Config file: `~/.config/flightline/config.yaml`
-
-See [Configuration precedence](#configuration-precedence) for the resolution order.
+**Alternative configuration paths** (lower precedence than env vars): CLI flags (`--key-id`, `--issuer-id`) on every command, or a config file at `~/.config/flightline/config.yaml`. See [Configuration precedence](#configuration-precedence) for the resolution order.
 
 ---
 
@@ -309,7 +263,7 @@ flightline rejection com.under5.passdmv --version 1.0
 flightline lint state.yaml
 ```
 
-Replace `com.under5.passdmv` with your bundle ID. For the full state-as-code walkthrough (fetch → edit → plan → apply), see [docs/state-yaml-quickstart.md](docs/state-yaml-quickstart.md).
+Replace `com.under5.passdmv` with your bundle ID. For the full state-as-code walkthrough (fetch → edit → plan → apply), see [docs/guides/state-as-code.md](docs/guides/state-as-code.md).
 
 ---
 
@@ -398,7 +352,7 @@ flightline apply state.yaml --confirm
 flightline apply state.yaml --confirm --resume
 ```
 
-See [docs/state-yaml.md](docs/state-yaml.md) for the full v1alpha1 schema reference and [docs/state-yaml-quickstart.md](docs/state-yaml-quickstart.md) for a step-by-step walkthrough.
+See [docs/reference/state-yaml.md](docs/reference/state-yaml.md) for the full v1alpha1 schema reference and [docs/guides/state-as-code.md](docs/guides/state-as-code.md) for a step-by-step walkthrough.
 
 ### Preflight: catch rejections before they happen
 
@@ -416,7 +370,7 @@ flightline preflight com.under5.passdmv --version 1.1 --state-file state.yaml
 flightline preflight com.under5.passdmv --version 1.1 --output json | jq '.diagnostics'
 ```
 
-See [docs/preflight-rules.md](docs/preflight-rules.md) for every rule with mode, severity, fix hints, and examples.
+See [docs/reference/preflight-rules.md](docs/reference/preflight-rules.md) for every rule with mode, severity, fix hints, and examples.
 
 ---
 
@@ -494,11 +448,34 @@ output: table
 
 ## Documentation
 
+**Getting started**
+
 | Document | What it covers |
 |---|---|
-| [docs/state-yaml.md](docs/state-yaml.md) | Full v1alpha1 reference: every field, type, constraint, and gotcha |
-| [docs/state-yaml-quickstart.md](docs/state-yaml-quickstart.md) | Fetch → edit → plan → apply walkthrough using passdmv |
-| [docs/preflight-rules.md](docs/preflight-rules.md) | All 11 preflight rules + submission-checklist items Apple's API doesn't expose |
+| [docs/getting-started/install.md](docs/getting-started/install.md) | Install via `go install` or from source |
+| [docs/getting-started/apple-api-key.md](docs/getting-started/apple-api-key.md) | Full App Store Connect API key setup: generate, place the `.p8`, export env vars, verify |
+| [docs/getting-started/first-run.md](docs/getting-started/first-run.md) | The first five read-only commands |
+
+**Guides**
+
+| Document | What it covers |
+|---|---|
+| [docs/guides/state-as-code.md](docs/guides/state-as-code.md) | Fetch → edit → plan → apply walkthrough using passdmv |
+| [docs/guides/uploading-assets.md](docs/guides/uploading-assets.md) | Uploading screenshots and IAP review screenshots via the L1 verbs |
+
+**Reference**
+
+| Document | What it covers |
+|---|---|
+| [docs/reference/state-yaml.md](docs/reference/state-yaml.md) | Full v1alpha1 reference: every field, type, constraint, and gotcha |
+| [docs/reference/preflight-rules.md](docs/reference/preflight-rules.md) | All 11 preflight rules + submission-checklist items Apple's API doesn't expose |
+| [docs/reference/cli.md](docs/reference/cli.md) | Command-group index pointing at `flightline <group> --help` |
+
+**Concepts**
+
+| Document | What it covers |
+|---|---|
+| [docs/concepts/three-layer-model.md](docs/concepts/three-layer-model.md) | How L1 (API CLI), L2 (state-as-code), and L3 (preflight) fit together |
 
 ---
 
