@@ -1,0 +1,93 @@
+version: 2
+
+project_name: flightline
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: flightline
+    main: .
+    binary: flightline
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      # Injects into main.version/commit/date — those vars do not exist yet; Lead must add them or -X no-ops.
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .Commit }}
+      - -X main.date={{ .CommitDate }}
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: flightline
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+sboms:
+  - id: archive-sbom
+    artifacts: archive
+
+signs:
+  - id: cosign-keyless
+    cmd: cosign
+    signature: "${artifact}.sig"
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--yes"
+      - "--output-signature=${signature}"
+      - "--output-certificate=${certificate}"
+      - "${artifact}"
+    artifacts: all
+    output: true
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "Merge pull request"
+      - "Merge branch"
+
+release:
+  github:
+    owner: ul0gic
+    name: flightline
+  draft: true
+  prerelease: auto
+
+# Homebrew tap — DISABLED. Uncomment this block and set HOMEBREW_TAP_TOKEN in release.yml to enable.
+# brews:
+#   - name: flightline
+#     repository:
+#       owner: ul0gic
+#       name: homebrew-flightline
+#       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+#     homepage: "https://flightline.dev"
+#     description: "Single-binary CLI for App Store Connect"
+#     license: "MIT"
+#     install: |
+#       bin.install "flightline"
+#     test: |
+#       system "#{bin}/flightline", "--help"

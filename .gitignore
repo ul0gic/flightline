@@ -1,9 +1,14 @@
 # Internal scaffolding — never ships with the repo
 .claude/
 .project/
+.playwright-mcp/
+
+# Marketing site — moves to its own repo before go-live
+web/
 
 # Build output
 /bin/
+/dist/
 *.exe
 
 # Coverage
