@@ -1,15 +1,3 @@
-// plan.go — `fline plan <state.yaml>`. Read-only: load file, fetch
-// live ASC state, run the diff engine, print the change set.
-//
-// Output:
-//   --output table — terraform-style "+ create / ~ update / - delete"
-//   --output json  — `{"changes": [...]}` for LLM/script consumers
-//
-// Exit codes:
-//   0  always when plan completes (diffs are not errors)
-//   1  on actual error (load failure, network failure, validation)
-//   2  when --exit-on-changes is set AND diffs exist (CI hook)
-
 package cmd
 
 import (
@@ -23,16 +11,13 @@ import (
 	"github.com/ul0gic/flightline/internal/state"
 )
 
-// PlanResult is the JSON-stable envelope the `plan` command emits in
-// --output json mode. Stable: adding fields is fine, removing or
-// renaming is a breaking change.
+// PlanResult is the JSON-stable envelope the `plan` command emits.
 type PlanResult struct {
 	BundleID string        `json:"bundleId"`
 	Version  string        `json:"version,omitempty"`
 	Changes  []plan.Change `json:"changes"`
 }
 
-// TableRows implements TableRenderable for the table renderer.
 func (p *PlanResult) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"OP", "PATH", "FROM", "TO"}
 	rows = make([][]string, 0, len(p.Changes))
@@ -65,14 +50,14 @@ func init() {
 fetches live ASC state for the same bundleId/version, and prints the
 change set the apply command would make.
 
-Read-only — never writes. Exit code 0 always (diffs aren't errors)
+Read-only: never writes. Exit code 0 always (diffs aren't errors)
 unless --exit-on-changes is set, in which case the command returns
 exit code 2 when changes exist (useful in CI hooks).
 
 Examples:
-  fline plan state.yaml
-  fline plan state.yaml --output json | jq '.changes | length'
-  fline plan state.yaml --exit-on-changes`,
+  flightline plan state.yaml
+  flightline plan state.yaml --output json | jq '.changes | length'
+  flightline plan state.yaml --exit-on-changes`,
 		Args: cobra.ExactArgs(1),
 		RunE: runPlan,
 	}
@@ -132,10 +117,8 @@ func runPlan(cmd *cobra.Command, args []string) error {
 
 	exitOnChanges, _ := cmd.Flags().GetBool("exit-on-changes")
 	if exitOnChanges && len(changes) > 0 {
-		// cobra's RunE doesn't carry an explicit exit code, so we
-		// fprintln a marker to stderr and return os.Exit. Going
-		// through main's printer would lose the exit code.
-		fmt.Fprintf(os.Stderr, "fline: %d change(s) — exiting 2 per --exit-on-changes\n", len(changes))
+		// cobra's RunE can't carry an exit code; os.Exit is the only path to 2.
+		fmt.Fprintf(os.Stderr, "flightline: %d change(s): exiting 2 per --exit-on-changes\n", len(changes))
 		os.Exit(2)
 	}
 	return nil

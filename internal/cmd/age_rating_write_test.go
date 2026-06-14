@@ -196,8 +196,8 @@ func TestDiffAgeRating_OnlyDifferingFields(t *testing.T) {
 
 func TestDiffAgeRating_NotProvided_NotIncluded(t *testing.T) {
 	current := asc.AgeRatingDeclarationAttributes{AlcoholTobaccoOrDrugUseOrReferences: "NONE"}
-	desired := asc.AgeRatingDeclarationAttributes{} // zero — would differ
-	// User did not supply any keys — diff should be empty.
+	desired := asc.AgeRatingDeclarationAttributes{} // zero: would differ
+	// User did not supply any keys: diff should be empty.
 	diff := diffAgeRating(current, desired, map[string]struct{}{})
 	if len(diff) != 0 {
 		t.Errorf("diff = %v, want empty", diff)
@@ -246,8 +246,7 @@ func TestAgeRatingWriteResult_JSONShape(t *testing.T) {
 }
 
 func TestAgeRatingSet_FixtureReplay_Idempotent(t *testing.T) {
-	// When the YAML matches current state, returns noop=true without any
-	// PATCH being routed (no PATCH route in the fixture map).
+	// No PATCH route registered: a write would 404 and fail the test.
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
 		"GET /v1/apps/1234567890/appStoreVersions":         {File: "age_rating_version_lookup"},
@@ -276,7 +275,6 @@ func TestAgeRatingSet_FixtureReplay_Idempotent(t *testing.T) {
 		t.Fatal("declID empty")
 	}
 
-	// Diff against itself — empty.
 	supplied := map[string]struct{}{"alcoholTobaccoOrDrugUseOrReferences": {}}
 	diff := diffAgeRating(current, current, supplied)
 	if len(diff) != 0 {
@@ -312,8 +310,6 @@ func TestSortStrings(t *testing.T) {
 	}
 }
 
-// TestLookupVersionState_ReturnsState validates the helper used by set's
-// pre-PATCH version → state resolution.
 func TestLookupVersionState_ReturnsState(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
@@ -334,6 +330,6 @@ func TestLookupVersionState_ReturnsState(t *testing.T) {
 	}
 }
 
-// Silences staticcheck warning on the (unused-locally) url package — we keep
-// the import for parity with sibling test files that use url.Values inline.
+// Silences staticcheck warning on the (unused-locally) url package: the
+// import is kept for parity with sibling test files that use url.Values inline.
 var _ = url.Values{}

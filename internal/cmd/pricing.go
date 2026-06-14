@@ -14,13 +14,7 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// PricingView is the read-side view for `pricing get`. Combines a slice of
-// the per-app price schedule with the per-territory availability summary.
-//
-// Field shape is intentionally flat at the top level so JSON consumers can
-// reach every key with a single dot lookup. Nested schedule/availability
-// objects keep their own fields stable so adding new top-level keys later
-// doesn't break consumers parsing existing ones.
+// PricingView is the read-side view for `pricing get`.
 type PricingView struct {
 	BundleID     string               `json:"bundleId"`
 	Schedule     PriceScheduleSummary `json:"schedule"`
@@ -28,10 +22,7 @@ type PricingView struct {
 	BasePrice    *PricePointSummary   `json:"basePrice,omitempty"`
 }
 
-// PriceScheduleSummary is the trimmed view of an app's AppPriceSchedule:
-// scheduleId, base territory + its currency, and the count of manual /
-// automatic price entries on the schedule. Detail beyond that is reachable
-// via the JSON output's id pointers.
+// PriceScheduleSummary is the trimmed view of an app's AppPriceSchedule.
 type PriceScheduleSummary struct {
 	ID                  string `json:"id,omitempty"`
 	BaseTerritoryID     string `json:"baseTerritoryId,omitempty"`
@@ -40,9 +31,8 @@ type PriceScheduleSummary struct {
 	AutomaticPriceCount int    `json:"automaticPriceCount"`
 }
 
-// PricePointSummary is the customer price + proceeds at a specific territory
-// (typically the base territory). Both values are decimal strings — Apple's
-// wire shape — to dodge float precision drift across currencies.
+// PricePointSummary is the customer price + proceeds at a territory. Prices stay
+// as Apple's decimal strings to avoid float precision drift across currencies.
 type PricePointSummary struct {
 	TerritoryID   string `json:"territoryId,omitempty"`
 	Currency      string `json:"currency,omitempty"`
@@ -52,10 +42,7 @@ type PricePointSummary struct {
 	EndDate       string `json:"endDate,omitempty"`
 }
 
-// AvailabilitySummary covers the per-app availability resource. Counts are
-// derived from the territoryAvailabilities collection; AvailableTotal is the
-// number of entries; AvailableCount is the subset where available=true.
-// AvailableInNewTerritories surfaces Apple's auto-release flag.
+// AvailabilitySummary covers the per-app availability resource.
 type AvailabilitySummary struct {
 	ID                        string `json:"id,omitempty"`
 	AvailableTotal            int    `json:"availableTotal"`
@@ -63,10 +50,6 @@ type AvailabilitySummary struct {
 	AvailableInNewTerritories *bool  `json:"availableInNewTerritories,omitempty"`
 }
 
-// TableRows for the pricing view. One row per scalar field; flatten the
-// nested summaries for grep-friendliness. Unknown values render as empty
-// rather than "(unknown)" because pricing has stable defaults that authors
-// don't need a visual prompt for.
 func (v *PricingView) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
 	rows = [][]string{
@@ -94,8 +77,7 @@ func (v *PricingView) TableRows() (headers []string, rows [][]string) {
 	return headers, rows
 }
 
-// priceWindow renders a start/end date pair. Empty endDate is "indefinite";
-// empty startDate (rare) renders as just the end.
+// priceWindow renders a start/end date pair; empty endDate is "indefinite".
 func priceWindow(start, end string) string {
 	switch {
 	case start == "" && end == "":
@@ -129,15 +111,13 @@ var pricingGetCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runPricingGet,
-	Example: `  fline pricing get com.example.myapp
-  fline pricing get com.example.myapp --output json | jq .basePrice
-  fline pricing get com.example.myapp --output json | jq '.availability.availableCount'`,
+	Example: `  flightline pricing get com.example.myapp
+  flightline pricing get com.example.myapp --output json | jq .basePrice
+  flightline pricing get com.example.myapp --output json | jq '.availability.availableCount'`,
 }
 
-// pricingSetCmd publishes a single-base-territory price schedule via POST
-// /v1/appPriceSchedules. The L1 verb keeps the surface narrow (one manual
-// price = base territory + appPricePoint id). Multi-territory manual price
-// schedules will live in L2 state-as-code.
+// pricingSetCmd publishes a single-base-territory price schedule (one manual
+// price = base territory + appPricePoint id).
 var pricingSetCmd = &cobra.Command{
 	Use:          "set <bundleId>",
 	Short:        "Apply a base-territory price schedule (idempotent against current schedule)",
@@ -154,8 +134,8 @@ L1 supports a single base-territory + appPricePoint pairing. Pass:
 Idempotent: if the current schedule already has the requested
 (baseTerritory, appPricePoint) pairing, no POST is issued and the
 result reports changed=false.`,
-	Example: `  fline pricing set com.example.myapp --base-territory USA --tier PP-USA-999
-  fline pricing set com.example.myapp --base-territory USA --tier PP-USA-999 --output json`,
+	Example: `  flightline pricing set com.example.myapp --base-territory USA --tier PP-USA-999
+  flightline pricing set com.example.myapp --base-territory USA --tier PP-USA-999 --output json`,
 }
 
 var (
@@ -193,8 +173,7 @@ func runPricingGet(cmd *cobra.Command, args []string) error {
 	view := &PricingView{BundleID: bundleID}
 
 	if sched, basePrice, err := fetchPriceSchedule(cmd.Context(), c, appID); err != nil {
-		// 404 on appPriceSchedule = app is free / never priced. Not fatal;
-		// continue on to availability so users still get a partial view.
+		// 404 = free / never-priced app; not fatal, continue to availability.
 		var apiErr *asc.APIError
 		if !errors.As(err, &apiErr) || apiErr.HTTPStatus != 404 {
 			return err
@@ -217,11 +196,8 @@ func runPricingGet(cmd *cobra.Command, args []string) error {
 	return Render(view, outputMode())
 }
 
-// fetchPriceSchedule pulls the schedule resource with manualPrices,
-// automaticPrices, and baseTerritory all sideloaded in one request, then
-// resolves the base territory's currency and the active manual price (if
-// any) by walking the included resources. Returns 404 when the app has no
-// schedule (rare; Apple usually creates one on first publish).
+// fetchPriceSchedule sideloads manualPrices, automaticPrices, and baseTerritory
+// in one request, then resolves base currency and the active manual price.
 func fetchPriceSchedule(ctx context.Context, c *asc.Client, appID string) (PriceScheduleSummary, *PricePointSummary, error) {
 	q := url.Values{
 		"include":                   {"manualPrices,automaticPrices,baseTerritory"},
@@ -249,22 +225,17 @@ func fetchPriceSchedule(ctx context.Context, c *asc.Client, appID string) (Price
 
 	included := decodeIncluded(resp.Included)
 
-	// Resolve base currency from the included territory entry.
 	if cur, ok := included.territories[sched.BaseTerritoryID]; ok {
 		sched.BaseCurrency = cur
 	}
 
-	// Find the manual price for the base territory whose window covers
-	// today (or the first manual price for the base territory if none
-	// covers today).
 	var basePrice *PricePointSummary
 	if sched.BaseTerritoryID != "" {
 		summary, pricePointID := pickActiveBasePrice(included, sched.BaseTerritoryID)
 		if summary != nil {
 			basePrice = summary
-			// If a basePrice was found, fetch its appPricePoint for
-			// customerPrice + proceeds. Apple does not expose those on the
-			// included AppPriceV2 — they live on AppPricePointV3.
+			// customerPrice + proceeds live on AppPricePointV3, not the
+			// included AppPriceV2, so fetch the price point separately.
 			if pricePointID != "" {
 				pt, perr := asc.Get[asc.Single[asc.AppPricePointAttributes]](
 					ctx, c, "/v3/appPricePoints/"+pricePointID, nil,
@@ -283,14 +254,8 @@ func fetchPriceSchedule(ctx context.Context, c *asc.Client, appID string) (Price
 	return sched, basePrice, nil
 }
 
-// pickActiveBasePrice scans the included AppPriceV2 entries for one whose
-// territory == baseTerritoryID. Prefers a manual entry whose window covers
-// today; falls back to the first manual entry; returns (nil, "") if none
-// exists (the schedule has only automatic prices).
-//
-// Returns the public summary plus the linked appPricePoint id; the latter
-// is needed for the follow-up /v3/appPricePoints/{id} fetch but should not
-// appear in the JSON output, hence the side-channel return.
+// pickActiveBasePrice finds the base-territory manual price covering today
+// (else the first). pricePointID feeds the /v3/appPricePoints fetch, not JSON.
 func pickActiveBasePrice(inc includedSet, baseTerritoryID string) (summary *PricePointSummary, pricePointID string) {
 	today := time.Now().UTC().Format("2006-01-02")
 	var fallback *PricePointSummary
@@ -299,9 +264,8 @@ func pickActiveBasePrice(inc includedSet, baseTerritoryID string) (summary *Pric
 		if p.territoryID != baseTerritoryID {
 			continue
 		}
-		// Only consider manual prices for the "current price" — automatic
-		// prices are equalized from the base territory's manual entry, so
-		// surfacing one would be circular.
+		// Automatic prices are equalized from the manual base entry, so
+		// surfacing one as the current price would be circular.
 		if p.manual == nil || !*p.manual {
 			continue
 		}
@@ -333,8 +297,8 @@ func windowCovers(today, start, end string) bool {
 	return true
 }
 
-// fetchAppAvailability pulls /v1/apps/{id}/appAvailabilityV2 with
-// territoryAvailabilities sideloaded; counts available=true and totals.
+// fetchAppAvailability sideloads territoryAvailabilities and counts
+// available=true against the total.
 func fetchAppAvailability(ctx context.Context, c *asc.Client, appID string) (AvailabilitySummary, error) {
 	q := url.Values{
 		"include":                         {"territoryAvailabilities"},
@@ -369,10 +333,8 @@ func fetchAppAvailability(ctx context.Context, c *asc.Client, appID string) (Ava
 	return out, nil
 }
 
-// priceScheduleSingle is the typed shape for /v1/apps/{id}/appPriceSchedule.
-// Apple's response is a JSON:API single-resource envelope; we model only the
-// fields Flightline reads. relationships.baseTerritory is to-one, the price
-// arrays are to-many.
+// priceScheduleSingle is the typed shape for /v1/apps/{id}/appPriceSchedule,
+// modelling only the fields Flightline reads.
 type priceScheduleSingle struct {
 	Data struct {
 		ID            string `json:"id"`
@@ -387,8 +349,7 @@ type priceScheduleSingle struct {
 	Included []json.RawMessage `json:"included,omitempty"`
 }
 
-// availabilitySingle is the typed shape for
-// /v1/apps/{id}/appAvailabilityV2.
+// availabilitySingle is the typed shape for /v1/apps/{id}/appAvailabilityV2.
 type availabilitySingle struct {
 	Data struct {
 		ID         string                        `json:"id"`
@@ -414,17 +375,15 @@ type toManyRel struct {
 	} `json:"data"`
 }
 
-// includedSet is the decoded view of an `included` array on a schedule
-// response. We pre-extract the few fields Flightline needs so the schedule
-// walker doesn't re-parse RawMessage on every lookup.
+// includedSet pre-extracts the fields Flightline needs from a schedule's
+// `included` array so the walker doesn't re-parse RawMessage per lookup.
 type includedSet struct {
 	territories       map[string]string // id → currency
 	appPrices         []includedPrice   // every appPrice entry, in order
 	priceToPricePoint map[string]string // appPrice id → appPricePoint id
 }
 
-// includedPrice mirrors AppPriceV2 with just the fields the schedule walker
-// reads. Decoded from the `included` slice once per fetch.
+// includedPrice mirrors AppPriceV2 with just the fields the schedule walker reads.
 type includedPrice struct {
 	id              string
 	manual          *bool
@@ -434,10 +393,8 @@ type includedPrice struct {
 	appPricePointID string
 }
 
-// decodeIncluded walks the `included` raw-message slice and pulls out the
-// territory currencies plus appPriceV2 entries the schedule walker needs.
-// Unknown types are silently skipped — Apple may add more includes per spec
-// version and we don't want to hard-fail on them.
+// decodeIncluded extracts territory currencies and appPriceV2 entries from the
+// `included` slice. Unknown types are skipped: Apple may add includes per spec version.
 func decodeIncluded(raw []json.RawMessage) includedSet {
 	out := includedSet{
 		territories:       make(map[string]string),
@@ -489,9 +446,8 @@ func decodeIncluded(raw []json.RawMessage) includedSet {
 	return out
 }
 
-// PricingSetResult is the structured outcome of `pricing set`. Surfaces
-// whether a POST was issued vs idempotent no-op so plan/apply consumers
-// can detect zero-cost runs without re-querying.
+// PricingSetResult is the outcome of `pricing set`; Changed reports whether a
+// POST was issued so consumers can detect idempotent no-ops.
 type PricingSetResult struct {
 	BundleID           string `json:"bundleId"`
 	AppID              string `json:"appId"`
@@ -521,8 +477,6 @@ func (r *PricingSetResult) TableRows() (headers []string, rows [][]string) {
 	return headers, rows
 }
 
-// boolStrPricing renders a bool as "true"/"false". Local to this file to
-// dodge cross-file helper collisions.
 func boolStrPricing(b bool) string {
 	if b {
 		return "true"
@@ -530,16 +484,12 @@ func boolStrPricing(b bool) string {
 	return "false"
 }
 
-// runPricingSet implements the `pricing set` write. Pattern: resolve app,
-// fetch current (baseTerritory, basePricePoint) from the live schedule,
-// short-circuit when the requested pairing matches, otherwise POST a new
-// schedule with one inline manual appPrice.
 func runPricingSet(cmd *cobra.Command, args []string) error {
 	bundleID := args[0]
 	baseTerr := strings.TrimSpace(pricingSetBaseTerritory)
 	tier := strings.TrimSpace(pricingSetTier)
 	if baseTerr == "" || tier == "" {
-		return fmt.Errorf("pricing: --base-territory and --tier are required")
+		return errors.New("pricing: --base-territory and --tier are required")
 	}
 
 	c, err := newClient()
@@ -566,7 +516,7 @@ func runPricingSet(cmd *cobra.Command, args []string) error {
 			PricePointID:       tier,
 			ScheduleID:         curSchedID,
 			PreviousScheduleID: curSchedID,
-			Note:               "no change (idempotent) — current schedule already matches",
+			Note:               "no change (idempotent): current schedule already matches",
 		}, outputMode())
 	}
 
@@ -589,9 +539,8 @@ func runPricingSet(cmd *cobra.Command, args []string) error {
 	}, outputMode())
 }
 
-// fetchCurrentBaseSchedule pulls the app's current schedule and returns
-// (scheduleID, baseTerritoryID, baseAppPricePointID). 404 = no schedule
-// yet (free app, freshly created); empty strings + nil error.
+// fetchCurrentBaseSchedule returns (scheduleID, baseTerritoryID,
+// baseAppPricePointID). 404 (no schedule yet) yields empty strings + nil error.
 func fetchCurrentBaseSchedule(ctx context.Context, c *asc.Client, appID string) (schedID, baseTerritory, basePricePoint string, err error) {
 	q := url.Values{
 		"include":                   {"manualPrices,baseTerritory"},
@@ -632,14 +581,8 @@ func fetchCurrentBaseSchedule(ctx context.Context, c *asc.Client, appID string) 
 	return schedID, baseTerritory, basePricePoint, nil
 }
 
-// buildPricingScheduleCreate crafts the JSON:API POST body for
-// /v1/appPriceSchedules carrying one inline manual appPrice for the base
-// territory. Apple matches the inline appPrice's local id against the
-// schedule's manualPrices linkage; we use a deterministic literal so the
-// body shape stays readable in fixture diffs.
-//
-// startDate / endDate are optional; empty omits the field (Apple defaults
-// to "now" / "indefinite").
+// buildPricingScheduleCreate crafts the POST body with one inline manual
+// appPrice; empty startDate/endDate omit the fields (Apple defaults now/indefinite).
 func buildPricingScheduleCreate(appID, baseTerritory, pricePointID, startDate, endDate string) map[string]any {
 	const localPriceID = "${TIER}"
 

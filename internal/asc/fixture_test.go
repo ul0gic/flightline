@@ -15,32 +15,16 @@ import (
 	"testing"
 )
 
-// FixtureRoute describes one entry in a fixture-server route table:
-// which JSON file under testdata/golden/ to serve, with what HTTP status.
-//
-// Status defaults to 200 when zero. Use a non-2xx Status for error fixtures.
+// FixtureRoute names a golden JSON file to serve. Status defaults to 200 when zero.
 type FixtureRoute struct {
 	File   string
 	Status int
 }
 
-// fixtureServer spins an httptest.Server backed by a route table mapping
-// "<METHOD> <path>" tuples to JSON files under testdata/golden/.
-//
-// Routes are matched against the request's METHOD + URL.Path (query strings
-// ignored — matching by query is too brittle for cred-redacted fixtures).
-//
-// Unknown routes return 404 with a body that names the offending route, so
-// failures pinpoint typos rather than masquerading as a request bug.
-//
-// fixtureServer registers t.Cleanup to close the server at the end of the
-// test; callers do NOT need to defer Close.
-//
-// File names accept the testdata/golden/<name>.json path with or without
-// the ".json" suffix.
+// fixtureServer keys routes by "<METHOD> <path>"; query strings are ignored
+// because matching by query is too brittle for cred-redacted fixtures.
 func fixtureServer(t *testing.T, routes map[string]FixtureRoute) *httptest.Server {
 	t.Helper()
-	// Capture routes by value to avoid handler-time mutation surprises.
 	captured := make(map[string]FixtureRoute, len(routes))
 	for k, v := range routes {
 		captured[k] = v
@@ -77,9 +61,8 @@ func fixtureServer(t *testing.T, routes map[string]FixtureRoute) *httptest.Serve
 	return srv
 }
 
-// readFixture loads testdata/golden/<name>.json. Accepts the file name with
-// or without the ".json" suffix, and rejects path-traversal attempts so an
-// untrusted route map can't read arbitrary files.
+// readFixture loads testdata/golden/<name>.json, rejecting path traversal so
+// an untrusted route map can't read arbitrary files.
 func readFixture(name string) ([]byte, error) {
 	if strings.Contains(name, "..") || strings.HasPrefix(name, "/") {
 		return nil, &fixtureError{name: name, reason: "path traversal"}
@@ -100,9 +83,8 @@ func (e *fixtureError) Error() string {
 	return "fixture " + e.name + ": " + e.reason
 }
 
-// fixtureClient returns a Client wired to the supplied fixture server with
-// an ephemeral .p8 minted in t.TempDir(). The client is fully production-
-// shaped (real auth.Mint runs per request) — only the base URL diverges.
+// fixtureClient wires a production-shaped Client to srv: real auth.Mint runs
+// per request, only the base URL diverges.
 func fixtureClient(t *testing.T, srv *httptest.Server) *Client {
 	t.Helper()
 	keyPath := writeFixtureKey(t)
@@ -120,9 +102,7 @@ func fixtureClient(t *testing.T, srv *httptest.Server) *Client {
 	return c
 }
 
-// writeFixtureKey writes an ephemeral P-256 PKCS8 PEM at mode 0600 in
-// t.TempDir() and returns its path. Each call generates a new key — never a
-// real .p8.
+// writeFixtureKey generates a fresh ephemeral P-256 PKCS8 PEM at mode 0600: never a real .p8.
 func writeFixtureKey(t *testing.T) string {
 	t.Helper()
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

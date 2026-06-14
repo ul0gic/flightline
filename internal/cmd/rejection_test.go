@@ -182,13 +182,19 @@ func TestRejection_JSONOutputStability(t *testing.T) {
 			t.Errorf("missing top-level key %q. Got: %v", key, mapKeys(decoded))
 		}
 	}
-	v := decoded["version"].(map[string]any)
+	v, ok := decoded["version"].(map[string]any)
+	if !ok {
+		t.Fatalf("version is %T, want object", decoded["version"])
+	}
 	for _, key := range []string{"id", "versionString", "platform", "state", "appStoreState", "appVersionState", "releaseType", "buildId", "buildVersion", "buildState"} {
 		if _, ok := v[key]; !ok {
 			t.Errorf("missing version key %q. Got: %v", key, mapKeys(v))
 		}
 	}
-	s := decoded["submission"].(map[string]any)
+	s, ok := decoded["submission"].(map[string]any)
+	if !ok {
+		t.Fatalf("submission is %T, want object", decoded["submission"])
+	}
 	for _, key := range []string{"id", "state", "platform", "submittedDate", "items"} {
 		if _, ok := s[key]; !ok {
 			t.Errorf("missing submission key %q. Got: %v", key, mapKeys(s))
@@ -196,9 +202,8 @@ func TestRejection_JSONOutputStability(t *testing.T) {
 	}
 }
 
-// TestRejection_FixtureReplay_FullCompose exercises the entire orchestrator
-// against the fixture corpus. Verifies the multi-call sequence produces the
-// expected composed report.
+// TestRejection_FixtureReplay_FullCompose verifies the multi-call orchestrator
+// produces the expected composed report against the fixture corpus.
 func TestRejection_FixtureReplay_FullCompose(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
@@ -273,9 +278,8 @@ func TestRejection_FixtureReplay_VersionNotFound(t *testing.T) {
 	}
 }
 
-// TestRelationshipID_HandlesPresentMissingNull exercises the three shapes
-// the production helper sees on the wire: a populated to-one relationship,
-// an absent key, and an explicit null Data block.
+// TestRelationshipID_HandlesPresentMissingNull covers the three wire shapes:
+// populated to-one, absent key, and explicit null Data.
 func TestRelationshipID_HandlesPresentMissingNull(t *testing.T) {
 	rels := map[string]asc.Relationship{
 		"build":                     {Data: json.RawMessage(`{"type":"builds","id":"9000000001"}`)},

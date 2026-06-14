@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -13,10 +14,7 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// ReviewView is one row of the reviews list/get output. The optional Response
-// field carries the developer reply when Apple included it via the
-// "response" relationship include (or via the embedded relationships
-// payload).
+// ReviewView is one row of the reviews list/get output.
 type ReviewView struct {
 	ID         string                       `json:"id"`
 	Type       string                       `json:"type"`
@@ -36,11 +34,6 @@ type ReviewList struct {
 	Reviews []ReviewView `json:"reviews"`
 }
 
-// TableRows implements TableRenderable for the reviews list view.
-//
-// Rating renders as filled/empty stars (★★★★☆) so a glance at the table
-// communicates the review distribution without reading numbers. JSON output
-// keeps the integer rating — the table chrome is for humans only.
 func (l ReviewList) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"RATING", "DATE", "TERRITORY", "TITLE", "ID"}
 	rows = make([][]string, 0, len(l.Reviews))
@@ -57,8 +50,6 @@ func (l ReviewList) TableRows() (headers []string, rows [][]string) {
 	return headers, rows
 }
 
-// TableRows for a single review. Vertical layout reads better for one record
-// and surfaces the body text plus any developer response.
 func (v *ReviewView) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
 	rows = [][]string{
@@ -82,19 +73,17 @@ func (v *ReviewView) TableRows() (headers []string, rows [][]string) {
 }
 
 // renderStars renders a 1..5 rating as filled/empty stars. Out-of-range
-// values render the integer literal so consumers see the unexpected value
-// rather than a silently-clamped row.
+// values render the integer so an unexpected value isn't silently clamped.
 func renderStars(n int) string {
 	if n < 1 || n > 5 {
 		return strconv.Itoa(n)
 	}
-	const filled = "★" // ★
-	const empty = "☆"  // ☆
+	const filled = "★"
+	const empty = "☆"
 	return strings.Repeat(filled, n) + strings.Repeat(empty, 5-n)
 }
 
-// truncDate returns just the YYYY-MM-DD prefix of an ISO-8601 timestamp, so
-// the table column width stays bounded. JSON output keeps the full timestamp.
+// truncDate returns the YYYY-MM-DD prefix of an ISO-8601 timestamp.
 func truncDate(s string) string {
 	if len(s) >= 10 {
 		return s[:10]
@@ -102,9 +91,8 @@ func truncDate(s string) string {
 	return s
 }
 
-// truncTitle truncates s to maxRunes with an ellipsis suffix when it's
-// longer. Operates on runes (not bytes) so multi-byte titles don't get
-// chopped mid-codepoint.
+// truncTitle truncates s to maxRunes with an ellipsis, operating on runes so
+// multi-byte titles aren't chopped mid-codepoint.
 func truncTitle(s string, maxRunes int) string {
 	if maxRunes <= 0 {
 		return ""
@@ -116,8 +104,7 @@ func truncTitle(s string, maxRunes int) string {
 	return string(r[:maxRunes-1]) + "…"
 }
 
-// ReviewSummaryView is the read-side view for `reviews summary`. Holds the
-// per-locale summarization rows Apple returns for a single app.
+// ReviewSummaryView is the read-side view for `reviews summary`.
 type ReviewSummaryView struct {
 	BundleID       string                    `json:"bundleId"`
 	Summarizations []ReviewSummarizationItem `json:"summarizations"`
@@ -158,11 +145,9 @@ var reviewsCmd = &cobra.Command{
 	Short: "Read App Store customer reviews and Apple's AI summaries",
 	Long: `reviews groups read commands over Apple's customer-review surface:
 
-  - list <bundleId>     — list reviews with optional territory/rating/since filters
-  - get <reviewId>      — fetch a single review with the developer response (if any)
-  - summary <bundleId>  — read Apple's AI summarization of recent reviews
-
-Phase 3 will add the 'reviews respond' write verb; v1 is read-only.`,
+  - list <bundleId>    : list reviews with optional territory/rating/since filters
+  - get <reviewId>     : fetch a single review with the developer response (if any)
+  - summary <bundleId> : read Apple's AI summarization of recent reviews`,
 }
 
 var reviewsListCmd = &cobra.Command{
@@ -171,9 +156,9 @@ var reviewsListCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runReviewsList,
-	Example: `  fline reviews list com.example.myapp
-  fline reviews list com.example.myapp --territory USA --rating 1..3
-  fline reviews list com.example.myapp --since 30d --output json | jq '.reviews[].attributes.body'`,
+	Example: `  flightline reviews list com.example.myapp
+  flightline reviews list com.example.myapp --territory USA --rating 1..3
+  flightline reviews list com.example.myapp --since 30d --output json | jq '.reviews[].attributes.body'`,
 }
 
 var reviewsGetCmd = &cobra.Command{
@@ -182,8 +167,8 @@ var reviewsGetCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runReviewsGet,
-	Example: `  fline reviews get 6e2b9b14-1234-4567-8910-abcdef012345
-  fline reviews get 6e2b9b14-1234-4567-8910-abcdef012345 --output json`,
+	Example: `  flightline reviews get 6e2b9b14-1234-4567-8910-abcdef012345
+  flightline reviews get 6e2b9b14-1234-4567-8910-abcdef012345 --output json`,
 }
 
 var reviewsSummaryCmd = &cobra.Command{
@@ -192,8 +177,8 @@ var reviewsSummaryCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runReviewsSummary,
-	Example: `  fline reviews summary com.example.myapp
-  fline reviews summary com.example.myapp --output json | jq '.summarizations[].attributes.text'`,
+	Example: `  flightline reviews summary com.example.myapp
+  flightline reviews summary com.example.myapp --output json | jq '.summarizations[].attributes.text'`,
 }
 
 var (
@@ -257,7 +242,7 @@ func runReviewsList(cmd *cobra.Command, args []string) error {
 func runReviewsGet(cmd *cobra.Command, args []string) error {
 	reviewID := strings.TrimSpace(args[0])
 	if reviewID == "" {
-		return fmt.Errorf("reviews: review id is required")
+		return errors.New("reviews: review id is required")
 	}
 	c, err := newClient()
 	if err != nil {
@@ -303,9 +288,8 @@ func runReviewsSummary(cmd *cobra.Command, args []string) error {
 		cmd.Context(), c, "/v1/apps/"+appID+"/customerReviewSummarizations", q,
 	) {
 		if err != nil {
-			// Apple sometimes 404s the summarization endpoint for apps with
-			// no enrolled summary feature. Surface a typed note so callers
-			// see a stable shape rather than a fatal that masks the cause.
+			// Apple 404s this endpoint for apps not enrolled in summaries;
+			// surface a typed note so callers see a stable shape, not a fatal.
 			view.Note = "no review summarizations available for this app (Apple may not have generated one yet, or the feature is not enabled)"
 			return Render(view, outputMode())
 		}
@@ -324,8 +308,7 @@ func runReviewsSummary(cmd *cobra.Command, args []string) error {
 }
 
 // parseRatingFilter accepts "3" or "1..3" and returns the comma-separated
-// integer list Apple's filter[rating] expects. Out-of-range or non-numeric
-// inputs return a typed error naming the offending value.
+// integer list Apple's filter[rating] expects.
 func parseRatingFilter(in string) ([]string, error) {
 	in = strings.TrimSpace(in)
 	if i := strings.Index(in, ".."); i >= 0 {
@@ -356,20 +339,17 @@ func parseRatingFilter(in string) ([]string, error) {
 	return []string{strconv.Itoa(n)}, nil
 }
 
-// parseSince accepts a duration like "30d" / "7d" / "12h" or an ISO date
-// like "2026-04-01" and returns the cutoff time. An empty input returns the
-// zero time, which collectReviews treats as "no filter".
+// parseSince accepts a duration ("30d"/"12h") or ISO date ("2026-04-01") and
+// returns the cutoff. Empty returns zero time, which collectReviews treats as no filter.
 func parseSince(in string) (time.Time, error) {
 	in = strings.TrimSpace(in)
 	if in == "" {
 		return time.Time{}, nil
 	}
-	// ISO date first (the common case for "since the start of April").
 	if t, err := time.Parse("2006-01-02", in); err == nil {
 		return t, nil
 	}
-	// Duration with a 'd' shorthand for days (Go's time.ParseDuration doesn't
-	// know "d", but operators expect it for review windows).
+	// time.ParseDuration doesn't know "d", but operators expect it for windows.
 	if strings.HasSuffix(in, "d") {
 		days, err := strconv.Atoi(strings.TrimSuffix(in, "d"))
 		if err != nil || days < 0 {
@@ -384,16 +364,10 @@ func parseSince(in string) (time.Time, error) {
 	return time.Now().Add(-d), nil
 }
 
-// collectReviews walks the paging iterator, applies the optional since
-// cutoff client-side (Apple's API does not expose a created-since filter),
-// and returns flattened ReviewView rows.
-//
-// Reviews are sorted newest-first by Apple, so the loop short-circuits as
-// soon as it hits a record older than the cutoff — avoiding the cost of
-// paging through years of reviews when callers want only the last 30 days.
+// collectReviews applies the since cutoff client-side (Apple has no created-since
+// filter); newest-first sorting lets the loop stop at the first too-old record.
 func collectReviews(ctx context.Context, c *asc.Client, path string, query url.Values, limit int, since time.Time) ([]ReviewView, error) {
 	out := make([]ReviewView, 0, defaultListCap(limit))
-	// Sort newest-first so the since-cutoff short-circuit is correct.
 	if query.Get("sort") == "" {
 		query.Set("sort", "-createdDate")
 	}
@@ -401,23 +375,12 @@ func collectReviews(ctx context.Context, c *asc.Client, path string, query url.V
 		if err != nil {
 			return nil, err
 		}
-		// Build a per-page lookup of response includes so each review's
-		// response (when present) attaches inline rather than via a second
-		// fetch.
 		responses := decodeReviewResponseMap(page.Included)
 		for _, r := range page.Data {
-			if !since.IsZero() {
-				if t, ok := parseISO(r.Attributes.CreatedDate); ok && t.Before(since) {
-					return out, nil
-				}
+			if olderThan(r.Attributes.CreatedDate, since) {
+				return out, nil
 			}
-			view := ReviewView{ID: r.ID, Type: r.Type, Attributes: r.Attributes}
-			if respID := relationshipID(r.Relationships, "response"); respID != "" {
-				if rr, ok := responses[respID]; ok {
-					view.Response = rr
-				}
-			}
-			out = append(out, view)
+			out = append(out, reviewToView(r, responses))
 			if limit > 0 && len(out) >= limit {
 				return out, nil
 			}
@@ -426,8 +389,27 @@ func collectReviews(ctx context.Context, c *asc.Client, path string, query url.V
 	return out, nil
 }
 
-// parseISO parses an Apple ISO-8601 timestamp. Returns zero+false on parse
-// failure rather than silently dropping records.
+// olderThan reports whether createdDate predates the cutoff. A zero cutoff or
+// unparseable date is never "older", so the record is kept.
+func olderThan(createdDate string, since time.Time) bool {
+	if since.IsZero() {
+		return false
+	}
+	t, ok := parseISO(createdDate)
+	return ok && t.Before(since)
+}
+
+func reviewToView(r asc.Resource[asc.CustomerReviewAttributes], responses map[string]*ReviewResponseView) ReviewView {
+	view := ReviewView{ID: r.ID, Type: r.Type, Attributes: r.Attributes}
+	if respID := relationshipID(r.Relationships, "response"); respID != "" {
+		if rr, ok := responses[respID]; ok {
+			view.Response = rr
+		}
+	}
+	return view
+}
+
+// parseISO parses an Apple ISO-8601 timestamp, returning zero+false on failure.
 func parseISO(s string) (time.Time, bool) {
 	for _, layout := range []string{time.RFC3339, time.RFC3339Nano, "2006-01-02T15:04:05Z"} {
 		if t, err := time.Parse(layout, s); err == nil {
@@ -437,9 +419,8 @@ func parseISO(s string) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-// decodeReviewResponseMap walks the Included array and returns a map of
-// id → ReviewResponseView for every customerReviewResponses entry. Resources
-// of other types are ignored.
+// decodeReviewResponseMap returns id → ReviewResponseView for every
+// customerReviewResponses entry in the Included array.
 func decodeReviewResponseMap(included []json.RawMessage) map[string]*ReviewResponseView {
 	out := make(map[string]*ReviewResponseView, len(included))
 	for _, raw := range included {
@@ -471,8 +452,7 @@ func decodeReviewResponseMap(included []json.RawMessage) map[string]*ReviewRespo
 }
 
 // decodeReviewResponseFromIncluded returns the first customerReviewResponses
-// entry in included, intended for the single-review get path where Apple
-// includes at most one response per review.
+// entry; the single-review get path includes at most one response.
 func decodeReviewResponseFromIncluded(included []json.RawMessage) (*ReviewResponseView, bool) {
 	m := decodeReviewResponseMap(included)
 	for _, v := range m {

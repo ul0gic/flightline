@@ -124,14 +124,12 @@ func TestAgeRating_JSONOutputStability(t *testing.T) {
 	}
 	for _, key := range []string{"id", "type", "attributes", "versionState"} {
 		if _, ok := decoded[key]; !ok {
-			t.Errorf("missing top-level key %q — JSON contract drift. Got: %v", key, mapKeys(decoded))
+			t.Errorf("missing top-level key %q: JSON contract drift. Got: %v", key, mapKeys(decoded))
 		}
 	}
 }
 
-// TestPickAppInfoForVersion_BucketLogic verifies the live/editable bucket
-// matching: an editable version state returns the editable appInfo, a live
-// state returns the live one.
+// An editable version state must map to the editable appInfo, a live state to the live one.
 func TestPickAppInfoForVersion_BucketLogic(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps/1234567890/appInfos": {File: "age_rating_app_infos"},
@@ -155,9 +153,6 @@ func TestPickAppInfoForVersion_BucketLogic(t *testing.T) {
 	}
 }
 
-// TestAgeRating_FixtureReplay_GetHappy exercises the full cmd-level chain:
-// resolveAppID -> version filter -> pickAppInfoForVersion ->
-// /v1/appInfos/{id}/ageRatingDeclaration.
 func TestAgeRating_FixtureReplay_GetHappy(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},

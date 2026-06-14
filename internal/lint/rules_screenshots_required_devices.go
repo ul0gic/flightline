@@ -8,13 +8,8 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// screenshotsRequiredDevicesRule fires when a locale is missing one of the
-// device classes Apple requires for new submissions: 6.9" iPhone
-// (APP_IPHONE_69) and 6.7" iPhone (APP_IPHONE_67). Apple's submission flow
-// blocks Submit-for-Review until both are present per locale.
-//
-// Mode=Both. Offline scans the spec's locales/devices map. Live re-fetches
-// the screenshot sets per locale and re-applies the same check.
+// screenshotsRequiredDevicesRule fires when a locale is missing APP_IPHONE_69 or APP_IPHONE_67 screenshots.
+// Apple blocks Submit-for-Review until both are present per locale. Mode=Both (offline + live re-check).
 type screenshotsRequiredDevicesRule struct{}
 
 func init() { Register(screenshotsRequiredDevicesRule{}) }
@@ -23,9 +18,7 @@ func (screenshotsRequiredDevicesRule) ID() string         { return "screenshots.
 func (screenshotsRequiredDevicesRule) Severity() Severity { return SeverityError }
 func (screenshotsRequiredDevicesRule) Mode() Mode         { return ModeBoth }
 
-// requiredDevices is the v1 set. Apple's required-device list rotates with
-// device launches; this list is conservative — both 6.9 and 6.7 are
-// currently required for new iPhone submissions.
+// requiredDevices is conservative: Apple rotates this list with device launches; update when required classes change.
 var requiredDevices = []string{"APP_IPHONE_69", "APP_IPHONE_67"}
 
 func (r screenshotsRequiredDevicesRule) Check(ctx CheckContext) []Diagnostic {
@@ -59,7 +52,7 @@ func (r screenshotsRequiredDevicesRule) checkOffline(ctx CheckContext) []Diagnos
 						"add at least one screenshot for the %s device class to spec.screenshots.locales.%s.",
 						dev, locale,
 					),
-					Reference: "PRD §L3 — screenshots.required-devices",
+					Reference: "PRD §L3: screenshots.required-devices",
 				})
 			}
 		}
@@ -101,15 +94,14 @@ func (r screenshotsRequiredDevicesRule) checkLive(ctx CheckContext) []Diagnostic
 					Message:  fmt.Sprintf("locale %q has no live screenshots for required device %s", loc.Attributes.Locale, dev),
 					Path:     "/spec/screenshots/locales/" + loc.Attributes.Locale + "/" + dev,
 					FixHint: fmt.Sprintf(
-						"upload screenshots for %s in locale %s — `fline screenshots upload <bundleId> --version <v> --locale %s --device-set %s ...`",
+						"upload screenshots for %s in locale %s: `flightline screenshots upload <bundleId> --version <v> --locale %s --device-set %s ...`",
 						dev, loc.Attributes.Locale, loc.Attributes.Locale, dev,
 					),
-					Reference: "PRD §L3 — screenshots.required-devices",
+					Reference: "PRD §L3: screenshots.required-devices",
 				})
 			}
 		}
 	}
-	// Stable ordering: locale, then device.
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].Path != out[j].Path {
 			return out[i].Path < out[j].Path
@@ -119,8 +111,7 @@ func (r screenshotsRequiredDevicesRule) checkLive(ctx CheckContext) []Diagnostic
 	return out
 }
 
-// fetchLocaleDevices returns the set of device classes present for a given
-// version-localization. Empty map means no screenshot sets at all.
+// fetchLocaleDevices returns the screenshotDisplayType set for a version-localization; nil means no sets.
 func (screenshotsRequiredDevicesRule) fetchLocaleDevices(ctx CheckContext, locID string) map[string]struct{} {
 	type setAttrs struct {
 		ScreenshotDisplayType string `json:"screenshotDisplayType,omitempty"`
@@ -150,7 +141,7 @@ func (r screenshotsRequiredDevicesRule) fetchErr(what string, err error) Diagnos
 	}
 }
 
-// sortedKeys is a tiny generic helper for stable iteration over locale maps.
+// sortedKeys returns map keys sorted for stable iteration.
 func sortedKeys[V any](m map[string]V) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {

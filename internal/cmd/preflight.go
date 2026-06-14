@@ -1,12 +1,3 @@
-// preflight.go — `fline preflight <bundleId> --version <v> [--state-file path]`.
-//
-// Live preflight: builds an authenticated ASC client, fetches the live
-// state for the version (or loads --state-file when provided), and runs
-// every Mode=Live + Mode=Both rule.
-//
-// Output and exit-code conventions match `fline lint` so users can pipe
-// either through the same tooling.
-
 package cmd
 
 import (
@@ -36,7 +27,7 @@ Offline rules run too when --state-file is provided so authoring
 mistakes are caught alongside live ones.
 
 Without --state-file the live state is fetched and used as the rule
-input — useful for "is the version actually submittable right now?"
+input: useful for "is the version actually submittable right now?"
 checks against any app you have credentials for. With --state-file the
 user-authored YAML is the input for offline rules and the live ASC
 state is consulted for live rules.
@@ -45,9 +36,9 @@ Exit codes:
   0  clean (no diagnostics, or info-only)
   1  at least one error-severity diagnostic
   2  only warnings (no errors)`,
-	Example: `  fline preflight com.example.myapp --version 1.0.1
-  fline preflight com.example.myapp --version 1.0.1 --state-file state.yaml
-  fline preflight com.example.myapp --version 1.0.1 --output json | jq '.summary'`,
+	Example: `  flightline preflight com.example.myapp --version 1.0.1
+  flightline preflight com.example.myapp --version 1.0.1 --state-file state.yaml
+  flightline preflight com.example.myapp --version 1.0.1 --output json | jq '.summary'`,
 }
 
 var (
@@ -82,9 +73,6 @@ func runPreflight(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Run every registered rule. ModeBoth rules branch on Live; live-only
-	// rules see Live=true and the populated client; offline rules see
-	// State and a SourcePath when --state-file was provided.
 	rules := lint.All()
 	runner := lint.NewRunner(rules)
 	checkCtx := lint.CheckContext{
@@ -111,20 +99,13 @@ func runPreflight(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if lint.HasErrors(merged) {
-		return errLintErrors{count: out.Summary.Error}
+		return lintFailedError{count: out.Summary.Error}
 	}
 	return nil
 }
 
-// resolvePreflightState picks the *State to feed the rules.
-//
-// Two paths:
-//  1. --state-file given: load + schema-validate the YAML, return the
-//     parsed *State and the absolute source path so strict rules can
-//     read it.
-//  2. no --state-file: fetch live ASC state and use it as the input.
-//     Offline rules guard with "is X managed?" so they no-op cleanly
-//     when fed live state.
+// With --state-file: load + schema-validate the YAML. Without: fetch live
+// ASC state; offline rules guard on "is X managed?" so they no-op on it.
 func resolvePreflightState(ctx context.Context, c *asc.Client, bundleID, versionStr, platform string) (*config.State, string, []config.Diagnostic, error) {
 	if preflightStateFile != "" {
 		abs, err := filepath.Abs(preflightStateFile)

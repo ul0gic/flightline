@@ -1,12 +1,5 @@
 package asc
 
-// Golden-table tests for AsyncState persistence. Round-trip a hand-crafted
-// canonical state file through Load + Persist to catch any accidental field
-// renames or marshal-order drift, and verify that the three corruption shapes
-// (truncated write, future schema, syntactically invalid JSON) all surface as
-// ErrStateCorrupt. The atomic-rename torture case forces a real os.Rename
-// failure and asserts the original file is byte-equivalent to its pre-state.
-
 import (
 	"bytes"
 	"errors"
@@ -17,14 +10,10 @@ import (
 	"time"
 )
 
-// goldenAsyncDir is the on-disk root for the canonical / corrupted state
-// fixtures. Tests load these via os.ReadFile, install them into the per-test
-// FLINE_STATE_HOME tree, and call LoadAsyncState against the install path.
 const goldenAsyncDir = "testdata/golden/async"
 
-// readGoldenAsync returns the bytes of a fixture under testdata/golden/async/.
-// Fails the test cleanly if the fixture is missing — golden files are
-// load-bearing, a missing one should not silently degrade to a happy path.
+// readGoldenAsync returns a fixture's bytes, failing the test if it's missing.
+// A missing golden file must fail loudly, not silently degrade to a happy path.
 func readGoldenAsync(t *testing.T, name string) []byte {
 	t.Helper()
 	path := filepath.Join(goldenAsyncDir, name)
@@ -35,10 +24,8 @@ func readGoldenAsync(t *testing.T, name string) []byte {
 	return b
 }
 
-// installGoldenAsync drops a golden fixture into the per-test
-// FLINE_STATE_HOME tree at the path that LoadAsyncState will look for given
-// (bundleID, reportClass). Returns the absolute install path so the caller
-// can compare bytes against the on-disk file after a Persist round-trip.
+// installGoldenAsync writes a fixture to the path LoadAsyncState resolves for (bundleID, class).
+// Returns the install path so callers can byte-compare after a Persist round-trip.
 func installGoldenAsync(t *testing.T, root, bundleID string, class ReportClass, contents []byte) string {
 	t.Helper()
 	dir := filepath.Join(root, bundleID)
@@ -52,14 +39,8 @@ func installGoldenAsync(t *testing.T, root, bundleID string, class ReportClass, 
 	return path
 }
 
-// TestAsyncState_GoldenRoundTrip loads the canonical fixture, re-persists it
-// via PersistAsyncState, and asserts the on-disk file is byte-equivalent to
-// the original. This catches:
-//   - JSON field renames (struct tag drift)
-//   - MarshalIndent format changes (Go stdlib swap)
-//   - Field-order swaps in AsyncState (json/encoding emits in struct order)
-//
-// The fixture lives under testdata/golden/async/state_canonical.json.
+// TestAsyncState_GoldenRoundTrip asserts a re-persisted canonical fixture is byte-identical,
+// catching struct-tag renames, MarshalIndent format changes, and field-order swaps.
 func TestAsyncState_GoldenRoundTrip(t *testing.T) {
 	root := withStateRoot(t)
 	canonical := readGoldenAsync(t, "state_canonical.json")
@@ -70,7 +51,6 @@ func TestAsyncState_GoldenRoundTrip(t *testing.T) {
 		t.Fatalf("LoadAsyncState: %v", err)
 	}
 
-	// Sanity-check a representative sample of fields before re-persisting.
 	if loaded.SchemaVersion != AsyncStateSchemaVersion {
 		t.Errorf("SchemaVersion = %d, want %d", loaded.SchemaVersion, AsyncStateSchemaVersion)
 	}
@@ -101,10 +81,8 @@ func TestAsyncState_GoldenRoundTrip(t *testing.T) {
 	}
 }
 
-// TestAsyncState_GoldenCorruptionShapes exercises the three documented
-// corruption modes in a single table. All must wrap ErrStateCorrupt so
-// callers can branch on errors.Is(err, ErrStateCorrupt) rather than parsing
-// error strings.
+// TestAsyncState_GoldenCorruptionShapes asserts all three corruption modes wrap ErrStateCorrupt,
+// so callers can branch on errors.Is rather than parsing error strings.
 func TestAsyncState_GoldenCorruptionShapes(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -115,7 +93,6 @@ func TestAsyncState_GoldenCorruptionShapes(t *testing.T) {
 		{"invalid json", "state_invalid_json.json"},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			root := withStateRoot(t)
 			body := readGoldenAsync(t, tc.fixture)
@@ -132,15 +109,8 @@ func TestAsyncState_GoldenCorruptionShapes(t *testing.T) {
 	}
 }
 
-// TestAsyncState_AtomicWriteFailurePreservesOriginal forces os.Rename to
-// fail and verifies the pre-existing state file is byte-equivalent to its
-// state before the failed write. Approach: seed the canonical fixture, then
-// chmod the parent directory to 0500 (read+execute only) so CreateTemp +
-// Rename inside it fails. The defer in PersistAsyncState should clean up the
-// tmp file; the canonical file must be unchanged.
-//
-// Skipped on Windows (chmod semantics differ) and when running as root
-// (root bypasses POSIX directory permissions).
+// TestAsyncState_AtomicWriteFailurePreservesOriginal forces a write failure by chmod'ing the state
+// dir to 0500 (so CreateTemp fails) and asserts the pre-existing file is byte-unchanged.
 func TestAsyncState_AtomicWriteFailurePreservesOriginal(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX chmod semantics required to force rename failure")
@@ -154,20 +124,16 @@ func TestAsyncState_AtomicWriteFailurePreservesOriginal(t *testing.T) {
 	stateDir := filepath.Join(root, "com.example.testapp")
 	statePath := installGoldenAsync(t, root, "com.example.testapp", ReportClassAnalytics, canonical)
 
-	// Snapshot before the failed write so we can compare bytes after.
 	before, err := os.ReadFile(statePath) //nolint:gosec // test-only path
 	if err != nil {
 		t.Fatalf("snapshot before: %v", err)
 	}
 
-	// Lock down the directory so CreateTemp inside it fails.
 	if err := os.Chmod(stateDir, 0o500); err != nil {
 		t.Fatalf("chmod 0500: %v", err)
 	}
 	t.Cleanup(func() { _ = os.Chmod(stateDir, 0o700) })
 
-	// Construct a different state — if Persist somehow succeeded, the file
-	// would change.
 	mutation := AsyncState{
 		BundleID:    "com.example.testapp",
 		ReportClass: ReportClassAnalytics,
@@ -181,7 +147,6 @@ func TestAsyncState_AtomicWriteFailurePreservesOriginal(t *testing.T) {
 		t.Fatal("PersistAsyncState succeeded despite read-only dir; expected an error")
 	}
 
-	// Restore dir perms so we can verify the file.
 	if err := os.Chmod(stateDir, 0o700); err != nil {
 		t.Fatalf("restore chmod: %v", err)
 	}
@@ -194,9 +159,8 @@ func TestAsyncState_AtomicWriteFailurePreservesOriginal(t *testing.T) {
 		t.Fatalf("failed Persist corrupted the original file\nbefore:\n%s\nafter:\n%s", before, after)
 	}
 
-	// Ensure no orphan .tmp-* files were left behind in the directory after
-	// the cleanup defer ran. (CreateTemp may itself fail before any file is
-	// created — that path produces no orphan; we only fail if one persists.)
+	// No orphan .tmp-* may survive the cleanup defer. CreateTemp failing before it creates
+	// a file is fine (no orphan); we fail only if one persists.
 	entries, err := os.ReadDir(stateDir)
 	if err != nil {
 		t.Fatalf("ReadDir: %v", err)

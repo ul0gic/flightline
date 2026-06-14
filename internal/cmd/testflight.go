@@ -12,19 +12,16 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// BetaGroupView is one row of the testflight groups list output.
 type BetaGroupView struct {
 	ID         string                  `json:"id"`
 	Type       string                  `json:"type"`
 	Attributes asc.BetaGroupAttributes `json:"attributes"`
 }
 
-// BetaGroupList is the table-aware view for `testflight groups list`.
 type BetaGroupList struct {
 	Groups []BetaGroupView `json:"groups"`
 }
 
-// TableRows implements TableRenderable for the beta-group list view.
 func (l BetaGroupList) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"NAME", "INTERNAL", "TESTERS_LIMIT", "PUBLIC_LINK", "ID"}
 	rows = make([][]string, 0, len(l.Groups))
@@ -45,19 +42,16 @@ func (l BetaGroupList) TableRows() (headers []string, rows [][]string) {
 	return headers, rows
 }
 
-// BetaTesterView is one row of the testflight testers list output.
 type BetaTesterView struct {
 	ID         string                   `json:"id"`
 	Type       string                   `json:"type"`
 	Attributes asc.BetaTesterAttributes `json:"attributes"`
 }
 
-// BetaTesterList is the table-aware view for `testflight testers list`.
 type BetaTesterList struct {
 	Testers []BetaTesterView `json:"testers"`
 }
 
-// TableRows implements TableRenderable for the beta-testers list view.
 func (l BetaTesterList) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"EMAIL", "FIRST", "LAST", "INVITE", "STATE", "ID"}
 	rows = make([][]string, 0, len(l.Testers))
@@ -75,9 +69,7 @@ func (l BetaTesterList) TableRows() (headers []string, rows [][]string) {
 	return headers, rows
 }
 
-// BetaReviewView is the read-side view for `testflight beta-review get`.
-// Wraps the per-build BetaAppReviewSubmission record. Apple makes a fresh
-// submission per build, so this is keyed (bundle, build).
+// Apple makes a fresh submission per build, so this view is keyed (bundle, build).
 type BetaReviewView struct {
 	BundleID    string                                `json:"bundleId"`
 	BuildID     string                                `json:"buildId"`
@@ -85,13 +77,10 @@ type BetaReviewView struct {
 	ID          string                                `json:"id,omitempty"`
 	Type        string                                `json:"type,omitempty"`
 	Attributes  asc.BetaAppReviewSubmissionAttributes `json:"attributes"`
-	// Note carries a "no submission yet" message when Apple returns 404 on
-	// the build → betaAppReviewSubmission relationship. Empty when a real
-	// submission exists.
+	// Carries a "no submission yet" message on a 404 from the build relationship; empty otherwise.
 	Note string `json:"note,omitempty"`
 }
 
-// TableRows for the beta-review view. Vertical layout reads better.
 func (v *BetaReviewView) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
 	rows = [][]string{
@@ -120,15 +109,14 @@ var testflightCmd = &cobra.Command{
 	Short: "Inspect TestFlight beta groups, testers, and review state",
 	Long: `testflight groups read commands over Apple's TestFlight resources:
 
-  - groups list <bundleId>           — list internal + external beta groups
-  - testers list <bundleId>          — list testers in the app or a group
+  - groups list <bundleId>          : list internal + external beta groups
+  - testers list <bundleId>         : list testers in the app or a group
   - beta-review get <bundleId> --build <n>
-                                     — show beta-review state for a build
+                                    : show beta-review state for a build
 
 Phase 3 will add invite/manage write verbs; v1 is read-only.`,
 }
 
-// testflight groups
 var testflightGroupsCmd = &cobra.Command{
 	Use:   "groups",
 	Short: "Manage and inspect TestFlight beta groups",
@@ -140,13 +128,12 @@ var testflightGroupsListCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runTestflightGroupsList,
-	Example: `  fline testflight groups list com.example.myapp
-  fline testflight groups list com.example.myapp --output json | jq -r '.groups[].attributes.name'`,
+	Example: `  flightline testflight groups list com.example.myapp
+  flightline testflight groups list com.example.myapp --output json | jq -r '.groups[].attributes.name'`,
 }
 
 var testflightGroupsListLimit int
 
-// testflight testers
 var testflightTestersCmd = &cobra.Command{
 	Use:   "testers",
 	Short: "Manage and inspect TestFlight beta testers",
@@ -158,9 +145,9 @@ var testflightTestersListCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runTestflightTestersList,
-	Example: `  fline testflight testers list com.example.myapp
-  fline testflight testers list com.example.myapp --group 4242424242
-  fline testflight testers list com.example.myapp --output json | jq -r '.testers[].attributes.email'`,
+	Example: `  flightline testflight testers list com.example.myapp
+  flightline testflight testers list com.example.myapp --group 4242424242
+  flightline testflight testers list com.example.myapp --output json | jq -r '.testers[].attributes.email'`,
 }
 
 var (
@@ -168,7 +155,6 @@ var (
 	testflightTestersListLimit int
 )
 
-// testflight beta-review
 var testflightBetaReviewCmd = &cobra.Command{
 	Use:   "beta-review",
 	Short: "Inspect TestFlight beta-review submissions",
@@ -180,11 +166,10 @@ var testflightBetaReviewGetCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runTestflightBetaReviewGet,
-	Example: `  fline testflight beta-review get com.example.myapp --build 42
-  fline testflight beta-review get com.example.myapp --build 42 --output json`,
+	Example: `  flightline testflight beta-review get com.example.myapp --build 42
+  flightline testflight beta-review get com.example.myapp --build 42 --output json`,
 }
 
-// testflight groups create/update/delete
 var testflightGroupsCreateCmd = &cobra.Command{
 	Use:          "create <bundleId>",
 	Short:        "Create a TestFlight beta group",
@@ -198,8 +183,8 @@ without a POST and changed=false.
 Internal vs external is selected via --internal (default false = external).
 Public-link controls are optional and only meaningful for external groups;
 Apple silently ignores them on internal groups.`,
-	Example: `  fline testflight groups create com.example.myapp --name "Internal" --internal
-  fline testflight groups create com.example.myapp --name "Public Beta" --public-link --public-link-limit 10000`,
+	Example: `  flightline testflight groups create com.example.myapp --name "Internal" --internal
+  flightline testflight groups create com.example.myapp --name "Public Beta" --public-link --public-link-limit 10000`,
 }
 
 var testflightGroupsUpdateCmd = &cobra.Command{
@@ -211,8 +196,8 @@ var testflightGroupsUpdateCmd = &cobra.Command{
 	Long: `PATCHes a beta group. Only flags explicitly passed are sent; omitted
 flags leave the corresponding attribute untouched. Idempotent: reads
 current state first, only PATCHes when at least one attribute differs.`,
-	Example: `  fline testflight groups update BG-EXTERNAL-1 --public-link-limit 5000
-  fline testflight groups update BG-EXTERNAL-1 --feedback`,
+	Example: `  flightline testflight groups update BG-EXTERNAL-1 --public-link-limit 5000
+  flightline testflight groups update BG-EXTERNAL-1 --feedback`,
 }
 
 var testflightGroupsDeleteCmd = &cobra.Command{
@@ -223,11 +208,10 @@ var testflightGroupsDeleteCmd = &cobra.Command{
 	RunE:         runTestflightGroupsDelete,
 	Long: `DELETEs a beta group. Idempotent: if the group is already absent
 (404 from Apple) the command exits 0 with changed=false rather than
-failing — re-running a delete script should not be a hard error.`,
-	Example: `  fline testflight groups delete BG-EXTERNAL-1`,
+failing: re-running a delete script should not be a hard error.`,
+	Example: `  flightline testflight groups delete BG-EXTERNAL-1`,
 }
 
-// testflight testers add/remove
 var testflightTestersAddCmd = &cobra.Command{
 	Use:          "add <groupId>",
 	Short:        "Add testers to a TestFlight beta group (idempotent)",
@@ -238,7 +222,7 @@ var testflightTestersAddCmd = &cobra.Command{
 /v1/betaGroups/{id}/relationships/betaTesters. Pass tester IDs via
 --tester (repeatable). Idempotent: testers already in the group are
 filtered out before the POST so re-running the command is a no-op.`,
-	Example: `  fline testflight testers add BG-EXTERNAL-1 --tester T1 --tester T2`,
+	Example: `  flightline testflight testers add BG-EXTERNAL-1 --tester T1 --tester T2`,
 }
 
 var testflightTestersRemoveCmd = &cobra.Command{
@@ -250,10 +234,9 @@ var testflightTestersRemoveCmd = &cobra.Command{
 	Long: `Removes one or more testers from a beta group via DELETE
 /v1/betaGroups/{id}/relationships/betaTesters. Idempotent: testers
 already absent are filtered out so re-running is a no-op.`,
-	Example: `  fline testflight testers remove BG-EXTERNAL-1 --tester T1`,
+	Example: `  flightline testflight testers remove BG-EXTERNAL-1 --tester T1`,
 }
 
-// testflight beta-review submit
 var testflightBetaReviewSubmitCmd = &cobra.Command{
 	Use:          "submit <bundleId>",
 	Short:        "Submit a build for TestFlight beta review",
@@ -261,11 +244,11 @@ var testflightBetaReviewSubmitCmd = &cobra.Command{
 	Args:         cobra.ExactArgs(1),
 	RunE:         runTestflightBetaReviewSubmit,
 	Long: `Creates a betaAppReviewSubmission for the named (bundleId, build) pair.
-Apple's beta review is one-shot per build — if a submission already
+Apple's beta review is one-shot per build: if a submission already
 exists for the build, the command surfaces the existing submission ID
 with changed=false rather than erroring.`,
-	Example: `  fline testflight beta-review submit com.example.myapp --build 42
-  fline testflight beta-review submit com.example.myapp --build 42 --output json`,
+	Example: `  flightline testflight beta-review submit com.example.myapp --build 42
+  flightline testflight beta-review submit com.example.myapp --build 42 --output json`,
 }
 
 var (
@@ -365,9 +348,7 @@ func runTestflightTestersList(cmd *cobra.Command, args []string) error {
 	q := url.Values{"limit": {"200"}}
 
 	if g := strings.TrimSpace(testflightTestersListGroup); g != "" {
-		// Group-scoped: testers belonging to a specific beta group. Bundle
-		// is still resolved so a typo in --group surfaces against the
-		// expected app rather than a foreign group.
+		// Resolve the bundle even in group scope so a typo in --group surfaces against the expected app.
 		if _, err := resolveAppID(cmd.Context(), c, bundleID); err != nil {
 			return err
 		}
@@ -391,7 +372,7 @@ func runTestflightBetaReviewGet(cmd *cobra.Command, args []string) error {
 	bundleID := args[0]
 	build := strings.TrimSpace(testflightBetaReviewGetBuild)
 	if build == "" {
-		return fmt.Errorf("testflight: --build is required")
+		return errors.New("testflight: --build is required")
 	}
 
 	c, err := newClient()
@@ -403,7 +384,6 @@ func runTestflightBetaReviewGet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Find the build by CFBundleVersion under the app.
 	bq := url.Values{
 		"filter[version]": {build},
 		"limit":           {"1"},
@@ -425,10 +405,7 @@ func runTestflightBetaReviewGet(cmd *cobra.Command, args []string) error {
 		BuildNumber: build,
 	}
 
-	// Fetch the per-build betaAppReviewSubmission. Apple returns 200 with
-	// `data: null` (or an empty data block) when no submission exists for
-	// the build; older accounts may return 404. Both surface as the typed
-	// "(no submission)" view rather than fatal.
+	// No submission yet surfaces as Apple's 200-with-null-data or a 404 on older accounts; both map to the "(no submission)" view.
 	resp, err := asc.Get[asc.Single[asc.BetaAppReviewSubmissionAttributes]](
 		cmd.Context(), c, "/v1/builds/"+buildID+"/betaAppReviewSubmission", nil,
 	)
@@ -445,8 +422,6 @@ func runTestflightBetaReviewGet(cmd *cobra.Command, args []string) error {
 	return Render(view, outputMode())
 }
 
-// collectBetaGroups walks the paging iterator and returns flattened
-// BetaGroupView rows.
 func collectBetaGroups(ctx context.Context, c *asc.Client, path string, query url.Values, limit int) ([]BetaGroupView, error) {
 	out := make([]BetaGroupView, 0, defaultListCap(limit))
 	for page, err := range asc.Pages[asc.BetaGroupAttributes](ctx, c, path, query) {
@@ -463,8 +438,6 @@ func collectBetaGroups(ctx context.Context, c *asc.Client, path string, query ur
 	return out, nil
 }
 
-// collectBetaTesters walks the paging iterator and returns flattened
-// BetaTesterView rows.
 func collectBetaTesters(ctx context.Context, c *asc.Client, path string, query url.Values, limit int) ([]BetaTesterView, error) {
 	out := make([]BetaTesterView, 0, defaultListCap(limit))
 	for page, err := range asc.Pages[asc.BetaTesterAttributes](ctx, c, path, query) {
@@ -481,8 +454,6 @@ func collectBetaTesters(ctx context.Context, c *asc.Client, path string, query u
 	return out, nil
 }
 
-// BetaGroupSetResult is the structured outcome of `testflight groups create/update`.
-// Surfaces whether a write was issued and the post-state group attributes.
 type BetaGroupSetResult struct {
 	GroupID    string                  `json:"groupId"`
 	Changed    bool                    `json:"changed"`
@@ -491,7 +462,6 @@ type BetaGroupSetResult struct {
 	Attributes asc.BetaGroupAttributes `json:"attributes"`
 }
 
-// TableRows for a beta-group set result.
 func (r *BetaGroupSetResult) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
 	rows = [][]string{
@@ -509,14 +479,12 @@ func (r *BetaGroupSetResult) TableRows() (headers []string, rows [][]string) {
 	return headers, rows
 }
 
-// BetaGroupDeleteResult is the structured outcome of `testflight groups delete`.
 type BetaGroupDeleteResult struct {
 	GroupID string `json:"groupId"`
 	Changed bool   `json:"changed"`
 	Note    string `json:"note,omitempty"`
 }
 
-// TableRows for the delete result.
 func (r *BetaGroupDeleteResult) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
 	rows = [][]string{
@@ -529,19 +497,15 @@ func (r *BetaGroupDeleteResult) TableRows() (headers []string, rows [][]string) 
 	return headers, rows
 }
 
-// BetaTestersChangeResult is the structured outcome of `testflight testers
-// add/remove`. Returns which tester IDs were actually applied vs filtered
-// out by the idempotency check.
 type BetaTestersChangeResult struct {
 	GroupID   string   `json:"groupId"`
 	Changed   bool     `json:"changed"`
-	Action    string   `json:"action"`            // "add" | "remove"
-	Applied   []string `json:"applied,omitempty"` // IDs sent to Apple
-	Skipped   []string `json:"skipped,omitempty"` // IDs filtered out (already in/out)
+	Action    string   `json:"action"`
+	Applied   []string `json:"applied,omitempty"`
+	Skipped   []string `json:"skipped,omitempty"`
 	Requested []string `json:"requested"`
 }
 
-// TableRows for a tester membership change.
 func (r *BetaTestersChangeResult) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
 	rows = [][]string{
@@ -555,9 +519,7 @@ func (r *BetaTestersChangeResult) TableRows() (headers []string, rows [][]string
 	return headers, rows
 }
 
-// BetaReviewSubmitResult is the structured outcome of `testflight
-// beta-review submit`. Carries the submission ID; Changed=false signals an
-// existing submission was reused.
+// Changed=false signals an existing submission was reused.
 type BetaReviewSubmitResult struct {
 	BundleID     string                                `json:"bundleId"`
 	BuildID      string                                `json:"buildId"`
@@ -568,7 +530,6 @@ type BetaReviewSubmitResult struct {
 	Attributes   asc.BetaAppReviewSubmissionAttributes `json:"attributes"`
 }
 
-// TableRows for the submit result.
 func (r *BetaReviewSubmitResult) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
 	rows = [][]string{
@@ -586,7 +547,6 @@ func (r *BetaReviewSubmitResult) TableRows() (headers []string, rows [][]string)
 	return headers, rows
 }
 
-// boolStrTF renders a bool as "true"/"false" for testflight result tables.
 func boolStrTF(b bool) string {
 	if b {
 		return "true"
@@ -594,14 +554,11 @@ func boolStrTF(b bool) string {
 	return "false"
 }
 
-// runTestflightGroupsCreate creates a beta group on the named app.
-// Idempotent on (app, name): an existing group with the same name is
-// returned without a POST.
 func runTestflightGroupsCreate(cmd *cobra.Command, args []string) error {
 	bundleID := args[0]
 	name := strings.TrimSpace(testflightGroupsCreateName)
 	if name == "" {
-		return fmt.Errorf("testflight: --name is required")
+		return errors.New("testflight: --name is required")
 	}
 
 	c, err := newClient()
@@ -613,10 +570,7 @@ func runTestflightGroupsCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Idempotent name check: list groups, pre-empt POST when a name match
-	// exists. Apple does enforce name uniqueness per app at write time
-	// (422), but pre-empting avoids burning a rate-limit token + giving
-	// the user a hard error for what is in practice a re-run.
+	// Pre-empt the POST on a name match: Apple 422s on duplicate names, but a re-run should be a no-op, not an error.
 	existing, err := findBetaGroupByName(cmd.Context(), c, appID, name)
 	if err != nil {
 		return err
@@ -626,7 +580,7 @@ func runTestflightGroupsCreate(cmd *cobra.Command, args []string) error {
 			GroupID:    existing.ID,
 			Changed:    false,
 			Created:    false,
-			Note:       "no change (idempotent) — group with same name already exists",
+			Note:       "no change (idempotent): group with same name already exists",
 			Attributes: existing.Attributes,
 		}, outputMode())
 	}
@@ -651,9 +605,7 @@ func runTestflightGroupsCreate(cmd *cobra.Command, args []string) error {
 	}, outputMode())
 }
 
-// findBetaGroupByName scans the app's beta groups and returns the first one
-// whose name matches (case-sensitive — Apple's UI is). Returns (nil, nil)
-// when no match exists.
+// Name match is case-sensitive, mirroring Apple's UI; returns (nil, nil) when no match exists.
 func findBetaGroupByName(ctx context.Context, c *asc.Client, appID, name string) (*asc.Resource[asc.BetaGroupAttributes], error) {
 	q := url.Values{
 		"limit":                   {"200"},
@@ -673,10 +625,7 @@ func findBetaGroupByName(ctx context.Context, c *asc.Client, appID, name string)
 	return nil, nil
 }
 
-// buildBetaGroupCreate crafts the JSON:API POST body for /v1/betaGroups.
-// Optional attributes are only emitted when their flag was actually
-// supplied (per cmd.Flags().Changed) so we don't pin Apple defaults to
-// boolean-zero values inadvertently.
+// Optional attributes are emitted only when their flag was set, so Apple defaults aren't pinned to boolean-zero.
 func buildBetaGroupCreate(
 	appID, name string,
 	internal bool,
@@ -710,9 +659,6 @@ func buildBetaGroupCreate(
 	}
 }
 
-// runTestflightGroupsUpdate PATCHes a beta group with only the attributes
-// the user explicitly passed flags for. Idempotent: reads current state
-// first, builds the diff, only PATCHes when at least one attribute moves.
 func runTestflightGroupsUpdate(cmd *cobra.Command, args []string) error {
 	groupID := args[0]
 	c, err := newClient()
@@ -733,7 +679,7 @@ func runTestflightGroupsUpdate(cmd *cobra.Command, args []string) error {
 		return Render(&BetaGroupSetResult{
 			GroupID:    groupID,
 			Changed:    false,
-			Note:       "no change (idempotent) — all requested attributes already match",
+			Note:       "no change (idempotent): all requested attributes already match",
 			Attributes: cur.Data.Attributes,
 		}, outputMode())
 	}
@@ -758,10 +704,7 @@ func runTestflightGroupsUpdate(cmd *cobra.Command, args []string) error {
 	}, outputMode())
 }
 
-// computeBetaGroupPatchAttrs builds the partial attributes map for a beta
-// group PATCH. Only flags the user actually passed (cmd.Flags().Changed)
-// contribute; values that already match the current state are filtered
-// out so we never send a redundant PATCH.
+// Only changed flags contribute, and values matching current state are dropped, so no redundant PATCH is sent.
 func computeBetaGroupPatchAttrs(cmd *cobra.Command, cur asc.BetaGroupAttributes) map[string]any {
 	patch := map[string]any{}
 	flags := cmd.Flags()
@@ -798,8 +741,7 @@ func computeBetaGroupPatchAttrs(cmd *cobra.Command, cur asc.BetaGroupAttributes)
 	return patch
 }
 
-// runTestflightGroupsDelete deletes a beta group. Idempotent: 404 (already
-// absent) is changed=false, not an error.
+// 404 (already absent) is changed=false, not an error, so a re-run stays idempotent.
 func runTestflightGroupsDelete(cmd *cobra.Command, args []string) error {
 	groupID := args[0]
 	c, err := newClient()
@@ -812,7 +754,7 @@ func runTestflightGroupsDelete(cmd *cobra.Command, args []string) error {
 			return Render(&BetaGroupDeleteResult{
 				GroupID: groupID,
 				Changed: false,
-				Note:    "no change (idempotent) — group already absent",
+				Note:    "no change (idempotent): group already absent",
 			}, outputMode())
 		}
 		return err
@@ -823,13 +765,12 @@ func runTestflightGroupsDelete(cmd *cobra.Command, args []string) error {
 	}, outputMode())
 }
 
-// runTestflightTestersAdd adds testers to a beta group. Filters out
-// already-present testers so a re-run is idempotent.
+// Already-present testers are filtered out so a re-run is idempotent.
 func runTestflightTestersAdd(cmd *cobra.Command, args []string) error {
 	groupID := args[0]
 	requested := dedupeStrings(testflightTestersAddIDs)
 	if len(requested) == 0 {
-		return fmt.Errorf("testflight: --tester is required (repeat for multiple)")
+		return errors.New("testflight: --tester is required (repeat for multiple)")
 	}
 
 	c, err := newClient()
@@ -869,22 +810,19 @@ func runTestflightTestersAdd(cmd *cobra.Command, args []string) error {
 	if _, err := asc.Post[map[string]any](
 		cmd.Context(), c, "/v1/betaGroups/"+groupID+"/relationships/betaTesters", nil, body,
 	); err != nil {
-		// 204 on the linkage POST returns empty body which doJSON treats
-		// as zero T (which here is the empty map) — no error. Real failures
-		// land here.
+		// A 204 (empty body) decodes to the zero map without error; only real failures reach here.
 		return err
 	}
 	res.Changed = true
 	return Render(res, outputMode())
 }
 
-// runTestflightTestersRemove removes testers from a beta group. Filters
-// out already-absent testers so a re-run is idempotent.
+// Already-absent testers are filtered out so a re-run is idempotent.
 func runTestflightTestersRemove(cmd *cobra.Command, args []string) error {
 	groupID := args[0]
 	requested := dedupeStrings(testflightTestersRemoveIDs)
 	if len(requested) == 0 {
-		return fmt.Errorf("testflight: --tester is required (repeat for multiple)")
+		return errors.New("testflight: --tester is required (repeat for multiple)")
 	}
 
 	c, err := newClient()
@@ -920,14 +858,7 @@ func runTestflightTestersRemove(cmd *cobra.Command, args []string) error {
 		return Render(res, outputMode())
 	}
 
-	// Apple's DELETE /relationships/betaTesters takes a body. The Client
-	// Delete helper omits bodies, so use the raw asc.Patch is wrong —
-	// instead call the linkage endpoint with method DELETE via an http
-	// request crafted on c. Lacking that helper, we construct a custom
-	// path using the Patch helper would mis-method; fallback to using
-	// Post-with-X-HTTP-Method-Override is gross. The supported route is
-	// to call Delete with a body — we add it here via a direct HTTP
-	// request (auth-injected) in deleteBetaTesterLinkages.
+	// Apple requires a body-bearing DELETE here, which the shared Client.Delete helper can't issue.
 	if err := deleteBetaTesterLinkages(cmd.Context(), c, groupID, applied); err != nil {
 		return err
 	}
@@ -936,9 +867,7 @@ func runTestflightTestersRemove(cmd *cobra.Command, args []string) error {
 	return Render(res, outputMode())
 }
 
-// listGroupTesterIDs returns all tester IDs currently assigned to a beta
-// group via the linkage endpoint (linkage-only, no full tester resource
-// payload — saves rate-limit cost).
+// Uses the linkage endpoint (IDs only, no full tester payload) to save rate-limit cost.
 func listGroupTesterIDs(ctx context.Context, c *asc.Client, groupID string) ([]string, error) {
 	q := url.Values{"limit": {"200"}}
 	resp, err := asc.Get[map[string]any](
@@ -968,8 +897,7 @@ func listGroupTesterIDs(ctx context.Context, c *asc.Client, groupID string) ([]s
 	return out, nil
 }
 
-// buildBetaTesterLinkages crafts the linkage POST body. The same shape
-// works for the DELETE-with-body variant.
+// Same body shape serves both the linkage POST and the DELETE-with-body variant.
 func buildBetaTesterLinkages(ids []string) map[string]any {
 	data := make([]map[string]any, 0, len(ids))
 	for _, id := range ids {
@@ -978,34 +906,17 @@ func buildBetaTesterLinkages(ids []string) map[string]any {
 	return map[string]any{"data": data}
 }
 
-// deleteBetaTesterLinkages issues a DELETE to the betaTesters linkage
-// endpoint with a JSON body listing the testers to remove. The shared
-// Client.Delete helper does not support bodies, so this is the local
-// fallback — auth-injection via a fresh JWT is preserved, just at the
-// cost of a small re-implementation.
-//
-// Apple's spec for betaGroups_betaTesters_deleteToManyRelationship requires
-// the body. 204 = success.
+// Apple's deleteToManyRelationship requires a body the shared Client.Delete can't send; delegate to DeleteWithBody when present.
 func deleteBetaTesterLinkages(ctx context.Context, c *asc.Client, groupID string, ids []string) error {
 	body := buildBetaTesterLinkages(ids)
-	// asc.Client doesn't expose a body-bearing Delete; the simplest
-	// supported path here is to use the Post helper but with method
-	// override. Since Post sets POST, and we need DELETE, fall back to
-	// constructing a minimal DELETE via a separate helper. The asc
-	// package will own this when the multi-resource linkage pattern
-	// repeats; for now we delegate via DeleteWithBody if available, else
-	// surface a clear error rather than silently misbehaving.
 	if dwb, ok := any(c).(interface {
 		DeleteWithBody(ctx context.Context, path string, query url.Values, body any) error
 	}); ok {
 		return dwb.DeleteWithBody(ctx, "/v1/betaGroups/"+groupID+"/relationships/betaTesters", nil, body)
 	}
-	// No body-bearing Delete on the Client. Emit a clear blocked-error
-	// hint so the caller knows what to add — file a SEC/QA issue.
-	return fmt.Errorf("testflight: testers remove requires asc.Client.DeleteWithBody (not yet wired); see https://developer.apple.com/documentation/appstoreconnectapi/delete_relationship for the contract — file an issue if blocked")
+	return errors.New("testflight: testers remove requires asc.Client.DeleteWithBody (not yet wired); see https://developer.apple.com/documentation/appstoreconnectapi/delete_relationship for the contract: file an issue if blocked")
 }
 
-// dedupeStrings returns a stable-order de-duplicated copy of in.
 func dedupeStrings(in []string) []string {
 	seen := make(map[string]bool, len(in))
 	out := make([]string, 0, len(in))
@@ -1020,7 +931,6 @@ func dedupeStrings(in []string) []string {
 	return out
 }
 
-// stringSet returns ids as a set for membership tests.
 func stringSet(ids []string) map[string]bool {
 	m := make(map[string]bool, len(ids))
 	for _, id := range ids {
@@ -1029,14 +939,12 @@ func stringSet(ids []string) map[string]bool {
 	return m
 }
 
-// runTestflightBetaReviewSubmit submits the named build for beta review.
-// Idempotent: an existing submission for the build returns
-// changed=false carrying the existing submission ID rather than erroring.
+// An existing submission for the build returns changed=false rather than erroring.
 func runTestflightBetaReviewSubmit(cmd *cobra.Command, args []string) error {
 	bundleID := args[0]
 	build := strings.TrimSpace(testflightBetaReviewSubmitBuild)
 	if build == "" {
-		return fmt.Errorf("testflight: --build is required")
+		return errors.New("testflight: --build is required")
 	}
 
 	c, err := newClient()
@@ -1075,7 +983,7 @@ func runTestflightBetaReviewSubmit(cmd *cobra.Command, args []string) error {
 			SubmissionID: existing.Data.ID,
 			Changed:      false,
 			Attributes:   existing.Data.Attributes,
-			Note:         "no change (idempotent) — submission already exists for this build",
+			Note:         "no change (idempotent): submission already exists for this build",
 		}, outputMode())
 	}
 

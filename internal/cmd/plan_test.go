@@ -7,8 +7,6 @@ import (
 	"github.com/ul0gic/flightline/internal/plan"
 )
 
-// TestPlanResult_TableRowsHeaders — the JSON-stable contract: column
-// headers don't drift.
 func TestPlanResult_TableRowsHeaders(t *testing.T) {
 	pr := &PlanResult{}
 	headers, rows := pr.TableRows()
@@ -26,8 +24,6 @@ func TestPlanResult_TableRowsHeaders(t *testing.T) {
 	}
 }
 
-// TestPlanResult_TableRowsContents — change values render through the
-// truncating formatter.
 func TestPlanResult_TableRowsContents(t *testing.T) {
 	pr := &PlanResult{Changes: []plan.Change{
 		{Op: plan.OpUpdate, Path: "/spec/version/copyright", From: "© 2025", To: "© 2026"},

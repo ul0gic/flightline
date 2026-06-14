@@ -18,8 +18,7 @@ import (
 	"testing"
 )
 
-// writeTestKey creates an ephemeral P-256 key as PKCS8 PEM at mode 0600.
-// The key never leaves the test process.
+// writeTestKey generates an ephemeral P-256 PKCS8 PEM at mode 0600: never a real .p8.
 func writeTestKey(t *testing.T) string {
 	t.Helper()
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -41,8 +40,6 @@ func writeTestKey(t *testing.T) string {
 	return path
 }
 
-// newTestClient returns a Client whose http.Client and baseURL point at the
-// supplied test server, plus an ephemeral .p8 so auth.Mint succeeds.
 func newTestClient(t *testing.T, srv *httptest.Server) *Client {
 	t.Helper()
 	keyPath := writeTestKey(t)
@@ -103,7 +100,6 @@ type appAttrs struct {
 
 func TestGet_HappyPath(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify auth header is present and well-formed.
 		auth := r.Header.Get("Authorization")
 		if !strings.HasPrefix(auth, "Bearer ey") {
 			t.Errorf("Authorization = %q, want Bearer ey...", auth)
@@ -226,10 +222,8 @@ func TestDelete_2xxIsSuccess(t *testing.T) {
 	}
 }
 
-// TestDeleteWithBody_SendsBody confirms the body-bearing DELETE variant
-// transmits the JSON body intact and accepts a 204 as success. Used by
-// Apple's "delete to-many relationship" endpoints
-// (e.g. /v1/betaGroups/{id}/relationships/betaTesters).
+// TestDeleteWithBody_SendsBody covers Apple's "delete to-many relationship"
+// endpoints (e.g. /v1/betaGroups/{id}/relationships/betaTesters), which need a JSON body.
 func TestDeleteWithBody_SendsBody(t *testing.T) {
 	called := false
 	var gotBody map[string]any
@@ -266,8 +260,7 @@ func TestDeleteWithBody_SendsBody(t *testing.T) {
 	}
 }
 
-// TestDeleteWithBody_4xxFails confirms typed-error surfacing on a non-2xx
-// response (regression guard against silently dropping Apple's errors[]).
+// TestDeleteWithBody_4xxFails guards against silently dropping Apple's errors[] on non-2xx.
 func TestDeleteWithBody_4xxFails(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

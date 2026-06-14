@@ -8,9 +8,7 @@ import (
 	"testing"
 )
 
-// promoImageServer composes the multi-endpoint fixture both pass + fail
-// tests need. iapHash is what `appStoreReviewScreenshot` returns;
-// appHash is what one app screenshot returns. When equal, the rule fires.
+// promoImageServer builds the multi-endpoint fixture; when iapHash == appHash the rule fires (Guideline 2.3.2 reuse).
 func promoImageServer(t *testing.T, iapHash, appHash string) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

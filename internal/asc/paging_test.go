@@ -106,25 +106,14 @@ func TestStripBase(t *testing.T) {
 	if got != "/v1/apps?cursor=x" {
 		t.Errorf("stripBase = %q", got)
 	}
-	// Foreign host: pass through unchanged so buildURL can reject.
 	if got := stripBase("https://attacker.example.com/v1/apps", "https://api.appstoreconnect.apple.com"); got != "https://attacker.example.com/v1/apps" {
 		t.Errorf("stripBase = %q", got)
 	}
 }
 
-// TestPages_FollowsNextLink_FromFixtures replays the page1/page2 golden
-// pair via the fixtureServer helper. Asserts that:
-//   - Pages yields exactly 2 pages then terminates
-//   - across both pages 3 records surface in the correct bundleId order
-//   - the loop terminates without a third yield (no "phantom page")
-//
-// The fixture's links.next URL is rewritten on the fly to match the test
-// server so the absolute-URL → strip-base → re-fetch path is exercised
-// end-to-end (just like production paging).
+// TestPages_FollowsNextLink_FromFixtures exercises absolute-URL → strip-base → re-fetch
+// end-to-end by rewriting the fixture's links.next host to the test server.
 func TestPages_FollowsNextLink_FromFixtures(t *testing.T) {
-	// Stage A: serve page1 with a links.next that points at the test
-	// server's own /v1/apps?cursor=PAGE2_CURSOR&limit=2. The fixture file
-	// hardcodes api.appstoreconnect.apple.com, so we patch on read.
 	page1Bytes, err := readFixture("apps_list_paginated_page1")
 	if err != nil {
 		t.Fatalf("read page1: %v", err)
@@ -143,8 +132,6 @@ func TestPages_FollowsNextLink_FromFixtures(t *testing.T) {
 				_, _ = w.Write(page2Bytes)
 				return
 			}
-			// Rewrite the fixture's hardcoded host to match the test server
-			// so paging follows the absolute URL into our handler.
 			rewritten := strings.ReplaceAll(
 				string(page1Bytes),
 				"https://api.appstoreconnect.apple.com",
@@ -183,19 +170,11 @@ func TestPages_FollowsNextLink_FromFixtures(t *testing.T) {
 	}
 }
 
-// TestPages_RejectsForeignHostInNextLink is the security-defense test for
-// paging: a malicious or buggy upstream that sets links.next to a foreign
-// host must NOT cause Pages to issue a request to that host. The follow-up
-// must error out instead.
-//
-// This protects against credential exfiltration via redirect-shaped paging
-// attacks (Apple cannot point us at attacker.example.com — but if Apple's
-// API is ever compromised, or a MITM rewrites the response, the foreign-
-// host check is the last line of defense before our JWT goes off-host).
+// TestPages_RejectsForeignHostInNextLink guards against JWT exfiltration: a links.next
+// pointing off-host must error rather than send a credentialed request to that host.
 func TestPages_RejectsForeignHostInNextLink(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		// Page 1 yields a foreign-host links.next.
 		_, _ = fmt.Fprint(w, `{
 			"data":[{"type":"apps","id":"1","attributes":{"bundleId":"com.example.alpha"}}],
 			"links":{"self":"","next":"https://attacker.example.com/v1/apps?cursor=stolen"}
@@ -232,8 +211,7 @@ func TestPages_RejectsForeignHostInNextLink(t *testing.T) {
 	if !strings.Contains(gotErr.Error(), "foreign host") {
 		t.Errorf("err = %v, want substring 'foreign host'", gotErr)
 	}
-	// The first page's data should still be observable — the rejection
-	// kicks in on the follow-up, not retroactively on page 1.
+	// Rejection kicks in on the follow-up, so page 1 data must remain observable.
 	if len(recvIDs) != 1 || recvIDs[0] != "1" {
 		t.Errorf("recvIDs = %v, want [1] (page 1 data should be intact)", recvIDs)
 	}

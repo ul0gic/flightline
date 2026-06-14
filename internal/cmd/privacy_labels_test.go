@@ -87,15 +87,10 @@ func TestPrivacyLabelsCommands_RegisteredOnRoot(t *testing.T) {
 	}
 }
 
-// TestPrivacyLabelsSet_SameDiagnosticAsGet asserts the write-side stub returns
-// byte-for-byte the same JSON as the read-side stub. ISSUE-002 resolution:
-// Flightline does not fabricate an endpoint; both surfaces report
-// supported=false with the same reason+reference so consumers branch on a
-// single contract.
+// ISSUE-002: read and write surfaces report the identical supported=false
+// diagnostic so consumers branch on a single contract, not a fabricated endpoint.
 func TestPrivacyLabelsSet_SameDiagnosticAsGet(t *testing.T) {
 	get := privacyLabelsDiagnostic("com.example.testapp")
-	// Both runE handlers shell into privacyLabelsDiagnostic; round-trip the
-	// view through JSON and assert the keys are identical.
 	bGet, err := json.Marshal(get)
 	if err != nil {
 		t.Fatalf("marshal get: %v", err)
@@ -108,7 +103,6 @@ func TestPrivacyLabelsSet_SameDiagnosticAsGet(t *testing.T) {
 	if !bytes.Equal(bGet, bSet) {
 		t.Errorf("get and set diagnostics diverge:\n  get: %s\n  set: %s", bGet, bSet)
 	}
-	// Sanity: assert supported=false for both — the contract.
 	for _, v := range []*PrivacyLabelsView{get, set} {
 		if v.Supported {
 			t.Errorf("supported=true (expected false until Apple ships endpoint)")
@@ -116,17 +110,11 @@ func TestPrivacyLabelsSet_SameDiagnosticAsGet(t *testing.T) {
 	}
 }
 
-// TestPrivacyLabelsSet_NoFabricatedEndpoint verifies the set RunE doesn't
-// reach for the API client. The stub must NOT spawn a request — that's the
-// whole point of ISSUE-002. We assert by giving runPrivacyLabelsSet an empty
-// arg slot would have panicked, but it survives because no client is needed.
+// ISSUE-002: the set path must not reach for an API client, even with --from set.
 func TestPrivacyLabelsSet_NoFabricatedEndpoint(t *testing.T) {
 	prev := privacyLabelsSetFrom
 	t.Cleanup(func() { privacyLabelsSetFrom = prev })
-	// Even with --from set, the stub does not touch ASC.
 	privacyLabelsSetFrom = "irrelevant.yaml"
-	// We can't easily call Render(...) without writing to stdout, so just
-	// confirm the diagnostic generator does its job.
 	v := privacyLabelsDiagnostic("com.example.testapp")
 	if v.Supported {
 		t.Error("supported=true; ISSUE-002 contract is supported=false")
@@ -136,10 +124,8 @@ func TestPrivacyLabelsSet_NoFabricatedEndpoint(t *testing.T) {
 	}
 }
 
-// TestPrivacyLabels_JSONOutputStability_Stub locks the JSON contract for
-// the "currently unsupported" diagnostic case. When Apple ships the
-// endpoint, .supported flips to true and additional keys appear; the keys
-// asserted here MUST stay stable so consumers can branch on .supported.
+// JSON contract: these keys stay stable so consumers can branch on .supported
+// once Apple ships the endpoint and flips it to true.
 func TestPrivacyLabels_JSONOutputStability_Stub(t *testing.T) {
 	v := &PrivacyLabelsView{
 		BundleID:  "com.example.testapp",
@@ -157,7 +143,7 @@ func TestPrivacyLabels_JSONOutputStability_Stub(t *testing.T) {
 	}
 	for _, key := range []string{"bundleId", "supported", "reason", "reference"} {
 		if _, ok := decoded[key]; !ok {
-			t.Errorf("missing top-level key %q — JSON contract drift. Got: %v", key, mapKeys(decoded))
+			t.Errorf("missing top-level key %q: JSON contract drift. Got: %v", key, mapKeys(decoded))
 		}
 	}
 	if got, ok := decoded["supported"].(bool); !ok || got != false {
@@ -165,16 +151,15 @@ func TestPrivacyLabels_JSONOutputStability_Stub(t *testing.T) {
 	}
 }
 
-// TestPrivacyLabels_StubViewSemantics verifies the view we return from the
-// stub command path encodes the unsupported state correctly. We assert on
-// the constructed view rather than running the command (which would dump
-// JSON to the test runner's stdout).
 func TestPrivacyLabels_StubViewSemantics(t *testing.T) {
 	view := &PrivacyLabelsView{
 		BundleID:  "com.example.testapp",
 		Supported: false,
 		Reason:    "App Store Connect API v4.3 does not expose appPrivacyDetails. Manage privacy nutrition labels via App Store Connect web UI.",
 		Reference: "https://developer.apple.com/app-store/app-privacy-details/",
+	}
+	if view.BundleID != "com.example.testapp" {
+		t.Errorf("bundleId = %q, want com.example.testapp", view.BundleID)
 	}
 	if view.Supported {
 		t.Errorf("supported should be false in v4.3")

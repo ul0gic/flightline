@@ -12,19 +12,16 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// TerritoryView is one row of the territories list output.
 type TerritoryView struct {
 	ID         string                  `json:"id"`
 	Type       string                  `json:"type"`
 	Attributes asc.TerritoryAttributes `json:"attributes"`
 }
 
-// TerritoryList is the table-aware view for `territories list`.
 type TerritoryList struct {
 	Territories []TerritoryView `json:"territories"`
 }
 
-// TableRows implements TableRenderable for the territories list view.
 func (l TerritoryList) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"TERRITORY", "CURRENCY"}
 	rows = make([][]string, 0, len(l.Territories))
@@ -35,21 +32,11 @@ func (l TerritoryList) TableRows() (headers []string, rows [][]string) {
 	return headers, rows
 }
 
-// territoriesCacheTTL is how long a cached territories.json is considered
-// fresh. Apple's territory list is reference data — currency mappings change
-// at most a handful of times a year — so a 24h TTL eliminates redundant API
-// calls without going stale on real-world cadences.
 const territoriesCacheTTL = 24 * time.Hour
 
-// territoriesCacheVersion guards against schema drift in the on-disk cache
-// file. Bump if the cached payload shape changes; older caches are then
-// treated as a miss and refetched.
+// Bump when the cached payload shape changes; older caches become a miss.
 const territoriesCacheVersion = 1
 
-// territoriesCacheFile is the on-disk shape: a tiny envelope around
-// TerritoryList plus the timestamp we wrote it. Lives at
-// $XDG_CACHE_HOME/flightline/territories.json (default
-// ~/.cache/flightline/territories.json on Linux/macOS).
 type territoriesCacheFile struct {
 	Version int           `json:"version"`
 	SavedAt time.Time     `json:"savedAt"`
@@ -61,7 +48,7 @@ var territoriesCmd = &cobra.Command{
 	Short: "List App Store territories",
 	Long: `territories groups read commands over the /v1/territories resource.
 
-Apple's territory list is reference data — the same set across every ASC
+Apple's territory list is reference data: the same set across every ASC
 account, with currency codes that change at most a few times a year. The
 list command caches results under $XDG_CACHE_HOME/flightline/territories.json
 for 24 hours by default; pass --no-cache to force a fresh fetch.`,
@@ -73,9 +60,9 @@ var territoriesListCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.NoArgs,
 	RunE:         runTerritoriesList,
-	Example: `  fline territories list
-  fline territories list --output json | jq -r '.territories[].id'
-  fline territories list --no-cache`,
+	Example: `  flightline territories list
+  flightline territories list --output json | jq -r '.territories[].id'
+  flightline territories list --no-cache`,
 }
 
 var territoriesListNoCache bool
@@ -90,9 +77,8 @@ func init() {
 func runTerritoriesList(cmd *cobra.Command, _ []string) error {
 	cachePath, err := territoriesCachePath()
 	if err != nil {
-		// Cache-path resolution failure is non-fatal — we still fetch live.
-		// Surfaced on stderr so the user knows their cache isn't being saved.
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "fline: territories cache disabled: %v\n", err)
+		// Non-fatal: live fetch still proceeds, cache just isn't saved.
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "flightline: territories cache disabled: %v\n", err)
 		cachePath = ""
 	}
 
@@ -113,18 +99,17 @@ func runTerritoriesList(cmd *cobra.Command, _ []string) error {
 	}
 
 	if cachePath != "" {
-		// Cache-write failures are non-fatal. The user still gets fresh data
-		// on stdout; we just lose the speedup on next invocation.
+		// Non-fatal: fresh data still goes to stdout, only the next-run
+		// speedup is lost.
 		if werr := writeTerritoriesCache(cachePath, list); werr != nil {
-			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "fline: territories cache write failed: %v\n", werr)
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "flightline: territories cache write failed: %v\n", werr)
 		}
 	}
 
 	return Render(list, outputMode())
 }
 
-// fetchTerritories pages through /v1/territories and returns the flattened
-// view list. 200 is Apple's max page size.
+// 200 is Apple's max page size.
 func fetchTerritories(ctx context.Context, c *asc.Client) (TerritoryList, error) {
 	out := make([]TerritoryView, 0, 200)
 	for page, err := range asc.Pages[asc.TerritoryAttributes](ctx, c, "/v1/territories", nil) {
@@ -138,10 +123,6 @@ func fetchTerritories(ctx context.Context, c *asc.Client) (TerritoryList, error)
 	return TerritoryList{Territories: out}, nil
 }
 
-// territoriesCachePath returns the absolute path to the on-disk cache file.
-// Uses os.UserCacheDir() so XDG_CACHE_HOME is honored on Linux and the
-// platform-specific default ($HOME/Library/Caches on macOS, %LocalAppData%
-// on Windows) elsewhere. Cache lives under flightline/ subdir.
 func territoriesCachePath() (string, error) {
 	dir, err := os.UserCacheDir()
 	if err != nil {
@@ -150,10 +131,8 @@ func territoriesCachePath() (string, error) {
 	return filepath.Join(dir, "flightline", "territories.json"), nil
 }
 
-// readTerritoriesCache reads and validates the cache file. Returns
-// (zero, false) on any miss reason: file absent, JSON corrupt, version
-// mismatch, or stale timestamp. Errors are swallowed because every failure
-// mode degrades to a live fetch — the user shouldn't see cache plumbing.
+// Errors are swallowed: every miss reason (absent, corrupt, version
+// mismatch, stale) degrades to a live fetch, invisible to the user.
 func readTerritoriesCache(path string) (TerritoryList, bool) {
 	data, err := os.ReadFile(path) // #nosec G304 -- path is computed from os.UserCacheDir()
 	if err != nil {
@@ -172,10 +151,7 @@ func readTerritoriesCache(path string) (TerritoryList, bool) {
 	return f.Payload, true
 }
 
-// writeTerritoriesCache writes the payload via a tmp-file + atomic rename so
-// a Ctrl-C mid-write can't corrupt the cache. Mode 0600 even though the
-// territory list isn't sensitive — defense in depth and consistency with
-// other Flightline-managed dotfiles.
+// Tmp-file + atomic rename so a Ctrl-C mid-write can't corrupt the cache.
 func writeTerritoriesCache(path string, payload TerritoryList) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("create cache dir: %w", err)

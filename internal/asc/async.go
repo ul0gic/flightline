@@ -1,21 +1,3 @@
-// Package asc — async-poll wrapper.
-//
-// Apple's Analytics Reports API and Sales/Finance Reports API don't return
-// data in the same request as the rest of the surface. Both follow a
-// request → wait → poll → download lifecycle:
-//
-//  1. Analytics — POST /v1/analyticsReportRequests, then poll
-//     /v1/analyticsReportRequests/{id}/reports until reports appear, then list
-//     instances per report and download each segment from a pre-signed URL.
-//     Latency: minutes to hours per request.
-//  2. Sales / Finance — synchronous gzipped CSV passthrough on
-//     /v1/salesReports / /v1/financeReports. Returned with content-type
-//     "application/a-gzip"; we gunzip transparently.
-//
-// This file holds the wrapper-level public API consumed by Phase 2A.2
-// (sales / finance / subscription reports) and 2A.3 (analytics reports).
-// Both downstream packages depend on the shape declared here — change with
-// care; renaming or removing exported symbols is a breaking change.
 package asc
 
 import (
@@ -31,33 +13,16 @@ import (
 	"time"
 )
 
-// ---------------------------------------------------------------------------
-// IDs
-// ---------------------------------------------------------------------------
-
-// RequestID is an analytics report request identifier returned by Apple from
-// POST /v1/analyticsReportRequests. Wrapped in a typed string so it can't be
-// confused at call sites with ReportID, InstanceID, or a bare app ID.
+// RequestID is a typed analytics report request identifier (POST /v1/analyticsReportRequests).
 type RequestID string
 
-// ReportID is an analytics report identifier (one row in
-// /v1/analyticsReportRequests/{id}/reports). Each report has many instances.
+// ReportID is an analytics report identifier; one row under a RequestID, with many InstanceIDs.
 type ReportID string
 
-// InstanceID is an analytics report instance identifier. An instance is
-// scoped to a granularity + processing date and contains 1..N segments.
+// InstanceID is an analytics report instance identifier, scoped to a granularity + processing date.
 type InstanceID string
 
-// ---------------------------------------------------------------------------
-// Enums (mirror the spec's accessType / category / granularity literals)
-// ---------------------------------------------------------------------------
-
-// AnalyticsAccessType is the access pattern for an analytics report request.
-// Apple supports two:
-//
-//   - ONE_TIME_SNAPSHOT — single point-in-time pull; reports stop being
-//     produced once the snapshot is done.
-//   - ONGOING — reports keep being added as new data becomes available.
+// AnalyticsAccessType is the access pattern: ONE_TIME_SNAPSHOT or ONGOING.
 type AnalyticsAccessType string
 
 const (
@@ -67,11 +32,9 @@ const (
 	AccessTypeOngoing AnalyticsAccessType = "ONGOING"
 )
 
-// AnalyticsCategory is the high-level grouping of a report (e.g. APP_USAGE,
-// COMMERCE). Mirrors the spec enum at AnalyticsReport.attributes.category.
+// AnalyticsCategory is the high-level report grouping (APP_USAGE, COMMERCE, etc.).
 type AnalyticsCategory string
 
-// Analytics category enum literals as published in openapi.oas.json.
 const (
 	CategoryAppUsage           AnalyticsCategory = "APP_USAGE"
 	CategoryAppStoreEngagement AnalyticsCategory = "APP_STORE_ENGAGEMENT"
@@ -80,23 +43,16 @@ const (
 	CategoryPerformance        AnalyticsCategory = "PERFORMANCE"
 )
 
-// AnalyticsGranularity is the time-bucket size of an analytics report
-// instance: DAILY / WEEKLY / MONTHLY (per spec).
+// AnalyticsGranularity is the time-bucket size of an analytics report instance (DAILY/WEEKLY/MONTHLY).
 type AnalyticsGranularity string
 
-// Analytics granularity enum literals.
 const (
 	GranularityDaily   AnalyticsGranularity = "DAILY"
 	GranularityWeekly  AnalyticsGranularity = "WEEKLY"
 	GranularityMonthly AnalyticsGranularity = "MONTHLY"
 )
 
-// ---------------------------------------------------------------------------
-// Typed attributes mirroring Apple's wire shape (subset Flightline actually uses)
-// ---------------------------------------------------------------------------
-
-// AnalyticsReportRequestAttributes mirrors AnalyticsReportRequest.attributes
-// from the spec.
+// AnalyticsReportRequestAttributes mirrors AnalyticsReportRequest.attributes from the spec.
 type AnalyticsReportRequestAttributes struct {
 	AccessType             AnalyticsAccessType `json:"accessType,omitempty"`
 	StoppedDueToInactivity bool                `json:"stoppedDueToInactivity,omitempty"`
@@ -108,10 +64,8 @@ type AnalyticsReportAttributes struct {
 	Category AnalyticsCategory `json:"category,omitempty"`
 }
 
-// AnalyticsReport is the wrapper-flat view of one analytics report row
-// surfaced through the iterator. ID is canonical; Name/Category come from
-// the resource attributes block. RequestID is filled in by the wrapper for
-// caller convenience (Apple's response doesn't echo it on the report rows).
+// AnalyticsReport is the flat view of one report row. RequestID is filled in by the wrapper;
+// Apple's response doesn't echo it on the report rows.
 type AnalyticsReport struct {
 	ID        ReportID          `json:"id"`
 	RequestID RequestID         `json:"requestId,omitempty"`
@@ -140,9 +94,7 @@ type AnalyticsReportSegmentAttributes struct {
 	URL         string `json:"url,omitempty"`
 }
 
-// AnalyticsReportSegment is the wrapper-flat view of one segment. URL is
-// the pre-signed CDN URL Apple expects callers to GET *without* an
-// Authorization header.
+// AnalyticsReportSegment is the flat view of one segment. URL is a pre-signed CDN URL; omit Authorization when fetching it.
 type AnalyticsReportSegment struct {
 	ID          string     `json:"id"`
 	InstanceID  InstanceID `json:"instanceId,omitempty"`
@@ -151,27 +103,14 @@ type AnalyticsReportSegment struct {
 	SizeInBytes int64      `json:"sizeInBytes,omitempty"`
 }
 
-// ---------------------------------------------------------------------------
-// Request / poll parameters
-// ---------------------------------------------------------------------------
-
 // AnalyticsReportRequestParams is the input to RequestAnalyticsReport.
-//
-// AppID is Apple's numeric app ID (string per the spec, e.g. "1234567890").
-// AccessType selects between ONE_TIME_SNAPSHOT and ONGOING. The spec rejects
-// any other attribute on the request body (filters/granularity are applied
-// at list/instance time, not at request time).
 type AnalyticsReportRequestParams struct {
 	AppID      string
 	AccessType AnalyticsAccessType
 }
 
 // PollOpts configures the analytics polling loop's exponential backoff.
-//
-// Defaults (used when a field is zero) target Apple's 500 req/hr rate limit
-// with comfortable headroom: 30s initial, capped at 5m, 1.5x growth, no
-// attempt cap. Override conservatively — polling faster than every 30s is
-// rarely worth the budget.
+// Defaults: 30s initial, 5m cap, 1.5x growth. Override conservatively: Apple caps at 500 req/hr.
 type PollOpts struct {
 	InitialBackoff time.Duration // default 30s
 	MaxBackoff     time.Duration // default 5m
@@ -194,24 +133,9 @@ func (o PollOpts) resolveDefaults() PollOpts {
 	return out
 }
 
-// ---------------------------------------------------------------------------
-// Sentinel error: pollAnalyticsReport stops cleanly when the request reports
-// stoppedDueToInactivity (ONGOING access type only).
-// ---------------------------------------------------------------------------
-
-// ErrAnalyticsRequestStopped is returned by PollAnalyticsReport when Apple
-// flips the request's stoppedDueToInactivity flag to true (ONGOING access
-// type only). The iterator yields the error once and terminates.
+// ErrAnalyticsRequestStopped is returned by PollAnalyticsReport when Apple sets stoppedDueToInactivity (ONGOING only).
 var ErrAnalyticsRequestStopped = errors.New("asc: analytics request stopped due to inactivity")
 
-// ---------------------------------------------------------------------------
-// 1. Submit a new analytics report request
-// ---------------------------------------------------------------------------
-
-// analyticsCreateRequestBody mirrors the spec's
-// AnalyticsReportRequestCreateRequest (data.type, data.attributes.accessType,
-// data.relationships.app.data.{type,id}). Built once per submit; not exported
-// because the public API takes the typed AnalyticsReportRequestParams.
 type analyticsCreateRequestBody struct {
 	Data analyticsCreateRequestData `json:"data"`
 }
@@ -239,19 +163,8 @@ type analyticsCreateRequestAppData struct {
 	ID   string `json:"id"`
 }
 
-// RequestAnalyticsReport submits a new analytics report request and returns
-// its ID. The request is queued by Apple; reports become available over
-// minutes-to-hours and must be retrieved via PollAnalyticsReport.
-//
-// Validation:
-//   - params.AppID must be non-empty (Apple's numeric app id).
-//   - params.AccessType must be ONE_TIME_SNAPSHOT or ONGOING.
-//
-// Wire body matches AnalyticsReportRequestCreateRequest from openapi.oas.json:
-//
-//	{ "data": { "type": "analyticsReportRequests",
-//	            "attributes": { "accessType": "..." },
-//	            "relationships": { "app": { "data": { "type": "apps", "id": "..." } } } } }
+// RequestAnalyticsReport submits a new analytics report request and returns its ID.
+// Reports become available over minutes-to-hours; retrieve them via PollAnalyticsReport.
 func (c *Client) RequestAnalyticsReport(ctx context.Context, params AnalyticsReportRequestParams) (RequestID, error) {
 	if params.AppID == "" {
 		return "", errors.New("asc: RequestAnalyticsReport: AppID is required")
@@ -292,33 +205,13 @@ func (c *Client) RequestAnalyticsReport(ctx context.Context, params AnalyticsRep
 	return RequestID(resp.Data.ID), nil
 }
 
-// ---------------------------------------------------------------------------
-// 2. Poll the request → list of reports as they appear
-// ---------------------------------------------------------------------------
-
-// PollAnalyticsReport yields available AnalyticsReport entries as they become
-// ready, ordered by Apple's response order. The iterator:
-//
-//   - Calls GET /v1/analyticsReportRequests/{id}/reports on a backoff schedule
-//     governed by PollOpts (defaults: 30s→5m, 1.5x).
-//   - Yields each newly observed report exactly once (deduped by ReportID).
-//   - Re-fetches the parent request each iteration to honour
-//     stoppedDueToInactivity (ONGOING) — yields ErrAnalyticsRequestStopped
-//     and terminates.
-//   - Honours ctx.Done() between polls; yields ctx.Err() and terminates.
-//   - Honours PollOpts.MaxAttempts (0 = unlimited).
-//
-// The iterator does NOT block on instance/segment readiness — it only tells
-// the caller which reports exist. To download data, the caller drives:
+// PollAnalyticsReport yields AnalyticsReport entries as they become ready, deduped by ID.
+// Polls on an exponential backoff (PollOpts); stops on ctx cancel, stoppedDueToInactivity, or MaxAttempts.
 //
 //	for report, err := range c.PollAnalyticsReport(ctx, id, opts) {
 //	    if err != nil { return err }
-//	    instances, err := c.ListAnalyticsInstances(ctx, report.ID)
-//	    ...
+//	    instances, _ := c.ListAnalyticsInstances(ctx, report.ID)
 //	}
-//
-// Apple's first poll often returns an empty array; PollAnalyticsReport keeps
-// polling until reports appear or the context cancels.
 func (c *Client) PollAnalyticsReport(ctx context.Context, id RequestID, opts PollOpts) iter.Seq2[AnalyticsReport, error] {
 	o := opts.resolveDefaults()
 	return func(yield func(AnalyticsReport, error) bool) {
@@ -350,18 +243,6 @@ func (c *Client) PollAnalyticsReport(ctx context.Context, id RequestID, opts Pol
 	}
 }
 
-// pollStepDone signals that the iterator should terminate without an error
-// (either a ONE_TIME_SNAPSHOT request reached its quiet follow-up or the
-// caller broke out via the yield callback returning false).
-//
-// runPollStep performs one poll iteration: re-fetches the parent request to
-// honour stoppedDueToInactivity, lists current reports, yields any new
-// ones, and reports back whether the iterator should terminate.
-//
-// Returns (done=true, nil) when the loop should end cleanly. Returns
-// (done=false, err!=nil) when an error was already yielded and the caller
-// should also terminate. Returns (done=false, err=nil) when the caller
-// should sleep and retry.
 func (c *Client) runPollStep(
 	ctx context.Context,
 	id RequestID,
@@ -394,20 +275,14 @@ func (c *Client) runPollStep(
 		return true, nil
 	}
 
-	// ONE_TIME_SNAPSHOT terminates the iterator after the first quiet
-	// follow-up: we have at least one report and the latest poll
-	// produced no new ones. ONGOING stays alive until ctx cancels or
-	// Apple flips stoppedDueToInactivity.
+	// ONE_TIME_SNAPSHOT terminates after the first quiet follow-up (a report exists, latest poll
+	// added none); ONGOING stays alive until ctx cancels or Apple flips stoppedDueToInactivity.
 	if reqInfo.AccessType == AccessTypeOneTimeSnapshot && len(seen) > 0 && !progressed {
 		return true, nil
 	}
 	return false, nil
 }
 
-// yieldNewReports drains a fresh report list against the de-dup set,
-// yielding each previously-unseen report exactly once. progressed is true
-// when at least one new report was yielded; halted is true when the caller
-// returned false from yield (caller wants to stop).
 func yieldNewReports(
 	reports []AnalyticsReport,
 	seen map[ReportID]struct{},
@@ -426,8 +301,6 @@ func yieldNewReports(
 	return progressed, false
 }
 
-// sleepWithCancel blocks for d, returning false (and yielding ctx.Err())
-// when the context cancels before the timer fires.
 func sleepWithCancel(ctx context.Context, d time.Duration, yield func(AnalyticsReport, error) bool) bool {
 	select {
 	case <-ctx.Done():
@@ -438,7 +311,6 @@ func sleepWithCancel(ctx context.Context, d time.Duration, yield func(AnalyticsR
 	}
 }
 
-// nextBackoff applies the multiplier and clamps to max.
 func nextBackoff(current time.Duration, multiplier float64, maxBackoff time.Duration) time.Duration {
 	next := time.Duration(float64(current) * multiplier)
 	if next > maxBackoff {
@@ -447,8 +319,7 @@ func nextBackoff(current time.Duration, multiplier float64, maxBackoff time.Dura
 	return next
 }
 
-// getAnalyticsRequest hydrates the parent request resource so we can read
-// stoppedDueToInactivity and accessType during the poll loop. Single GET.
+// getAnalyticsRequest reads stoppedDueToInactivity and accessType, which the poll loop branches on.
 func (c *Client) getAnalyticsRequest(ctx context.Context, id RequestID) (AnalyticsReportRequestAttributes, error) {
 	resp, err := Get[Single[AnalyticsReportRequestAttributes]](
 		ctx, c, "/v1/analyticsReportRequests/"+url.PathEscape(string(id)), nil,
@@ -459,8 +330,7 @@ func (c *Client) getAnalyticsRequest(ctx context.Context, id RequestID) (Analyti
 	return resp.Data.Attributes, nil
 }
 
-// listReportsForRequest fetches the current set of analyticsReports for a
-// request. Apple paginates; we walk every page and flatten to []AnalyticsReport.
+// listReportsForRequest walks every page; Apple paginates the reports collection.
 func (c *Client) listReportsForRequest(ctx context.Context, id RequestID) ([]AnalyticsReport, error) {
 	var out []AnalyticsReport
 	path := "/v1/analyticsReportRequests/" + url.PathEscape(string(id)) + "/reports"
@@ -484,8 +354,7 @@ func (c *Client) listReportsForRequest(ctx context.Context, id RequestID) ([]Ana
 	}
 }
 
-// ListAnalyticsInstances returns every instance of a report (across all
-// granularities and processing dates). Synchronous; walks all pages.
+// ListAnalyticsInstances returns every instance of a report across all granularities and dates.
 func (c *Client) ListAnalyticsInstances(ctx context.Context, reportID ReportID) ([]AnalyticsReportInstance, error) {
 	if reportID == "" {
 		return nil, errors.New("asc: ListAnalyticsInstances: empty ReportID")
@@ -512,9 +381,8 @@ func (c *Client) ListAnalyticsInstances(ctx context.Context, reportID ReportID) 
 	}
 }
 
-// ListAnalyticsSegments returns every segment for one instance. Each segment
-// carries a pre-signed URL that DownloadAnalyticsSegment fetches without
-// injecting an Authorization header.
+// ListAnalyticsSegments returns every segment for one instance. Each carries a pre-signed URL
+// that DownloadAnalyticsSegment fetches without an Authorization header (Apple's CDN rejects it).
 func (c *Client) ListAnalyticsSegments(ctx context.Context, instanceID InstanceID) ([]AnalyticsReportSegment, error) {
 	if instanceID == "" {
 		return nil, errors.New("asc: ListAnalyticsSegments: empty InstanceID")
@@ -542,26 +410,12 @@ func (c *Client) ListAnalyticsSegments(ctx context.Context, instanceID InstanceI
 	}
 }
 
-// ---------------------------------------------------------------------------
-// 3. Download a segment (pre-signed CDN URL — NO Authorization header).
-// ---------------------------------------------------------------------------
-
-// downloadCapBytes is the upper bound on a single segment download. Apple's
-// segments are typically a few MiB; 256 MiB is generous defense against a
-// runaway response and ten-fold the largest segment seen in practice.
+// downloadCapBytes caps a single segment download. Apple's segments run a few MiB;
+// 256 MiB is defense against a runaway response, ten-fold the largest seen in practice.
 const downloadCapBytes = 256 << 20
 
-// DownloadAnalyticsSegment downloads a segment by ID and returns the
-// gunzipped bytes. The data path is two GETs:
-//
-//  1. GET /v1/analyticsReportSegments/{id} → resolve the pre-signed CDN URL
-//     (using the JWT-injecting *Client.do path).
-//  2. GET <pre-signed URL> with NO Authorization header — Apple's CDN rejects
-//     bearer tokens on signed URLs (same pattern the beta-feedback screenshot
-//     downloader uses; see internal/cmd/beta_feedback.go).
-//
-// The CDN response is gzipped; we transparently gunzip and return raw CSV
-// bytes.
+// DownloadAnalyticsSegment resolves the pre-signed CDN URL for a segment and returns the gunzipped CSV bytes.
+// The CDN GET omits Authorization: Apple's signed URLs reject bearer tokens.
 func (c *Client) DownloadAnalyticsSegment(ctx context.Context, segmentID string) ([]byte, error) {
 	if segmentID == "" {
 		return nil, errors.New("asc: DownloadAnalyticsSegment: empty segmentID")
@@ -585,15 +439,8 @@ func (c *Client) DownloadAnalyticsSegment(ctx context.Context, segmentID string)
 	return body, nil
 }
 
-// fetchSignedGzip GETs a pre-signed URL with no Authorization header,
-// reads up to downloadCapBytes, and gunzips. Used by both the analytics
-// segment download and (transparently — same shape) the sales/finance
-// helpers below since Apple returns "application/a-gzip" for those too.
-//
-// The "no Authorization header" rule is critical: Apple's CDN signs the URL
-// with a query-string SHA, and any extra header at the wrong layer flips the
-// signature. http.DefaultClient is correct here precisely because it does
-// not run the JWT middleware that the *Client.do path injects.
+// fetchSignedGzip GETs a pre-signed URL without Authorization and gunzips the response.
+// http.DefaultClient is intentional: the JWT middleware in *Client.do would break Apple's CDN signature.
 func fetchSignedGzip(ctx context.Context, signedURL string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, signedURL, http.NoBody)
 	if err != nil {
@@ -610,8 +457,6 @@ func fetchSignedGzip(ctx context.Context, signedURL string) ([]byte, error) {
 
 	limited := io.LimitReader(resp.Body, downloadCapBytes)
 
-	// gzip.NewReader returns io.EOF cleanly when the body is well-formed.
-	// If Apple ever serves an already-decompressed body, fall back to raw.
 	gz, err := gzip.NewReader(limited)
 	if err != nil {
 		return nil, fmt.Errorf("gunzip: %w", err)
@@ -624,15 +469,9 @@ func fetchSignedGzip(ctx context.Context, signedURL string) ([]byte, error) {
 	return out, nil
 }
 
-// ---------------------------------------------------------------------------
-// 4. Synchronous sales / finance reports (gzipped CSV passthrough)
-// ---------------------------------------------------------------------------
-
-// SalesFrequency is the time bucket of a sales report (DAILY / WEEKLY /
-// MONTHLY / YEARLY).
+// SalesFrequency is the time bucket of a sales report (DAILY/WEEKLY/MONTHLY/YEARLY).
 type SalesFrequency string
 
-// Sales frequency literals.
 const (
 	SalesFrequencyDaily   SalesFrequency = "DAILY"
 	SalesFrequencyWeekly  SalesFrequency = "WEEKLY"
@@ -643,7 +482,6 @@ const (
 // SalesReportType mirrors the spec enum at filter[reportType].
 type SalesReportType string
 
-// Sales report type literals.
 const (
 	SalesReportTypeSales                   SalesReportType = "SALES"
 	SalesReportTypePreOrder                SalesReportType = "PRE_ORDER"
@@ -660,7 +498,6 @@ const (
 // SalesReportSubType mirrors the spec enum at filter[reportSubType].
 type SalesReportSubType string
 
-// Sales report sub-type literals.
 const (
 	SalesReportSubTypeSummary            SalesReportSubType = "SUMMARY"
 	SalesReportSubTypeDetailed           SalesReportSubType = "DETAILED"
@@ -669,11 +506,8 @@ const (
 	SalesReportSubTypeSummaryChannel     SalesReportSubType = "SUMMARY_CHANNEL"
 )
 
-// SalesReportParams holds the filter[…] query parameters for /v1/salesReports.
-//
-// VendorNumber, ReportType, ReportSubType, Frequency are required by Apple.
-// ReportDate is optional for some sub-types (Apple defaults to "latest").
-// Version (optional) pins to a specific Sales report schema version.
+// SalesReportParams holds the filter[...] parameters for /v1/salesReports.
+// VendorNumber, ReportType, ReportSubType, Frequency are required; ReportDate and Version are optional.
 type SalesReportParams struct {
 	VendorNumber  string
 	ReportType    SalesReportType
@@ -686,15 +520,12 @@ type SalesReportParams struct {
 // FinanceReportType mirrors the spec enum at filter[reportType] for finance.
 type FinanceReportType string
 
-// Finance report type literals.
 const (
 	FinanceReportTypeFinancial     FinanceReportType = "FINANCIAL"
 	FinanceReportTypeFinanceDetail FinanceReportType = "FINANCE_DETAIL"
 )
 
-// FinanceReportParams holds the filter[…] params for /v1/financeReports.
-//
-// VendorNumber, ReportType, RegionCode, ReportDate are all required.
+// FinanceReportParams holds the filter[...] parameters for /v1/financeReports. All four fields are required.
 type FinanceReportParams struct {
 	VendorNumber string
 	ReportType   FinanceReportType
@@ -702,11 +533,7 @@ type FinanceReportParams struct {
 	ReportDate   string // YYYY-MM (Apple's finance reports are monthly)
 }
 
-// FetchSalesReport hits /v1/salesReports synchronously and returns the
-// gunzipped CSV bytes. Apple responds with content-type "application/a-gzip";
-// we always gunzip transparently.
-//
-// Returns an *APIError on Apple non-2xx (typed, with errors[] payload).
+// FetchSalesReport hits /v1/salesReports and returns gunzipped CSV bytes. Returns *APIError on non-2xx.
 func (c *Client) FetchSalesReport(ctx context.Context, params SalesReportParams) ([]byte, error) {
 	if err := validateSalesParams(params); err != nil {
 		return nil, err
@@ -725,8 +552,7 @@ func (c *Client) FetchSalesReport(ctx context.Context, params SalesReportParams)
 	return c.fetchGzipReport(ctx, "/v1/salesReports", q)
 }
 
-// FetchFinanceReport hits /v1/financeReports synchronously and returns the
-// gunzipped CSV bytes.
+// FetchFinanceReport hits /v1/financeReports and returns gunzipped CSV bytes.
 func (c *Client) FetchFinanceReport(ctx context.Context, params FinanceReportParams) ([]byte, error) {
 	if err := validateFinanceParams(params); err != nil {
 		return nil, err
@@ -739,11 +565,8 @@ func (c *Client) FetchFinanceReport(ctx context.Context, params FinanceReportPar
 	return c.fetchGzipReport(ctx, "/v1/financeReports", q)
 }
 
-// fetchGzipReport runs an Apple-authenticated GET against an endpoint that
-// returns "application/a-gzip", then gunzips. Unlike DownloadAnalyticsSegment
-// (which fetches a pre-signed URL with no Authorization header), this path
-// uses the JWT-injecting *Client.do — Apple's report endpoints are
-// authenticated and live on api.appstoreconnect.apple.com.
+// fetchGzipReport runs an authenticated GET against an "application/a-gzip" endpoint and gunzips.
+// Unlike DownloadAnalyticsSegment, this path uses JWT auth: Apple's report endpoints require it.
 func (c *Client) fetchGzipReport(ctx context.Context, path string, query url.Values) ([]byte, error) {
 	resp, err := c.do(ctx, http.MethodGet, path, query, nil, "application/a-gzip")
 	if err != nil {
@@ -768,9 +591,7 @@ func (c *Client) fetchGzipReport(ctx context.Context, path string, query url.Val
 	return out, nil
 }
 
-// validateSalesParams enforces Apple's required filter[...] set. Returns an
-// actionable error naming the empty field rather than letting Apple respond
-// with a generic 400.
+// validateSalesParams names the empty required field locally rather than letting Apple return a generic 400.
 func validateSalesParams(p SalesReportParams) error {
 	switch {
 	case p.VendorNumber == "":
@@ -785,8 +606,7 @@ func validateSalesParams(p SalesReportParams) error {
 	return nil
 }
 
-// validateFinanceParams enforces Apple's required filter[...] set for
-// /v1/financeReports.
+// validateFinanceParams names the empty required field locally rather than letting Apple return a generic 400.
 func validateFinanceParams(p FinanceReportParams) error {
 	switch {
 	case p.VendorNumber == "":

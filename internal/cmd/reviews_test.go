@@ -193,7 +193,6 @@ func TestReviewsCommand_RegisteredOnRoot(t *testing.T) {
 	}
 }
 
-// TestReviews_JSONOutputStability_List locks the ReviewList JSON shape.
 func TestReviews_JSONOutputStability_List(t *testing.T) {
 	list := ReviewList{
 		Reviews: []ReviewView{
@@ -221,13 +220,13 @@ func TestReviews_JSONOutputStability_List(t *testing.T) {
 	}
 	for _, key := range []string{"id", "type", "attributes"} {
 		if _, ok := decoded.Reviews[0][key]; !ok {
-			t.Errorf("missing per-row key %q — JSON contract drift", key)
+			t.Errorf("missing per-row key %q: JSON contract drift", key)
 		}
 	}
 }
 
-// TestReviews_FixtureReplay_ListWithResponseInclude exercises the include
-// decoding path: 3 reviews, only the first has a response inline.
+// TestReviews_FixtureReplay_ListWithResponseInclude: 3 reviews, only the first
+// has a response inline.
 func TestReviews_FixtureReplay_ListWithResponseInclude(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
@@ -260,8 +259,6 @@ func TestReviews_FixtureReplay_ListWithResponseInclude(t *testing.T) {
 	}
 }
 
-// TestReviews_FixtureReplay_GetWithResponse exercises the single-review get
-// with response include.
 func TestReviews_FixtureReplay_GetWithResponse(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/customerReviews/REVIEW-001": {File: "reviews_get"},
@@ -290,7 +287,6 @@ func TestReviews_FixtureReplay_GetWithResponse(t *testing.T) {
 	}
 }
 
-// TestReviews_FixtureReplay_Summary exercises the summarizations endpoint.
 func TestReviews_FixtureReplay_Summary(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
@@ -317,8 +313,6 @@ func TestReviews_FixtureReplay_Summary(t *testing.T) {
 	}
 }
 
-// TestReviews_SinceShortCircuit asserts the since cutoff stops walking
-// records older than the cutoff.
 func TestReviews_SinceShortCircuit(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
@@ -339,6 +333,6 @@ func TestReviews_SinceShortCircuit(t *testing.T) {
 		t.Fatalf("collectReviews: %v", err)
 	}
 	if len(views) != 2 {
-		t.Errorf("views len = %d, want 2 (REVIEW-001 and REVIEW-002 — REVIEW-003 should be cut off)", len(views))
+		t.Errorf("views len = %d, want 2 (REVIEW-001 and REVIEW-002: REVIEW-003 should be cut off)", len(views))
 	}
 }

@@ -1,11 +1,11 @@
 # Flightline Preflight Rules
 
-Flightline's L3 layer catches the clerical mistakes that cause Apple to reject a release. Every rule in this document encodes a real rejection pattern — either from Apple's documented guidelines or from production experience.
+Flightline's L3 layer catches the clerical mistakes that cause Apple to reject a release. Every rule in this document encodes a real rejection pattern, either from Apple's documented guidelines or from production experience.
 
 Two commands run the rules:
 
-- **`fline lint <state.yaml>`** — offline. Validates the state file against the JSON Schema and runs every Offline and Both-mode rule. No network required. Run this in CI on every commit that touches `state.yaml`.
-- **`fline preflight <bundleId> --version <v>`** — live. Reads the actual ASC API state for the specified bundle and version, then runs every Live and Both-mode rule. Requires a valid `.p8` credential. Run this just before `fline submit`.
+- **`flightline lint <state.yaml>`**, offline. Validates the state file against the JSON Schema and runs every Offline and Both-mode rule. No network required. Run this in CI on every commit that touches `state.yaml`.
+- **`flightline preflight <bundleId> --version <v>`**, live. Reads the actual ASC API state for the specified bundle and version, then runs every Live and Both-mode rule. Requires a valid `.p8` credential. Run this just before `flightline submit`.
 
 Both commands emit a stable JSON contract via `--output json`:
 
@@ -17,8 +17,8 @@ Both commands emit a stable JSON contract via `--output json`:
       "severity": "error",
       "message": "IAP \"com.example.lifetime\" is READY_TO_SUBMIT but not in review submission abc123",
       "path": "/spec/iap/products/com.example.lifetime",
-      "fixHint": "add the IAP to the submission: `fline review-submissions items ...`",
-      "reference": "PRD §L3 — IAP attached-to-review-submission"
+      "fixHint": "add the IAP to the submission: `flightline review-submissions items ...`",
+      "reference": "PRD §L3, IAP attached-to-review-submission"
     }
   ]
 }
@@ -67,14 +67,14 @@ Rules are sorted alphabetically by ID. The runner also executes them in this ord
 - **Mode:** Live
 - **Severity:** Error
 - **What it checks:** Whether the App Store version has a build attached and whether that build's `processingState` is `VALID`.
-- **Why it matters:** Apple's submission flow blocks "Submit for Review" until both conditions are true. Submitting without a valid build is impossible — but the error only surfaces at submit time, after you've confirmed the dialog. This rule surfaces the gap at preflight, before you commit to review.
+- **Why it matters:** Apple's submission flow blocks "Submit for Review" until both conditions are true. Submitting without a valid build is impossible, but the error only surfaces at submit time, after you've confirmed the dialog. This rule surfaces the gap at preflight, before you commit to review.
 - **When it fires:**
   - The version has no build attached (the `/v1/appStoreVersions/{id}/build` relationship resolves to empty or 404).
   - A build is attached but its `processingState` is not `VALID` (e.g., still `PROCESSING`, or `FAILED`/`INVALID`).
 - **How to fix:**
-  - Upload the build via Xcode or `altool`, wait for Apple to finish processing (the `processingState` transitions `PROCESSING` → `VALID`), then attach it: `fline builds attach <bundleId> --version <v> --build <buildNumber>`.
-  - If the build is `FAILED` or `INVALID`, re-archive and re-upload. `fline builds list <bundleId>` shows current state for every uploaded build.
-- **Reference:** PRD §L3 — build.attached-and-valid
+  - Upload the build via Xcode or `altool`, wait for Apple to finish processing (the `processingState` transitions `PROCESSING` → `VALID`), then attach it: `flightline builds attach <bundleId> --version <v> --build <buildNumber>`.
+  - If the build is `FAILED` or `INVALID`, re-archive and re-upload. `flightline builds list <bundleId>` shows current state for every uploaded build.
+- **Reference:** PRD §L3, build.attached-and-valid
 
 **Example diagnostic JSON:**
 
@@ -84,8 +84,8 @@ Rules are sorted alphabetically by ID. The runner also executes them in this ord
   "severity": "error",
   "message": "version \"1.2.0\" has no build attached",
   "path": "/spec/build",
-  "fixHint": "upload via Xcode/altool, wait for VALID, then `fline builds attach com.example.myapp --version 1.2.0 --build <n>`.",
-  "reference": "PRD §L3 — build.attached-and-valid"
+  "fixHint": "upload via Xcode/altool, wait for VALID, then `flightline builds attach com.example.myapp --version 1.2.0 --build <n>`.",
+  "reference": "PRD §L3, build.attached-and-valid"
 }
 ```
 
@@ -97,8 +97,8 @@ Or, when a build is attached but still processing:
   "severity": "error",
   "message": "build \"1.2.0\" is attached but processingState=\"PROCESSING\" (must be VALID)",
   "path": "/spec/build",
-  "fixHint": "wait for Apple to finish processing (PROCESSING -> VALID), or re-upload if the build is FAILED/INVALID. `fline builds list <bundleId>` shows current state.",
-  "reference": "PRD §L3 — build.attached-and-valid"
+  "fixHint": "wait for Apple to finish processing (PROCESSING -> VALID), or re-upload if the build is FAILED/INVALID. `flightline builds list <bundleId>` shows current state.",
+  "reference": "PRD §L3, build.attached-and-valid"
 }
 ```
 
@@ -112,10 +112,10 @@ Or, when a build is attached but still processing:
 - **Why it matters:** This is the #1 IAP rejection cause. Developers mark an IAP ready, assume "ready" means "submitted," and then the app goes through review without the IAP attached. Apple either rejects the app ("IAP referenced but not in review") or approves the app with the IAP silently marked `SCHEDULED-but-not-live`. The IAP never goes live. The rule catches this before you submit.
 - **When it fires:** An IAP product has `state=READY_TO_SUBMIT` but its resource ID does not appear in the open review submission's items (`/v1/reviewSubmissions/{id}/items`). Also fires when there is no open review submission at all.
 - **How to fix:**
-  - Inspect the current submission items: `fline review-submissions items <bundleId> --submission <submissionId>`.
+  - Inspect the current submission items: `flightline review-submissions items <bundleId> --submission <submissionId>`.
   - Attach the IAP through App Store Connect (Submission > Add Items) or via the review-submissions write surface.
   - If there is no open submission, create one first.
-- **Reference:** PRD §L3 — IAP attached-to-review-submission
+- **Reference:** PRD §L3, IAP attached-to-review-submission
 
 **Example diagnostic JSON:**
 
@@ -125,8 +125,8 @@ Or, when a build is attached but still processing:
   "severity": "error",
   "message": "IAP \"com.example.lifetime\" is READY_TO_SUBMIT but not in review submission abc123def456",
   "path": "/spec/iap/products/com.example.lifetime",
-  "fixHint": "add the IAP to the submission: `fline review-submissions items com.example.myapp --submission abc123def456` to inspect, then attach via App Store Connect or the submissions write surface.",
-  "reference": "PRD §L3 — IAP attached-to-review-submission"
+  "fixHint": "add the IAP to the submission: `flightline review-submissions items com.example.myapp --submission abc123def456` to inspect, then attach via App Store Connect or the submissions write surface.",
+  "reference": "PRD §L3, IAP attached-to-review-submission"
 }
 ```
 
@@ -138,8 +138,8 @@ When there is no open submission:
   "severity": "error",
   "message": "IAP \"com.example.lifetime\" is READY_TO_SUBMIT but no open review submission found for this app",
   "path": "/spec/iap/products/com.example.lifetime",
-  "fixHint": "create or open a review submission for the app and attach the IAP product. `fline review-submissions list <bundleId>` shows current submissions.",
-  "reference": "PRD §L3 — IAP attached-to-review-submission"
+  "fixHint": "create or open a review submission for the app and attach the IAP product. `flightline review-submissions list <bundleId>` shows current submissions.",
+  "reference": "PRD §L3, IAP attached-to-review-submission"
 }
 ```
 
@@ -151,7 +151,7 @@ When there is no open submission:
 - **Severity:** Error
 - **What it checks:** Whether any IAP's review screenshot shares a `sourceFileChecksum` with any of the app's store screenshots. Apple Guideline 2.3.2 explicitly prohibits reusing a store screenshot as IAP promotional art.
 - **Why it matters:** Guideline 2.3.2 is a hard rejection. Apple's reviewer checks whether the IAP "promotional" image is distinct from the app's store screenshots. Developers who drag-and-drop a screenshot to the IAP review screenshot field to save time will hit this.
-- **API note:** Apple's public API does not expose the IAP "promotional artwork" (the StoreKit promoted-purchase image) directly. The closest accessible asset is the review screenshot at `/v2/inAppPurchases/{id}/appStoreReviewScreenshot`. Flightline checks for checksum equality between that asset and the app's store screenshots — which catches the exact misuse pattern (reusing a screenshot file across surfaces) regardless of which field it landed on. When Apple exposes promotional-artwork hashes via the API, a sibling check will be added.
+- **API note:** Apple's public API does not expose the IAP "promotional artwork" (the StoreKit promoted-purchase image) directly. The closest accessible asset is the review screenshot at `/v2/inAppPurchases/{id}/appStoreReviewScreenshot`. Flightline checks for checksum equality between that asset and the app's store screenshots, which catches the exact misuse pattern (reusing a screenshot file across surfaces) regardless of which field it landed on. When Apple exposes promotional-artwork hashes via the API, a sibling check will be added.
 - **When it fires:** An IAP's review screenshot `sourceFileChecksum` matches any screenshot in the app's store screenshot sets (any locale, any device class, any version).
 - **How to fix:** Replace the IAP review screenshot with a unique image that is not reused from the app's store listing. The image should specifically represent the IAP purchase, not the app in general.
 - **Reference:** Apple Guideline 2.3.2
@@ -176,10 +176,10 @@ When there is no open submission:
 - **Mode:** Live
 - **Severity:** Error
 - **What it checks:** Whether every IAP product that is approaching review has an App Store review screenshot attached.
-- **Why it matters:** Apple requires a review screenshot for any IAP submitted for review. The screenshot is attached via a 3-levels-deep tab in App Store Connect that is easy to miss. Missing it is a hard rejection cause with no ambiguity — the submission is returned immediately.
+- **Why it matters:** Apple requires a review screenshot for any IAP submitted for review. The screenshot is attached via a 3-levels-deep tab in App Store Connect that is easy to miss. Missing it is a hard rejection cause with no ambiguity, the submission is returned immediately.
 - **When it fires:** An IAP is in one of the states where Apple will imminently review it (`READY_TO_SUBMIT`, `WAITING_FOR_REVIEW`, `IN_REVIEW`, `DEVELOPER_ACTION_NEEDED`, `PENDING_BINARY_APPROVAL`) and the IAP's `/v2/inAppPurchases/{id}/appStoreReviewScreenshot` relationship resolves to null or 404.
-- **How to fix:** Upload the review screenshot: `fline iap review-screenshot upload <bundleId> --product <productId> <file>`. The screenshot should show the IAP purchase within the app context.
-- **Reference:** PRD §L3 — IAP review-screenshot-exists
+- **How to fix:** Upload the review screenshot: `flightline iap review-screenshot upload <bundleId> --product <productId> <file>`. The screenshot should show the IAP purchase within the app context.
+- **Reference:** PRD §L3, IAP review-screenshot-exists
 
 **Example diagnostic JSON:**
 
@@ -189,8 +189,8 @@ When there is no open submission:
   "severity": "error",
   "message": "IAP \"com.example.lifetime\" has no App Store review screenshot attached",
   "path": "/spec/iap/products/com.example.lifetime/reviewScreenshot",
-  "fixHint": "upload one: `fline iap review-screenshot upload com.example.myapp --product com.example.lifetime <file>`",
-  "reference": "PRD §L3 — IAP review-screenshot-exists"
+  "fixHint": "upload one: `flightline iap review-screenshot upload com.example.myapp --product com.example.lifetime <file>`",
+  "reference": "PRD §L3, IAP review-screenshot-exists"
 }
 ```
 
@@ -201,10 +201,10 @@ When there is no open submission:
 - **Mode:** Offline
 - **Severity:** Warning
 - **What it checks:** Whether every locale that appears in one localizable surface (metadata, screenshots, IAP localizations) also appears in every other surface managed in the state file.
-- **Why it matters:** Apple may reject a submission where a locale has metadata but no screenshots (or vice versa) because reviewers can't preview the listing in that language. Inconsistency across surfaces is also a signal of a partially-applied edit — a locale was added to screenshots but the metadata block wasn't updated.
+- **Why it matters:** Apple may reject a submission where a locale has metadata but no screenshots (or vice versa) because reviewers can't preview the listing in that language. Inconsistency across surfaces is also a signal of a partially-applied edit, a locale was added to screenshots but the metadata block wasn't updated.
 - **When it fires:** A locale exists in the union of all declared surfaces (metadata, screenshots, iap.localizations) but is absent from at least one of those surfaces. Each missing (surface, locale) pair produces one warning.
-- **How to fix:** Either add the locale to every localizable surface, or remove it from all of them. A locale that is legitimately only in one surface (e.g., a screenshots-only locale) can be left as-is — the warning is advisory. Use `--output json` and pipe to `jq` to filter out specific rule IDs in CI if you have intentional single-surface locales.
-- **Reference:** PRD §L3 — localizations.completeness
+- **How to fix:** Either add the locale to every localizable surface, or remove it from all of them. A locale that is legitimately only in one surface (e.g., a screenshots-only locale) can be left as-is, the warning is advisory. Use `--output json` and pipe to `jq` to filter out specific rule IDs in CI if you have intentional single-surface locales.
+- **Reference:** PRD §L3, localizations.completeness
 
 **Example diagnostic JSON:**
 
@@ -215,7 +215,7 @@ When there is no open submission:
   "message": "locale \"fr-FR\" is declared in another surface but missing from screenshots",
   "path": "/spec/screenshots/locales/fr-FR",
   "fixHint": "either add the locale to every localizable surface (metadata, screenshots, iap.localizations) or remove it everywhere.",
-  "reference": "PRD §L3 — localizations.completeness"
+  "reference": "PRD §L3, localizations.completeness"
 }
 ```
 
@@ -226,14 +226,14 @@ When there is no open submission:
 - **Mode:** Both
 - **Severity:** Error
 - **What it checks:** Whether every locale has screenshots for the two device classes Apple currently requires for new iPhone submissions: 6.9" (`APP_IPHONE_69`) and 6.7" (`APP_IPHONE_67`). Apple's submission flow hard-blocks "Submit for Review" until both are present per locale.
-- **Why it matters:** Apple rotates its required-device list with major hardware releases. As of the v1 rule set, both 6.9" and 6.7" are required. Missing either causes a submission block that is not surfaced as a reviewer rejection — the UI simply won't allow you to proceed.
+- **Why it matters:** Apple rotates its required-device list with major hardware releases. As of the v1 rule set, both 6.9" and 6.7" are required. Missing either causes a submission block that is not surfaced as a reviewer rejection, the UI simply won't allow you to proceed.
 - **When it fires:**
   - **Offline:** A locale in `spec.screenshots.locales` has no entry (or an empty array) for `APP_IPHONE_69` or `APP_IPHONE_67`.
   - **Live:** A locale on the live App Store version has no screenshot set for `APP_IPHONE_69` or `APP_IPHONE_67`.
 - **How to fix:**
-  - Upload the missing screenshots: `fline screenshots upload <bundleId> --version <v> --locale <locale> --device-set APP_IPHONE_69 <files...>`.
+  - Upload the missing screenshots: `flightline screenshots upload <bundleId> --version <v> --locale <locale> --device-set APP_IPHONE_69 <files...>`.
   - Screenshot dimensions: 6.9" requires 1320×2868 or 2868×1320 (portrait/landscape); 6.7" requires 1290×2796 or 2796×1290.
-- **Reference:** PRD §L3 — screenshots.required-devices
+- **Reference:** PRD §L3, screenshots.required-devices
 
 **Example diagnostic JSON:**
 
@@ -244,7 +244,7 @@ When there is no open submission:
   "message": "locale \"en-US\" is missing required device APP_IPHONE_69",
   "path": "/spec/screenshots/locales/en-US/APP_IPHONE_69",
   "fixHint": "add at least one screenshot for the APP_IPHONE_69 device class to spec.screenshots.locales.en-US.",
-  "reference": "PRD §L3 — screenshots.required-devices"
+  "reference": "PRD §L3, screenshots.required-devices"
 }
 ```
 
@@ -256,8 +256,8 @@ Live variant:
   "severity": "error",
   "message": "locale \"en-US\" has no live screenshots for required device APP_IPHONE_67",
   "path": "/spec/screenshots/locales/en-US/APP_IPHONE_67",
-  "fixHint": "upload screenshots for APP_IPHONE_67 in locale en-US — `fline screenshots upload <bundleId> --version <v> --locale en-US --device-set APP_IPHONE_67 ...`",
-  "reference": "PRD §L3 — screenshots.required-devices"
+  "fixHint": "upload screenshots for APP_IPHONE_67 in locale en-US, `flightline screenshots upload <bundleId> --version <v> --locale en-US --device-set APP_IPHONE_67 ...`",
+  "reference": "PRD §L3, screenshots.required-devices"
 }
 ```
 
@@ -268,7 +268,7 @@ Live variant:
 - **Mode:** Offline
 - **Severity:** Warning
 - **What it checks:** Whether the contact email fields in `spec.reviewerDemo.contactEmail` and `spec.testflight.groups.*.testers[].email` match a permissive RFC 5322 simple-form pattern (`local@domain.tld`).
-- **Why it matters:** The JSON Schema declares `format: email` on these fields, but `santhosh-tekuri/jsonschema/v6` does not enforce format keywords by default. A value like `"joe at example dot com"` slips past schema validation silently. Apple's systems catch the bad address on submit or invite — but by then you've already committed to review or sent a broken invite. This rule catches malformed addresses offline, before any wire call.
+- **Why it matters:** The JSON Schema declares `format: email` on these fields, but `santhosh-tekuri/jsonschema/v6` does not enforce format keywords by default. A value like `"joe at example dot com"` slips past schema validation silently. Apple's systems catch the bad address on submit or invite, but by then you've already committed to review or sent a broken invite. This rule catches malformed addresses offline, before any wire call.
 - **Background:** This rule was created to close QA-011 at the lint layer. The loader stays permissive so existing state files don't break; the lint layer surfaces the gaps with actionable diagnostics. See `.project/issues/closed/QA-011-loader-quirks-format-and-yes-no-coercion.md`.
 - **When it fires:** An email field has a non-empty value that does not match `^[^\s@]+@[^\s@]+\.[^\s@]+$`. Empty values are handled by `strict.required-nonzero`, not here, to avoid double-reporting.
 - **How to fix:** Replace the value with a valid email address in the form `local@domain.tld`. For reviewer contact info, Apple uses this address to reach you about review questions; a bad address silently breaks that channel.
@@ -307,7 +307,7 @@ Tester variant:
 - **Mode:** Offline
 - **Severity:** Error
 - **What it checks:** Whether required string fields that the JSON Schema marks as `required` are also non-empty in the authored YAML. The specific focus in v1 is `spec.testflight.groups.*.testers[].email`.
-- **Why it matters:** Go's `json.Marshal` emits `"email": ""` for a zero-value `string` field even when the YAML omits the key entirely. The schema's `required: ["email"]` constraint is satisfied by the *presence* of the key in the JSON object — not by its non-emptiness — so a tester without an email is silently accepted by the validator. The tester is then quietly dropped by the apply-time resolver because it has no address to invite.
+- **Why it matters:** Go's `json.Marshal` emits `"email": ""` for a zero-value `string` field even when the YAML omits the key entirely. The schema's `required: ["email"]` constraint is satisfied by the *presence* of the key in the JSON object, not by its non-emptiness, so a tester without an email is silently accepted by the validator. The tester is then quietly dropped by the apply-time resolver because it has no address to invite.
 - **Background:** This rule was created to close QA-011 at the lint layer. The JSON Schema approach (`minLength: 1`) would also catch this, but the lint rule catches it at the YAML source level with a file-and-line reference. See `.project/issues/closed/QA-011-loader-quirks-format-and-yes-no-coercion.md`.
 - **When it fires:** A tester mapping under `spec.testflight.groups.<group>.testers[]` is missing the `email` key entirely, or has `email: ""` (explicitly empty).
 - **How to fix:** Every tester row must have a non-empty `email` field:
@@ -331,7 +331,7 @@ Tester variant:
 {
   "ruleId": "strict.required-nonzero",
   "severity": "error",
-  "message": "line 14:5 — testflight group \"internal\" tester[0] is missing a non-empty email",
+  "message": "line 14:5, testflight group \"internal\" tester[0] is missing a non-empty email",
   "path": "/spec/testflight/groups/internal/testers/0/email",
   "fixHint": "every tester row must have a non-empty `email` field. Empty strings satisfy the schema's `required` (because the JSON key is present) but cannot be invited.",
   "reference": "QA-011 (resolved via this rule)"
@@ -345,9 +345,9 @@ Tester variant:
 - **Mode:** Offline
 - **Severity:** Error
 - **What it checks:** Whether any boolean field in the state file carries a YAML 1.1 boolean token (`yes`, `no`, `on`, `off`, `y`, `n` in any case) instead of a proper Go-compatible boolean (`true` or `false`).
-- **Why it matters:** `go.yaml.in/yaml/v3` implements the YAML 1.1 core schema and silently coerces `yes`/`no`/`on`/`off` to `bool` when decoding into a `*bool`. **Quoting does not suppress this coercion** — `gambling: "yes"` and `gambling: 'no'` both decode to `true` and `false` respectively. A developer who types `gambling: "yes"` expecting a string answer gets `true` applied to ASC, silently.
+- **Why it matters:** `go.yaml.in/yaml/v3` implements the YAML 1.1 core schema and silently coerces `yes`/`no`/`on`/`off` to `bool` when decoding into a `*bool`. **Quoting does not suppress this coercion**, `gambling: "yes"` and `gambling: 'no'` both decode to `true` and `false` respectively. A developer who types `gambling: "yes"` expecting a string answer gets `true` applied to ASC, silently.
 - **Background:** This rule was created to close QA-011 at the lint layer. The loader stays permissive (existing state files keep working); the lint layer surfaces the gap with a file-and-line reference. See `.project/issues/closed/QA-011-loader-quirks-format-and-yes-no-coercion.md`.
-- **When it fires:** A YAML scalar node at a known boolean field path has a value from the YAML 1.1 boolean token set (`yes`, `no`, `on`, `off`, `y`, `n`). Both unquoted and quoted forms fire — the coercion is the same in both cases.
+- **When it fires:** A YAML scalar node at a known boolean field path has a value from the YAML 1.1 boolean token set (`yes`, `no`, `on`, `off`, `y`, `n`). Both unquoted and quoted forms fire, the coercion is the same in both cases.
 
   Known boolean fields (v1): `usesNonExemptEncryption`, `availableOnFrenchStore`, `containsProprietaryCryptography`, `containsThirdPartyCryptography`, `usesEncryption`, `exempt`, `prolongedGraphicSadisticRealisticViolence`, `gambling`, `unrestrictedWebAccess`, `seventeenPlus`, `familySharable`, `contentHosting`, `downloadable`, `isInternal`, `publicLink`, `visible`.
 
@@ -373,7 +373,7 @@ Tester variant:
 {
   "ruleId": "strict.yaml-coercion",
   "severity": "error",
-  "message": "line 8:5 — bool field \"usesNonExemptEncryption\" has quoted YAML 1.1 token \"no\" (yaml.v3 coerces yes/no/on/off to bool when decoding into *bool, even when quoted)",
+  "message": "line 8:5, bool field \"usesNonExemptEncryption\" has quoted YAML 1.1 token \"no\" (yaml.v3 coerces yes/no/on/off to bool when decoding into *bool, even when quoted)",
   "path": "/usesNonExemptEncryption",
   "fixHint": "use a real boolean: write `true` or `false`. Quoting yes/no does not suppress the coercion in yaml.v3.",
   "reference": "QA-011 (resolved via this rule); yaml.v3 YAML 1.1 core schema"
@@ -387,15 +387,15 @@ Tester variant:
 - **Mode:** Both
 - **Severity:** Error
 - **What it checks:** Whether the age-rating questionnaire is fully answered. Apple's submission flow blocks "Submit for Review" until every prompt has a value.
-- **Why it matters:** The age-rating questionnaire has 12 prompts spread across frequency-enum fields (violence, sexual content, profanity, etc.) and boolean prompts (gambling, unrestricted web access). A partially-answered questionnaire surfaces as a soft block on the "Submit for Review" button — Apple won't tell you which field is missing until you open the specific panel. This rule reports every missing field by name.
+- **Why it matters:** The age-rating questionnaire has 12 prompts spread across frequency-enum fields (violence, sexual content, profanity, etc.) and boolean prompts (gambling, unrestricted web access). A partially-answered questionnaire surfaces as a soft block on the "Submit for Review" button, Apple won't tell you which field is missing until you open the specific panel. This rule reports every missing field by name.
 - **When it fires:**
   - **Offline:** `spec.ageRating` is absent from the state file entirely, or any of the 12 required fields is `nil` (pointer not set). A pointer-to-empty-string is also treated as unanswered.
   - **Live:** The `ageRatingDeclaration` fetched via `/v1/appInfos/{id}/ageRatingDeclaration` has an empty string for any frequency-enum field, or a nil pointer for any boolean prompt.
 - **How to fix:**
-  - Add or complete the `spec.ageRating` block in your state file. Every frequency-enum field accepts `NONE`, `INFREQUENT_OR_MILD`, or `FREQUENT_OR_INTENSE`. Every boolean prompt accepts `true` or `false`. `NONE` and `false` are valid — they mean "this content type is absent from the app."
+  - Add or complete the `spec.ageRating` block in your state file. Every frequency-enum field accepts `NONE`, `INFREQUENT_OR_MILD`, or `FREQUENT_OR_INTENSE`. Every boolean prompt accepts `true` or `false`. `NONE` and `false` are valid, they mean "this content type is absent from the app."
   - See [docs/state-yaml.md#spec-agerating](./state-yaml.md) for the full field list.
-  - For live failures: answer the prompts in App Store Connect or via `fline age-rating set <bundleId> --version <v> --from age.yaml`.
-- **Reference:** PRD §L3 — version.age-rating-answered
+  - For live failures: answer the prompts in App Store Connect or via `flightline age-rating set <bundleId> --version <v> --from age.yaml`.
+- **Reference:** PRD §L3, version.age-rating-answered
 
 **Example diagnostic JSON** (missing block):
 
@@ -403,10 +403,10 @@ Tester variant:
 {
   "ruleId": "version.age-rating-answered",
   "severity": "error",
-  "message": "spec.ageRating is missing — Apple requires every prompt to be answered",
+  "message": "spec.ageRating is missing, Apple requires every prompt to be answered",
   "path": "/spec/ageRating",
   "fixHint": "add the ageRating block; every frequency-enum and boolean prompt must have a value. See docs/state-yaml.md#spec-agerating.",
-  "reference": "PRD §L3 — version.age-rating-answered"
+  "reference": "PRD §L3, version.age-rating-answered"
 }
 ```
 
@@ -419,7 +419,7 @@ Specific field missing:
   "message": "age-rating field \"gambling\" is not answered",
   "path": "/spec/ageRating/gambling",
   "fixHint": "set every age-rating prompt to a value (NONE is valid for frequency fields; false is valid for boolean prompts).",
-  "reference": "PRD §L3 — version.age-rating-answered"
+  "reference": "PRD §L3, version.age-rating-answered"
 }
 ```
 
@@ -430,16 +430,16 @@ Specific field missing:
 - **Mode:** Both
 - **Severity:** Error
 - **What it checks:** Whether the export-compliance question (`usesNonExemptEncryption`) has been answered. Apple requires this declaration before submission.
-- **Why it matters:** Export compliance is a legal and technical requirement. Apple blocks submission until the answer is on record — either in the build's `Info.plist` (`ITSAppUsesNonExemptEncryption`) or set per-version in App Store Connect. Forgetting it is one of the most common submission blocks for developers shipping new builds.
+- **Why it matters:** Export compliance is a legal and technical requirement. Apple blocks submission until the answer is on record, either in the build's `Info.plist` (`ITSAppUsesNonExemptEncryption`) or set per-version in App Store Connect. Forgetting it is one of the most common submission blocks for developers shipping new builds.
 - **When it fires:**
-  - **Offline:** `spec.exportCompliance` is present in the state file but `usesNonExemptEncryption` is `nil`. Note: omitting `spec.exportCompliance` entirely does NOT fire the rule — the user may be relying on the build's `Info.plist` answer. The rule only fires when the block is present but the answer is unset.
+  - **Offline:** `spec.exportCompliance` is present in the state file but `usesNonExemptEncryption` is `nil`. Note: omitting `spec.exportCompliance` entirely does NOT fire the rule, the user may be relying on the build's `Info.plist` answer. The rule only fires when the block is present but the answer is unset.
   - **Live:** The build attached to the version has no value for `usesNonExemptEncryption` in its build attributes.
 - **How to fix:**
-  - Most apps: set `spec.exportCompliance.usesNonExemptEncryption: false`. This is correct for apps that don't use non-exempt encryption (which is the vast majority of apps — standard HTTPS/TLS is exempt).
+  - Most apps: set `spec.exportCompliance.usesNonExemptEncryption: false`. This is correct for apps that don't use non-exempt encryption (which is the vast majority of apps, standard HTTPS/TLS is exempt).
   - Apps using non-exempt encryption (custom crypto, certain VPN implementations): set `usesNonExemptEncryption: true` and complete the supplemental declaration fields.
   - Alternatively, set `ITSAppUsesNonExemptEncryption` in the app's `Info.plist` to answer it at the build level. The ASC per-version field and the `Info.plist` key are equivalent; whichever you set, only one needs to be set.
-  - For live failures: `fline export-compliance set <bundleId> --version <v> --uses-non-exempt-encryption=false`.
-- **Reference:** PRD §L3 — version.export-compliance-answered
+  - For live failures: `flightline export-compliance set <bundleId> --version <v> --uses-non-exempt-encryption=false`.
+- **Reference:** PRD §L3, version.export-compliance-answered
 
 **Example diagnostic JSON** (offline, block present but unanswered):
 
@@ -450,7 +450,7 @@ Specific field missing:
   "message": "spec.exportCompliance is set but usesNonExemptEncryption is nil",
   "path": "/spec/exportCompliance/usesNonExemptEncryption",
   "fixHint": "set the answer: `spec.exportCompliance.usesNonExemptEncryption: false` (most apps) or `true` plus a declaration block. See docs/state-yaml.md#spec-exportcompliance.",
-  "reference": "PRD §L3 — version.export-compliance-answered"
+  "reference": "PRD §L3, version.export-compliance-answered"
 }
 ```
 
@@ -462,8 +462,8 @@ Live variant:
   "severity": "error",
   "message": "the build attached to this version has not declared usesNonExemptEncryption",
   "path": "/spec/exportCompliance/usesNonExemptEncryption",
-  "fixHint": "answer the export-compliance question in App Store Connect, or `fline export-compliance set <bundleId> --version <v> --uses-non-exempt-encryption=false`.",
-  "reference": "PRD §L3 — version.export-compliance-answered"
+  "fixHint": "answer the export-compliance question in App Store Connect, or `flightline export-compliance set <bundleId> --version <v> --uses-non-exempt-encryption=false`.",
+  "reference": "PRD §L3, version.export-compliance-answered"
 }
 ```
 
@@ -503,7 +503,7 @@ func (r myNewRule) Check(ctx CheckContext) []Diagnostic {
 }
 ```
 
-Rules self-register via `init()` — no wiring needed in `runner.go` or `rules.go`. The runner picks up all registered rules automatically through `lint.All()` and `lint.Filter(mode)`.
+Rules self-register via `init()`, no wiring needed in `runner.go` or `rules.go`. The runner picks up all registered rules automatically through `lint.All()` and `lint.Filter(mode)`.
 
 Rule IDs are a stable JSON contract. Once published, an ID cannot be renamed without a major-version bump. Choose carefully: `domain.what-it-checks`, all lowercase, kebab-case within the name segment, dot separator between domain and name.
 
@@ -519,7 +519,7 @@ Two categories of rejection are outside Flightline's reach as of ASC API v4.3:
 
 Apple does not expose the reviewer-written rejection text via the public API. The text lives in App Store Connect's Resolution Center (an inbox-style web surface) and has no API endpoint in the v4.3 spec.
 
-`fline rejection <bundleId> --version <v>` reports the API-visible rejection state: the version state, review submission state, and per-item states. For the reviewer's actual written reason, open App Store Connect > your app > App Review > Resolution Center.
+`flightline rejection <bundleId> --version <v>` reports the API-visible rejection state: the version state, review submission state, and per-item states. For the reviewer's actual written reason, open App Store Connect > your app > App Review > Resolution Center.
 
 This is a known gap. See `.project/issues/closed/ISSUE-001-oapi-codegen-collisions.md` for related background on the API surface coverage decisions.
 
@@ -527,7 +527,7 @@ This is a known gap. See `.project/issues/closed/ISSUE-001-oapi-codegen-collisio
 
 Privacy nutrition labels are entirely absent from the ASC API v4.3 spec. The `appPrivacyDetails` resource does not exist in `openapi.oas.json`. As a result, Flightline cannot read or write privacy labels, and no lint rule can check their completeness.
 
-Manage privacy labels in the App Store Connect web UI (App > App Privacy). `fline privacy-labels get` returns a typed diagnostic explaining the gap rather than silently returning empty data.
+Manage privacy labels in the App Store Connect web UI (App > App Privacy). `flightline privacy-labels get` returns a typed diagnostic explaining the gap rather than silently returning empty data.
 
 Track Apple's spec versions. If a future ASC API version adds `appPrivacyDetails` endpoints, Flightline will wire them and the gap rules will be upgraded accordingly.
 
@@ -539,17 +539,17 @@ Rules reducible to API-checkable state (missing assets, unanswered questions, at
 
 ## Submission checklist (Flightline does not lint these)
 
-Some submission requirements live entirely outside ASC's API surface, can't be conditioned on anything Flightline can read, and don't belong in the rule engine because they'd just nag every run. They live here as a checklist instead of as Info-severity diagnostics — read once, handle, move on.
+Some submission requirements live entirely outside ASC's API surface, can't be conditioned on anything Flightline can read, and don't belong in the rule engine because they'd just nag every run. They live here as a checklist instead of as Info-severity diagnostics, read once, handle, move on.
 
 ### Account-deletion attestation
 
 If your app supports user accounts (login, signup, profile, any persistent user identity), Apple requires you to:
 
-1. Provide an in-app way to delete the account — not just an email link or a "contact support" path
+1. Provide an in-app way to delete the account, not just an email link or a "contact support" path
 2. Toggle the attestation on in App Store Connect: **App > Distribution > App Privacy > Account Deletion**
 
-Apps with user accounts that haven't toggled the attestation are a frequent rejection cause (Guideline 5.1.1(v)). Apple's public API does not expose the attestation field, so Flightline cannot verify it — that's why this is a checklist item, not a lint rule.
+Apps with user accounts that haven't toggled the attestation are a frequent rejection cause (Guideline 5.1.1(v)). Apple's public API does not expose the attestation field, so Flightline cannot verify it, that's why this is a checklist item, not a lint rule.
 
 If your app has no accounts (calculator, reference utility, single-player game with no login, content viewer with no login), this requirement doesn't apply at all.
 
-A future Flightline version may infer "this app has accounts" from Xcode project signals (`com.apple.developer.applesignin` entitlement, `AuthenticationServices.framework` linkage, third-party auth SDKs in `Package.resolved`) and surface the reminder conditionally. Tracked under `.project/issues/open/FEAT-001` — Phase 7+ work.
+A future Flightline version may infer "this app has accounts" from Xcode project signals (`com.apple.developer.applesignin` entitlement, `AuthenticationServices.framework` linkage, third-party auth SDKs in `Package.resolved`) and surface the reminder conditionally. Tracked under `.project/issues/open/FEAT-001`, Phase 7+ work.

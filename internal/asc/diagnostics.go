@@ -1,26 +1,5 @@
 package asc
 
-// Diagnostics read surface. Apple deduplicates crash and hang reports into
-// "diagnostic signatures" — same call stack, same crash, regardless of how
-// many users hit it. Each signature carries a weight (severity / occurrence
-// proxy) and an optional insight payload contrasting it against prior
-// versions.
-//
-// Apple v4.3 only exposes diagnostic signatures scoped to a build:
-//
-//	GET /v1/builds/{id}/diagnosticSignatures   — list signatures for a build
-//	GET /v1/diagnosticSignatures/{id}/logs     — full call-stack logs
-//
-// There is NO /v1/diagnosticSignatures global list in v4.3 and NO
-// /v1/diagnosticSignatures/{id} get. The `diagnostics get` command in
-// Flightline resolves to the /logs endpoint instead.
-//
-// Source:
-//
-//	jq '.components.schemas.DiagnosticSignature.properties.attributes.properties' openapi.oas.json
-//	jq '.components.schemas.DiagnosticInsight' openapi.oas.json
-//	jq '.components.schemas.diagnosticLogs' openapi.oas.json
-
 // Apple-defined diagnostic types. Surfaced as named constants so command
 // code can filter / compare without typos.
 const (
@@ -29,25 +8,21 @@ const (
 	DiagnosticTypeLaunches   = "LAUNCHES"
 )
 
-// DiagnosticInsight is Apple's regression-direction wrapper. Apple compares
-// the current build's metric against prior versions and reports whether the
-// metric is regressing or improving along a category.
+// DiagnosticInsight is Apple's regression-direction wrapper comparing the current build's metric against prior versions.
 type DiagnosticInsight struct {
 	InsightType       string                       `json:"insightType,omitempty"`
 	Direction         string                       `json:"direction,omitempty"`
 	ReferenceVersions []DiagnosticReferenceVersion `json:"referenceVersions,omitempty"`
 }
 
-// DiagnosticReferenceVersion is one prior-version data point Apple includes
-// in the insight payload (e.g. "1.0.0 had value 1.42").
+// DiagnosticReferenceVersion is one prior-version data point in the insight payload (e.g. "1.0.0 had value 1.42").
 type DiagnosticReferenceVersion struct {
 	Version string  `json:"version,omitempty"`
 	Value   float64 `json:"value,omitempty"`
 }
 
-// DiagnosticSignatureAttributes is the subset of Apple's
-// DiagnosticSignature.attributes Flightline reads. Weight is Apple's severity
-// proxy — higher weight = more user impact / more occurrences.
+// DiagnosticSignatureAttributes is the subset of Apple's DiagnosticSignature.attributes Flightline reads.
+// Weight is Apple's severity proxy: higher weight = more user impact / occurrences.
 type DiagnosticSignatureAttributes struct {
 	DiagnosticType string             `json:"diagnosticType,omitempty"`
 	Signature      string             `json:"signature,omitempty"`
@@ -55,10 +30,8 @@ type DiagnosticSignatureAttributes struct {
 	Insight        *DiagnosticInsight `json:"insight,omitempty"`
 }
 
-// DiagnosticLogsResponse is the shape Apple returns from
-// /v1/diagnosticSignatures/{id}/logs. The response is NOT a JSON:API
-// envelope (no Resource[T]/Collection[T]); it's a custom productData /
-// version structure with embedded call-stack trees.
+// DiagnosticLogsResponse is the shape Apple returns from /v1/diagnosticSignatures/{id}/logs.
+// NOT a JSON:API envelope: it's a custom productData/version structure with embedded call-stack trees.
 type DiagnosticLogsResponse struct {
 	ProductData []DiagnosticProductData `json:"productData,omitempty"`
 	Version     string                  `json:"version,omitempty"`
@@ -72,19 +45,15 @@ type DiagnosticProductData struct {
 }
 
 // DiagnosticLogInsight is a single insight entry from the logs response.
-// The wire shape differs slightly from the signature-level insight; we keep
-// them separate to match Apple's casing.
+// Wire shape differs from the signature-level DiagnosticInsight; kept separate to match Apple's casing.
 type DiagnosticLogInsight struct {
 	InsightsURL      string `json:"insightsURL,omitempty"`
 	InsightsCategory string `json:"insightsCategory,omitempty"`
 	InsightsString   string `json:"insightsString,omitempty"`
 }
 
-// DiagnosticLogStackTree is one call-stack tree with the metadata Apple
-// captured at crash time. The full call stack lives under CallStackTree
-// as nested CallStacks → CallStackRootFrames; we surface it as raw
-// JSON-shaped maps to avoid building a deeply-nested typed model that
-// changes shape with every Apple revision.
+// DiagnosticLogStackTree is one call-stack tree with crash-time metadata.
+// CallStackTree uses raw maps to avoid a deeply-nested typed model that changes shape with Apple revisions.
 type DiagnosticLogStackTree struct {
 	CallStackTree      []DiagnosticCallStackTreeBranch `json:"callStackTree,omitempty"`
 	DiagnosticMetaData DiagnosticLogMetaData           `json:"diagnosticMetaData,omitempty"`
@@ -96,9 +65,7 @@ type DiagnosticCallStackTreeBranch struct {
 	CallStacks         []DiagnosticCallStackBlob `json:"callStacks,omitempty"`
 }
 
-// DiagnosticCallStackBlob carries the actual frame nodes. The frame node
-// tree is recursive; we use json.RawMessage there so unmarshal succeeds
-// against whatever shape Apple ships.
+// DiagnosticCallStackBlob carries the actual frame nodes as raw maps; the tree is recursive and Apple's shape varies.
 type DiagnosticCallStackBlob struct {
 	CallStackRootFrames []map[string]any `json:"callStackRootFrames,omitempty"`
 }

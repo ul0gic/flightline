@@ -83,9 +83,7 @@ func TestStrPtrEq(t *testing.T) {
 	}
 }
 
-// TestResolveReviewerPassword_FromFile asserts --password-file reads the
-// secret from disk and trims trailing newline (the typical `echo > file`
-// case) without trimming inner whitespace.
+// --password-file must trim the trailing newline (the `echo > file` case) but keep inner whitespace.
 func TestResolveReviewerPassword_FromFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "pwd")
@@ -152,12 +150,9 @@ func TestResolveReviewerPassword_BothSetIsError(t *testing.T) {
 	}
 }
 
-// TestRedactReviewerError_StripsPassword is the headline security test: any
-// error returned to the user must not contain the password value.
+// Headline security test: no error returned to the user may contain the password value.
 func TestRedactReviewerError_StripsPassword(t *testing.T) {
 	password := "hunter2-LiteralPassword"
-	// Synthesize the worst case: an error that includes the password verbatim
-	// (something Apple's response or a careless wrap site might produce).
 	leaked := fmt.Errorf("PATCH failed for password=%s on the server", password)
 	got := redactReviewerError(leaked, password)
 	if got == nil {
@@ -178,9 +173,7 @@ func TestRedactReviewerError_NilPassthrough(t *testing.T) {
 	}
 }
 
-// TestRedactReviewerError_EmptyPassword is a no-op: when there's no password
-// to redact, the original error is returned unchanged (we don't want to
-// allocate a new error string for every call).
+// Empty password is a no-op: the original error pointer is returned unchanged.
 func TestRedactReviewerError_EmptyPassword(t *testing.T) {
 	orig := errors.New("some api error")
 	got := redactReviewerError(orig, "")
@@ -190,7 +183,7 @@ func TestRedactReviewerError_EmptyPassword(t *testing.T) {
 }
 
 // TestRedactReviewerError_NoMatch is also a no-op when the password doesn't
-// appear in the message — same pointer-identity behavior.
+// appear in the message: same pointer-identity behavior.
 func TestRedactReviewerError_NoMatch(t *testing.T) {
 	orig := errors.New("403 forbidden")
 	got := redactReviewerError(orig, "shellpass")
@@ -199,10 +192,7 @@ func TestRedactReviewerError_NoMatch(t *testing.T) {
 	}
 }
 
-// TestReviewerDemoWriteResult_NeverIncludesPassword is the JSON-shape headline
-// security test. The result struct intentionally has no DemoAccountPassword
-// field — only the boolean DemoAccountPasswordSet. A regression that adds a
-// password field would land here.
+// The result struct has only the boolean DemoAccountPasswordSet; a regression adding a password field lands here.
 func TestReviewerDemoWriteResult_NeverIncludesPassword(t *testing.T) {
 	r := ReviewerDemoWriteResult{
 		Action:                 "set",
@@ -305,7 +295,7 @@ func TestDiffReviewerDetail_NoChanges(t *testing.T) {
 }
 
 // TestChangedKeys_SortedAndDeterministic locks the JSON output stability of
-// the changedKeys list — consumers parse it.
+// the changedKeys list: consumers parse it.
 func TestChangedKeys_SortedAndDeterministic(t *testing.T) {
 	delta := AppStoreReviewDetailAttributes{
 		Notes:               strPtr("x"),
@@ -324,9 +314,7 @@ func TestChangedKeys_SortedAndDeterministic(t *testing.T) {
 	}
 }
 
-// TestBuildReviewerResult_DerefsAttrsWithoutPassword asserts the constructor
-// faithfully copies non-secret attributes but never copies the password
-// value into the result struct (only the boolean).
+// The constructor copies non-secret attributes but only the boolean for the password, never its value.
 func TestBuildReviewerResult_DerefsAttrsWithoutPassword(t *testing.T) {
 	pwd := "topsecret"
 	first := "Jane"
@@ -353,9 +341,7 @@ func TestBuildReviewerResult_DerefsAttrsWithoutPassword(t *testing.T) {
 	}
 }
 
-// TestFetchAppStoreReviewDetail_404IsZero asserts a 404 from Apple
-// (no review detail yet for this version) returns ("", zero, nil) — the
-// signal the caller uses to route to the create path.
+// A 404 (no review detail yet) returns ("", zero, nil), the signal the caller uses to route to create.
 func TestFetchAppStoreReviewDetail_404IsZero(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/appStoreVersions/V1/appStoreReviewDetail": {File: "iap_get_notFound", Status: 404},

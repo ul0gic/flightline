@@ -149,7 +149,10 @@ func TestBuilds_JSONOutputStability(t *testing.T) {
 			t.Errorf("missing per-row key %q. Got: %v", key, mapKeys(row))
 		}
 	}
-	attrs := row["attributes"].(map[string]any)
+	attrs, ok := row["attributes"].(map[string]any)
+	if !ok {
+		t.Fatalf("attributes is %T, want object", row["attributes"])
+	}
 	for _, key := range []string{"version", "uploadedDate", "expirationDate", "expired", "minOsVersion", "processingState", "usesNonExemptEncryption", "buildAudienceType"} {
 		if _, ok := attrs[key]; !ok {
 			t.Errorf("missing attribute key %q. Got: %v", key, mapKeys(attrs))
@@ -187,7 +190,6 @@ func TestBuilds_FixtureReplay_List(t *testing.T) {
 	if views[0].Attributes.Version != "43" {
 		t.Errorf("views[0].version = %q, want 43", views[0].Attributes.Version)
 	}
-	// Third row is the expired one.
 	if views[2].Attributes.Expired == nil || !*views[2].Attributes.Expired {
 		t.Errorf("views[2].expired = %v, want true", views[2].Attributes.Expired)
 	}
@@ -221,8 +223,6 @@ func TestBuilds_FixtureReplay_Get(t *testing.T) {
 		t.Errorf("processingState = %q, want VALID", page.Data[0].Attributes.ProcessingState)
 	}
 }
-
-// ----- builds attach tests -----
 
 func TestBuildsAttach_RegisteredWithRequiredFlags(t *testing.T) {
 	var attach *cobra.Command
@@ -283,9 +283,8 @@ func TestBuildAttachResult_TableRows(t *testing.T) {
 	}
 }
 
-// TestBuildLinkage_NullData round-trips Apple's "no build attached" shape:
-// {"data": null}. The pointer-typed Data field must decode to nil rather
-// than an empty struct so callers can branch correctly.
+// Apple's "no build attached" shape is {"data":null}; the pointer Data
+// field must decode to nil, not an empty struct, so callers can branch.
 func TestBuildLinkage_NullData(t *testing.T) {
 	var got buildLinkageEnvelope
 	if err := json.Unmarshal([]byte(`{"data":null}`), &got); err != nil {
@@ -341,9 +340,6 @@ func TestBuilds_GetAttachedBuild_NullData(t *testing.T) {
 	}
 }
 
-// TestBuilds_GetAttachedBuild_AlreadyAttached confirms that an existing
-// linkage decodes to the right id — the value the idempotency check
-// branches on.
 func TestBuilds_GetAttachedBuild_AlreadyAttached(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/appStoreVersions/8000000001/relationships/build": {File: "builds_attach_linkage_already"},
@@ -361,9 +357,8 @@ func TestBuilds_GetAttachedBuild_AlreadyAttached(t *testing.T) {
 	}
 }
 
-// TestBuilds_PatchAttachedBuild_204NoContent confirms the PATCH path
-// tolerates Apple's 204 No Content response. The fixture server returns
-// 204 with an empty body; doJSON must not error on the empty decode.
+// Apple returns 204 No Content with an empty body; doJSON must not error
+// on the empty decode.
 func TestBuilds_PatchAttachedBuild_204NoContent(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"PATCH /v1/appStoreVersions/8000000001/relationships/build": {
@@ -378,11 +373,8 @@ func TestBuilds_PatchAttachedBuild_204NoContent(t *testing.T) {
 	}
 }
 
-// TestBuilds_AttachIdempotency_SameBuild simulates the noop branch end-to-
-// end: lookups all match, current linkage already points at the requested
-// build, and the runner declines to issue a PATCH. The route table omits
-// the PATCH entry — if the wire layer ever called it, the fixture server
-// would 404 and the test would fail.
+// The route table omits PATCH: if the wire layer issued one, the fixture
+// server would 404 and fail the test: that's the no-op assertion.
 func TestBuilds_AttachIdempotency_SameBuild(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
@@ -413,13 +405,8 @@ func TestBuilds_AttachIdempotency_SameBuild(t *testing.T) {
 	if current == nil || current.ID != buildView.ID {
 		t.Fatalf("expected current attached build %s, got %+v", buildView.ID, current)
 	}
-	// "Same build attached" branch: do NOT issue a PATCH. The fixture server
-	// would 404 on an unregistered route, so reaching here is the assertion.
 }
 
-// TestBuilds_AttachIdempotency_DifferentBuild simulates the attach branch:
-// version currently points at a different build, runner issues a PATCH.
-// The PATCH route is registered; reaching it is the assertion.
 func TestBuilds_AttachIdempotency_DifferentBuild(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
@@ -460,9 +447,7 @@ func TestBuilds_AttachIdempotency_DifferentBuild(t *testing.T) {
 	}
 }
 
-// TestBuilds_AttachWireBody asserts the linkage PATCH body matches Apple's
-// schema: {"data":{"type":"builds","id":"<id>"}}. Catches accidental
-// misnamed fields that would 422 against the live API.
+// Misnamed fields here would 422 against the live API.
 func TestBuilds_AttachWireBody(t *testing.T) {
 	body := buildLinkageEnvelope{Data: &buildLinkageRef{Type: "builds", ID: "9000000042"}}
 	b, err := json.Marshal(body)

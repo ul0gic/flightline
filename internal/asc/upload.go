@@ -1,33 +1,4 @@
-// Package asc — multipart upload helper.
-//
-// Apple's media-asset upload (app screenshots, IAP review screenshots, app
-// previews) is a 3-step dance:
-//
-//  1. Reserve — POST to the create endpoint with attributes.fileSize and
-//     attributes.fileName plus the parent relationship (screenshot set, IAP,
-//     preview set). Apple returns the new resource with attributes.
-//     uploadOperations[], one entry per chunk: method, url (pre-signed CDN),
-//     length, offset, and the exact requestHeaders Apple expects.
-//  2. PUT chunks — for each upload operation, slice the file at
-//     [offset, offset+length) and PUT it to the pre-signed URL with Apple's
-//     headers. NO Authorization header on these PUTs; Apple's CDN signs the
-//     URL with a query-string SHA and any extra header at the wrong layer
-//     flips the signature. Same contract as DownloadAnalyticsSegment.
-//  3. Commit — PATCH the resource with attributes.uploaded=true and
-//     attributes.sourceFileChecksum=<md5-hex>. Apple computes the MD5 itself
-//     and matches; a mismatch flips assetDeliveryState.state to FAILED.
-//
-// Resumable. Between chunk PUTs we persist a checkpoint to
-// $XDG_CACHE_HOME/flightline/uploads/<assetId>.json (cache, not state — uploads
-// are recoverable from the file on disk + the Apple-assigned asset ID, no
-// need for state-tier durability). On Ctrl-C, a re-invocation with
-// ResumeFromCheckpoint=true skips chunks already uploaded and re-PUTs only
-// the failed ones.
-//
-// Public surface consumed by Phase 3.1.5 (screenshots upload) and 3.2.1
-// (IAP review screenshot upload). Renaming or removing exported symbols
-// here is a breaking change — see .project/build-plan.md.
-
+// Chunk PUTs carry NO Authorization header: Apple's CDN signs the URL; any extra header flips the signature.
 package asc
 
 import (
@@ -48,38 +19,24 @@ import (
 	"time"
 )
 
-// UploadCheckpointSchemaVersion is the on-disk JSON schema version for
-// upload checkpoints. Bump when UploadCheckpoint's shape changes; loadUpload
-// Checkpoint rejects files with an unrecognised SchemaVersion (forward-
-// incompat by design — same gate as AsyncState).
+// UploadCheckpointSchemaVersion is the on-disk JSON schema version for upload checkpoints.
+// Bump on shape changes; the loader rejects unrecognised versions (forward-incompat by design).
 const UploadCheckpointSchemaVersion = 1
 
-// uploadDownloadCapBytes is the upper bound on a single chunk read into
-// memory before PUTting. Apple's chunks are typically <16 MiB; 64 MiB is
-// generous defense against a runaway operation.length value.
+// Bounds a single chunk read into memory against a runaway operation.length.
 const uploadDownloadCapBytes = 64 << 20
 
-// AssetKind selects which Apple endpoint to reserve against. Each kind
-// pins the resource type wire-string, the create-endpoint path, the
-// patch-endpoint path, and the relationship name.
+// AssetKind selects which Apple endpoint to reserve against.
 type AssetKind int
 
-// Asset kinds. Defined as iota+1 so the zero value is invalid and forces
-// callers to pick one; we surface a typed error on AssetKind(0).
+// iota+1 so the zero value is invalid and forces callers to pick a kind.
 const (
-	// AssetKindAppScreenshot reserves under /v1/appScreenshots with a
-	// parent appScreenshotSet.
 	AssetKindAppScreenshot AssetKind = iota + 1
-	// AssetKindIAPReviewScreenshot reserves under
-	// /v1/inAppPurchaseAppStoreReviewScreenshots with a parent inAppPurchaseV2.
 	AssetKindIAPReviewScreenshot
-	// AssetKindAppPreview reserves under /v1/appPreviews with a parent
-	// appPreviewSet.
 	AssetKindAppPreview
 )
 
-// String returns the canonical name used in checkpoint files and error
-// messages. Stable JSON contract — renames break checkpoint compat.
+// String is the canonical name in checkpoint files; renames break checkpoint compat.
 func (k AssetKind) String() string {
 	switch k {
 	case AssetKindAppScreenshot:
@@ -93,9 +50,6 @@ func (k AssetKind) String() string {
 	}
 }
 
-// kindEndpoints captures the per-kind wire details: which collection path
-// to POST against, which resource path to PATCH, the parent relationship
-// name, the parent type literal, and the resource type literal.
 type kindEndpoints struct {
 	collectionPath string
 	resourceType   string
@@ -132,11 +86,7 @@ func (k AssetKind) endpoints() (kindEndpoints, error) {
 }
 
 // UploadAsset describes one file to upload.
-//
-// Path is the local file path. FileSize defaults to the on-disk size when
-// zero; pass non-zero only to override (rare — useful in tests). FileName
-// defaults to filepath.Base(Path); Apple stores it on the resource and uses
-// it for display in App Store Connect.
+// FileSize defaults to on-disk size when zero; FileName defaults to filepath.Base(Path).
 type UploadAsset struct {
 	Path     string
 	FileSize int64
@@ -144,12 +94,7 @@ type UploadAsset struct {
 }
 
 // UploadOptions configures one upload session.
-//
-// Kind selects the Apple endpoint family. ParentID is the parent resource
-// ID (an appScreenshotSet ID for screenshots, an inAppPurchase ID for IAP
-// review screenshots, an appPreviewSet ID for previews). Asset names the
-// local file. ResumeFromCheckpoint=true reads the on-disk checkpoint for
-// the asset (if any) and skips already-uploaded chunks.
+// ResumeFromCheckpoint=true reads the on-disk checkpoint and skips already-uploaded chunks.
 type UploadOptions struct {
 	Kind                 AssetKind
 	ParentID             string
@@ -158,27 +103,15 @@ type UploadOptions struct {
 }
 
 // UploadResult names the created Apple resource after a successful commit.
-// Checksum is the hex-encoded MD5 we computed locally and sent to Apple as
-// sourceFileChecksum — exposed so callers can persist it alongside the
-// asset ID for idempotency checks at the cmd layer.
+// Checksum is the hex-encoded MD5 sent as sourceFileChecksum; persist alongside ID for idempotency checks.
 type UploadResult struct {
 	ID       string
 	Type     string
 	Checksum string
 }
 
-// UploadCheckpoint is the on-disk shape of an in-progress upload.
-//
-// Stable JSON contract:
-//   - SchemaVersion gates forward-compat (see UploadCheckpointSchemaVersion).
-//   - AssetID is the Apple-assigned ID returned by the reserve POST.
-//   - Kind is the asset kind name (AssetKind.String()).
-//   - FilePath / FileSize / Md5Hex pin the local source; a different file
-//     with the same intended slot reports as a typed error rather than
-//     silently re-uploading wrong bytes.
-//   - UploadedChunks lists zero-based operation indices that have already
-//     succeeded; the resume path skips these.
-//   - StartedAt / LastUpdate are RFC3339 UTC timestamps.
+// UploadCheckpoint is the on-disk shape of an in-progress upload (stable JSON contract).
+// FilePath/FileSize/Md5Hex pin the local source; a mismatched file returns ErrCheckpointMismatch instead of re-uploading wrong bytes.
 type UploadCheckpoint struct {
 	SchemaVersion  int       `json:"schemaVersion"`
 	AssetID        string    `json:"assetId"`
@@ -191,20 +124,12 @@ type UploadCheckpoint struct {
 	LastUpdate     time.Time `json:"lastUpdate"`
 }
 
-// ErrCheckpointMismatch is returned by Upload when ResumeFromCheckpoint=true
-// and the local file's MD5 differs from the checkpoint's stored hash.
-// Surfacing this loudly is on purpose: silently re-uploading mutated bytes
-// to a half-written Apple asset is worse than refusing to continue.
+// ErrCheckpointMismatch is returned by Upload when ResumeFromCheckpoint=true and the local file's MD5 changed.
+// Loud by design: silently re-uploading mutated bytes to a half-written Apple asset is worse than refusing to continue.
 var ErrCheckpointMismatch = errors.New("asc: upload checkpoint does not match local file (file changed since checkpoint)")
 
-// ErrCheckpointCorrupt is returned when an upload checkpoint exists but
-// cannot be decoded (truncated write, JSON corruption, schema mismatch).
-// Same semantics as ErrStateCorrupt.
+// ErrCheckpointCorrupt is returned when an upload checkpoint exists but cannot be decoded; same semantics as ErrStateCorrupt.
 var ErrCheckpointCorrupt = errors.New("asc: upload checkpoint file is corrupt or unreadable")
-
-// ---------------------------------------------------------------------------
-// Wire envelopes — typed against openapi.oas.json
-// ---------------------------------------------------------------------------
 
 // uploadOperation mirrors components.schemas.UploadOperation.
 type uploadOperation struct {
@@ -221,21 +146,15 @@ type uploadHTTPHeader struct {
 	Value string `json:"value"`
 }
 
-// uploadAssetAttributes mirrors the subset of AppScreenshot /
-// InAppPurchaseAppStoreReviewScreenshot / AppPreview attributes that the
-// upload helper needs. Other shared attribute structs (e.g.
-// IAPReviewScreenshotAttributes) intentionally don't carry uploadOperations
-// because their consumers don't need it; we keep the upload-specific shape
-// here.
+// uploadAssetAttributes is the upload-specific subset shared across all three asset kinds;
+// other attribute structs omit uploadOperations because their consumers don't need it.
 type uploadAssetAttributes struct {
 	FileSize         int64             `json:"fileSize,omitempty"`
 	FileName         string            `json:"fileName,omitempty"`
 	UploadOperations []uploadOperation `json:"uploadOperations,omitempty"`
 }
 
-// reserveRequest builds the JSON:API create-request body. Generic across
-// all three asset kinds because Apple uses identical shape for each, just
-// with different type/relationship literals.
+// reserveRequest is the JSON:API create body; all three asset kinds share this shape.
 type reserveRequest struct {
 	Data reserveRequestData `json:"data"`
 }
@@ -276,41 +195,8 @@ type commitRequestAttributes struct {
 	SourceFileChecksum string `json:"sourceFileChecksum"`
 }
 
-// ---------------------------------------------------------------------------
-// Public entry point
-// ---------------------------------------------------------------------------
-
-// Upload performs the full reserve → PUT chunks → commit lifecycle for a
-// single asset. On success returns the created resource's ID, type, and
-// the MD5 hex Apple was told to verify against. On failure between PUTs,
-// the on-disk checkpoint is preserved and a re-invocation with
-// opts.ResumeFromCheckpoint=true skips chunks already uploaded.
-//
-// Validation:
-//   - opts.Kind must be a known AssetKind.
-//   - opts.ParentID must be non-empty (Apple's parent resource ID).
-//   - opts.Asset.Path must point to a readable regular file.
-//
-// Wire flow:
-//
-//  1. POST opts.Kind.endpoints().collectionPath with attributes.fileSize,
-//     attributes.fileName, and the parent relationship. Apple returns the
-//     new resource with attributes.uploadOperations[].
-//  2. For each upload operation, slice the file at [offset, offset+length)
-//     and PUT to operation.url with operation.requestHeaders. NO bearer
-//     token; uses http.DefaultClient (mirrors DownloadAnalyticsSegment).
-//  3. PATCH the resource with uploaded=true + sourceFileChecksum=<md5-hex>.
-//
-// Errors:
-//   - ErrCheckpointMismatch when ResumeFromCheckpoint=true and the local
-//     file's MD5 differs from the on-disk checkpoint.
-//   - ErrCheckpointCorrupt when a checkpoint exists but is unreadable.
-//   - *APIError on Apple non-2xx (typed, with errors[] payload).
-//   - Plain wrapped errors on chunk-PUT HTTP failures (status + redacted
-//     URL host; pre-signed query strings are not echoed).
-//
-// No retry logic in v1 — a failed chunk PUT returns immediately. Callers
-// drive resume by re-running the command with the resume flag.
+// Upload runs the reserve → PUT chunks → commit lifecycle for one asset.
+// A failure between PUTs preserves the checkpoint; no retry in v1, callers re-run with the resume flag.
 func (c *Client) Upload(ctx context.Context, opts UploadOptions) (UploadResult, error) {
 	endpoints, asset, md5Hex, err := prepareUpload(opts)
 	if err != nil {
@@ -325,7 +211,6 @@ func (c *Client) Upload(ctx context.Context, opts UploadOptions) (UploadResult, 
 		return UploadResult{}, fmt.Errorf("asc: Upload: Apple returned zero upload operations for asset %s", plan.assetID)
 	}
 
-	// PUT each chunk that isn't already uploaded.
 	if err := putChunks(ctx, asset.Path, asset.FileSize, plan.operations, plan.uploaded, func(idx int) error {
 		plan.uploaded[idx] = struct{}{}
 		return persistCheckpoint(UploadCheckpoint{
@@ -342,14 +227,11 @@ func (c *Client) Upload(ctx context.Context, opts UploadOptions) (UploadResult, 
 		return UploadResult{}, err
 	}
 
-	// Commit.
 	if err := commitAsset(ctx, c, endpoints, plan.assetID, md5Hex); err != nil {
 		return UploadResult{}, err
 	}
 
-	// Successful commit — the checkpoint is no longer needed. Best-effort
-	// remove; failure to clean up is non-fatal (the user can rm it later
-	// or a future invocation will overwrite).
+	// Best-effort cleanup; a stale checkpoint is overwritten on the next upload of this asset.
 	_ = removeCheckpoint(plan.assetID)
 
 	return UploadResult{
@@ -359,9 +241,7 @@ func (c *Client) Upload(ctx context.Context, opts UploadOptions) (UploadResult, 
 	}, nil
 }
 
-// prepareUpload validates the options, normalizes the asset descriptor, and
-// hashes the local file. Pulled out of Upload so the top-level function
-// stays under the gocyclo bar.
+// prepareUpload validates the options, normalizes the asset descriptor, and hashes the local file.
 func prepareUpload(opts UploadOptions) (kindEndpoints, UploadAsset, string, error) {
 	endpoints, err := opts.Kind.endpoints()
 	if err != nil {
@@ -384,11 +264,6 @@ func prepareUpload(opts UploadOptions) (kindEndpoints, UploadAsset, string, erro
 	return endpoints, asset, md5Hex, nil
 }
 
-// uploadPlan is the resolved set of "what's left to upload" for one
-// session: the assigned asset ID, the (still-valid) upload operations
-// array, the set of chunk indices already uploaded (empty for a fresh
-// reserve), and the original session start time (used by checkpoint
-// persistence).
 type uploadPlan struct {
 	assetID    string
 	operations []uploadOperation
@@ -396,10 +271,8 @@ type uploadPlan struct {
 	startedAt  time.Time
 }
 
-// resolveUploadPlan picks between resuming an existing checkpoint and
-// reserving a fresh asset, then returns either way the operations to
-// upload and the set of chunks already done. Mid-resume re-fetches the
-// resource to refresh Apple's pre-signed chunk URLs (they expire).
+// resolveUploadPlan resumes an existing checkpoint or reserves a fresh asset.
+// On resume it re-fetches the resource to refresh Apple's pre-signed chunk URLs, which expire.
 func resolveUploadPlan(
 	ctx context.Context,
 	c *Client,
@@ -448,9 +321,7 @@ func resolveUploadPlan(
 	return plan, nil
 }
 
-// validateCheckpointForReuse asserts that a loaded checkpoint matches the
-// caller's intent: same kind, same file MD5. Surfaces typed errors so
-// callers can branch on errors.Is(err, ErrCheckpointMismatch).
+// validateCheckpointForReuse asserts a loaded checkpoint matches the caller's kind and file MD5.
 func validateCheckpointForReuse(cp UploadCheckpoint, kind AssetKind, path, md5Hex string) error {
 	if cp.Md5Hex != md5Hex {
 		return fmt.Errorf("%w: %s (checkpoint md5 %s, file md5 %s)",
@@ -463,9 +334,7 @@ func validateCheckpointForReuse(cp UploadCheckpoint, kind AssetKind, path, md5He
 	return nil
 }
 
-// normalizeAsset fills FileSize from the on-disk stat when unset, and
-// FileName from filepath.Base(Path) when unset. Returns a typed error if
-// the file can't be stat'd or isn't a regular file.
+// normalizeAsset fills FileSize from the on-disk stat and FileName from filepath.Base when unset.
 func normalizeAsset(a UploadAsset) (UploadAsset, error) {
 	info, err := os.Stat(a.Path)
 	if err != nil {
@@ -483,9 +352,8 @@ func normalizeAsset(a UploadAsset) (UploadAsset, error) {
 	return a, nil
 }
 
-// computeFileMD5 streams the file through md5 and returns the lowercase
-// hex digest. MD5 is required by Apple's sourceFileChecksum protocol; it
-// is NOT used for security here, only for upload integrity verification.
+// computeFileMD5 returns the lowercase hex digest. MD5 is Apple's sourceFileChecksum
+// protocol requirement, not a security choice: integrity verification only.
 func computeFileMD5(path string) (string, error) {
 	f, err := os.Open(path) //nolint:gosec // path supplied by trusted caller
 	if err != nil {
@@ -499,15 +367,12 @@ func computeFileMD5(path string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// reservedAssetView is the slice of the reserve / get response shape that
-// Upload cares about: the assigned ID and the upload operations.
 type reservedAssetView struct {
 	ID         string
 	Attributes uploadAssetAttributes
 }
 
-// reserveAsset POSTs the create-request body and returns the assigned ID
-// plus the upload operations array.
+// reserveAsset POSTs the create body and returns the assigned ID plus upload operations.
 func reserveAsset(ctx context.Context, c *Client, ep kindEndpoints, parentID string, asset UploadAsset) (reservedAssetView, error) {
 	body := reserveRequest{
 		Data: reserveRequestData{
@@ -536,8 +401,8 @@ func reserveAsset(ctx context.Context, c *Client, ep kindEndpoints, parentID str
 	return reservedAssetView{ID: resp.Data.ID, Attributes: resp.Data.Attributes}, nil
 }
 
-// getReservedAsset re-fetches an existing reserved asset to get a fresh
-// uploadOperations array (Apple's pre-signed URLs expire).
+// getReservedAsset re-fetches a reserved asset for a fresh uploadOperations array;
+// Apple's pre-signed URLs expire.
 func getReservedAsset(ctx context.Context, c *Client, ep kindEndpoints, assetID string) (reservedAssetView, error) {
 	path := ep.collectionPath + "/" + url.PathEscape(assetID)
 	resp, err := Get[Single[uploadAssetAttributes]](ctx, c, path, nil)
@@ -569,11 +434,8 @@ func commitAsset(ctx context.Context, c *Client, ep kindEndpoints, assetID, md5H
 	return nil
 }
 
-// putChunks iterates the upload operations array and PUTs each chunk that
-// isn't in the uploaded set. After each successful PUT, calls onSuccess
-// with the chunk index so the caller can persist a checkpoint.
-//
-// Honours ctx.Done() between chunks. Stops on the first PUT failure.
+// putChunks PUTs each chunk not in the uploaded set, calling onSuccess after each so the
+// caller can checkpoint. Honours ctx.Done() between chunks; stops on the first PUT failure.
 func putChunks(
 	ctx context.Context,
 	path string,
@@ -605,8 +467,7 @@ func putChunks(
 	return nil
 }
 
-// putOneChunk PUTs a single chunk to its pre-signed URL. NO Authorization
-// header — uses http.DefaultClient, mirroring DownloadAnalyticsSegment.
+// putOneChunk PUTs a single chunk to its pre-signed URL via http.DefaultClient (no bearer token).
 func putOneChunk(ctx context.Context, f *os.File, fileSize int64, idx int, op uploadOperation) error {
 	if !strings.EqualFold(op.Method, http.MethodPut) {
 		return fmt.Errorf("asc: chunk %d: unexpected method %q (Apple uses PUT)", idx, op.Method)
@@ -632,11 +493,8 @@ func putOneChunk(ctx context.Context, f *os.File, fileSize int64, idx int, op up
 	}
 	req.ContentLength = op.Length
 	for _, h := range op.RequestHeaders {
-		// Authorization is explicitly NOT set — Apple's CDN will reject a
-		// request that pairs a pre-signed URL with a bearer token. If
-		// Apple ever instructs us to set Authorization via requestHeaders
-		// we forward it (rare but documented), but we never inject one
-		// of our own.
+		// Only Apple-supplied headers; never inject Authorization: a bearer token on a
+		// pre-signed URL makes the CDN reject the request.
 		req.Header.Set(h.Name, h.Value)
 	}
 
@@ -655,8 +513,7 @@ func putOneChunk(ctx context.Context, f *os.File, fileSize int64, idx int, op up
 	return nil
 }
 
-// redactSignedURL strips the query string of a pre-signed URL so the
-// signature material doesn't leak into error logs.
+// redactSignedURL drops the query string so pre-signed signature material stays out of error logs.
 func redactSignedURL(rawURL string) string {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -666,8 +523,7 @@ func redactSignedURL(rawURL string) string {
 	return u.String() + "?…"
 }
 
-// sortedIndices returns the keys of a map[int]struct{} in ascending order
-// so checkpoint files are deterministic across writes (idempotent JSON).
+// sortedIndices returns keys in ascending order so checkpoint JSON is deterministic across writes.
 func sortedIndices(m map[int]struct{}) []int {
 	out := make([]int, 0, len(m))
 	for k := range m {
@@ -677,14 +533,8 @@ func sortedIndices(m map[int]struct{}) []int {
 	return out
 }
 
-// ---------------------------------------------------------------------------
-// Checkpoint persistence (cache tier — recoverable, not state-tier durable)
-// ---------------------------------------------------------------------------
-
-// persistCheckpoint atomically writes cp to
-// $XDG_CACHE_HOME/flightline/uploads/<assetId>.json. Same atomic-rename
-// torture as PersistAsyncState — a Ctrl-C mid-write leaves the previous
-// checkpoint untouched.
+// persistCheckpoint atomically writes cp to $XDG_CACHE_HOME/flightline/uploads/<assetId>.json.
+// Atomic rename: a Ctrl-C mid-write leaves the previous checkpoint untouched.
 func persistCheckpoint(cp UploadCheckpoint) error {
 	if cp.AssetID == "" {
 		return errors.New("asc: persistCheckpoint: AssetID is required")
@@ -737,9 +587,8 @@ func persistCheckpoint(cp UploadCheckpoint) error {
 	return nil
 }
 
-// loadCheckpoint reads the checkpoint at $XDG_CACHE_HOME/flightline/uploads/
-// <assetId>.json. Returns (zero, fs.ErrNotExist) when no checkpoint exists.
-// Returns ErrCheckpointCorrupt for malformed / future-schema files.
+// loadCheckpoint returns (zero, fs.ErrNotExist) when none exists and
+// ErrCheckpointCorrupt for malformed or future-schema files.
 func loadCheckpoint(assetID string) (UploadCheckpoint, error) {
 	if assetID == "" {
 		return UploadCheckpoint{}, errors.New("asc: loadCheckpoint: assetID is required")
@@ -766,15 +615,8 @@ func loadCheckpoint(assetID string) (UploadCheckpoint, error) {
 	return cp, nil
 }
 
-// tryLoadCheckpointForAsset scans the upload cache directory for a
-// checkpoint whose FilePath matches path. Returns (cp, true, nil) on a
-// match, (zero, false, nil) when no checkpoint references the file, and
-// (zero, false, err) on a real I/O error.
-//
-// We index by file path rather than asset ID because the cmd-layer caller
-// (3.1.5 screenshots upload) only knows the local path on resume — Apple's
-// asset ID was issued during the failed first run and is stored only in
-// the checkpoint we're trying to find.
+// tryLoadCheckpointForAsset finds a checkpoint whose FilePath matches path. Indexed by path,
+// not asset ID: on resume the caller knows only the path; the asset ID lives in the checkpoint.
 func tryLoadCheckpointForAsset(path string) (UploadCheckpoint, bool, error) {
 	root, err := uploadCacheRoot()
 	if err != nil {
@@ -801,9 +643,8 @@ func tryLoadCheckpointForAsset(path string) (UploadCheckpoint, bool, error) {
 		assetID := strings.TrimSuffix(e.Name(), ".json")
 		cp, err := loadCheckpoint(assetID)
 		if err != nil {
-			// A corrupt checkpoint at the wrong asset ID shouldn't break
-			// resume of an unrelated asset. Forward only the typed
-			// corruption signal so callers can surface it.
+			// Forward only typed corruption; an unrelated unreadable entry must not
+			// block resume of this asset.
 			if errors.Is(err, ErrCheckpointCorrupt) {
 				return UploadCheckpoint{}, false, err
 			}
@@ -820,9 +661,7 @@ func tryLoadCheckpointForAsset(path string) (UploadCheckpoint, bool, error) {
 	return UploadCheckpoint{}, false, nil
 }
 
-// removeCheckpoint deletes the checkpoint for assetID. Best-effort —
-// callers ignore the error; the file will be overwritten on the next
-// upload of the same asset ID.
+// removeCheckpoint deletes the checkpoint for assetID.
 func removeCheckpoint(assetID string) error {
 	path, err := uploadCheckpointPath(assetID)
 	if err != nil {
@@ -831,9 +670,7 @@ func removeCheckpoint(assetID string) error {
 	return os.Remove(path)
 }
 
-// uploadCheckpointPath composes the absolute on-disk path for a given
-// asset ID. Validates the asset ID against the same path-traversal rules
-// as bundle IDs (no separators, no "..").
+// uploadCheckpointPath composes the on-disk path, rejecting path-traversal in the asset ID.
 func uploadCheckpointPath(assetID string) (string, error) {
 	if err := validateAssetIDForPath(assetID); err != nil {
 		return "", err
@@ -845,9 +682,7 @@ func uploadCheckpointPath(assetID string) (string, error) {
 	return filepath.Join(root, "uploads", assetID+".json"), nil
 }
 
-// validateAssetIDForPath rejects asset IDs that would escape the
-// uploads/ subdirectory. Apple's asset IDs are opaque short strings;
-// anything with a path separator or ".." is hostile.
+// validateAssetIDForPath rejects asset IDs that would escape the uploads/ subdirectory.
 func validateAssetIDForPath(assetID string) error {
 	if assetID == "" {
 		return errors.New("asc: assetID is required")
@@ -859,18 +694,15 @@ func validateAssetIDForPath(assetID string) error {
 		return fmt.Errorf("asc: assetID %q contains path-traversal segments", assetID)
 	}
 	if strings.ContainsRune(assetID, 0) {
-		return fmt.Errorf("asc: assetID contains NUL byte")
+		return errors.New("asc: assetID contains NUL byte")
 	}
 	return nil
 }
 
-// uploadCacheRoot returns $XDG_CACHE_HOME/flightline, falling back to
-// $HOME/.cache/flightline when XDG_CACHE_HOME is unset. Tests override via
-// FLINE_CACHE_HOME for hermetic behavior; that env var mirrors
-// FLINE_STATE_HOME (used by AsyncState) and is intentionally undocumented
-// in user-facing surfaces — it's a test escape hatch only.
+// uploadCacheRoot returns $XDG_CACHE_HOME/flightline, falling back to $HOME/.cache/flightline.
+// FLIGHTLINE_CACHE_HOME overrides it: an undocumented test escape hatch only.
 func uploadCacheRoot() (string, error) {
-	if override := os.Getenv("FLINE_CACHE_HOME"); override != "" {
+	if override := os.Getenv("FLIGHTLINE_CACHE_HOME"); override != "" {
 		return override, nil
 	}
 	if xdg := os.Getenv("XDG_CACHE_HOME"); xdg != "" {

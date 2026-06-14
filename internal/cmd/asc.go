@@ -10,17 +10,14 @@ import (
 	"github.com/ul0gic/flightline/internal/auth"
 )
 
-// errMissingCreds is the canonical "creds aren't configured" error. The
-// message names every input the user can fix, in priority order.
+// errMissingCreds is the canonical "creds aren't configured" error.
 var errMissingCreds = errors.New(
-	"missing App Store Connect credentials — set APP_STORE_CONNECT_KEY_ID, " +
+	"missing App Store Connect credentials: set APP_STORE_CONNECT_KEY_ID, " +
 		"APP_STORE_CONNECT_ISSUER_ID, or pass --key-id/--issuer-id",
 )
 
 // newClient builds a Client from the viper-merged config (flags > env > file).
-//
-// Returns errMissingCreds if either id is empty so cobra prints a useful hint
-// rather than a path-not-found error from auth.KeyPath.
+// Fails early with errMissingCreds so cobra prints a hint, not a key-path error.
 func newClient() (*asc.Client, error) {
 	keyID := strings.TrimSpace(viper.GetString("key_id"))
 	issuerID := strings.TrimSpace(viper.GetString("issuer_id"))

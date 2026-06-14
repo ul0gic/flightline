@@ -182,7 +182,7 @@ func TestTestflight_JSONOutputStability_Groups(t *testing.T) {
 	}
 	for _, key := range []string{"id", "type", "attributes"} {
 		if _, ok := decoded.Groups[0][key]; !ok {
-			t.Errorf("missing per-row key %q — JSON contract drift", key)
+			t.Errorf("missing per-row key %q: JSON contract drift", key)
 		}
 	}
 }
@@ -248,9 +248,8 @@ func TestTestflight_FixtureReplay_TestersListAppScoped(t *testing.T) {
 	}
 }
 
-// TestTestflight_FixtureReplay_TestersListGroupScoped uses the group-scoped
-// /v1/betaGroups/{id}/betaTesters path. Confirms the group filter switches
-// the URL path.
+// TestTestflight_FixtureReplay_TestersListGroupScoped confirms the --group
+// filter switches to the /v1/betaGroups/{id}/betaTesters path.
 func TestTestflight_FixtureReplay_TestersListGroupScoped(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
@@ -279,9 +278,7 @@ func TestTestflight_FixtureReplay_BetaReviewGet(t *testing.T) {
 	c := fixtureASCClient(t, srv)
 	ctx := context.Background()
 
-	// Resolve appID + build directly (the cmd's RunE wrapper isn't designed
-	// to be invoked outside a cobra context; assert the underlying API
-	// chain is correct).
+	// Drive the API chain directly; the RunE wrapper needs a cobra context.
 	_, err := resolveAppID(ctx, c, "com.example.alpha")
 	if err != nil {
 		t.Fatalf("resolveAppID: %v", err)
@@ -334,9 +331,7 @@ func TestTestflight_BuildNotFoundErrorMessage(t *testing.T) {
 	}
 }
 
-// TestTestflightWrites_RegisteredOnGroup verifies the cobra wiring for all
-// new write verbs: groups create/update/delete, testers add/remove,
-// beta-review submit.
+// TestTestflightWrites_RegisteredOnGroup verifies cobra wiring for every write verb.
 func TestTestflightWrites_RegisteredOnGroup(t *testing.T) {
 	var tf *cobra.Command
 	for _, c := range rootCmd.Commands() {
@@ -371,9 +366,8 @@ func TestTestflightWrites_RegisteredOnGroup(t *testing.T) {
 	}
 }
 
-// TestBuildBetaGroupCreate_ShapesFlagsCorrectly asserts that only flags
-// the user actually passed appear in the body, with required attrs always
-// present.
+// TestBuildBetaGroupCreate_ShapesFlagsCorrectly asserts only passed flags
+// appear in the body, with required attrs always present.
 func TestBuildBetaGroupCreate_ShapesFlagsCorrectly(t *testing.T) {
 	body := buildBetaGroupCreate("APP-1", "Internal Team", true, false, false, false, 0, false, false)
 	raw, _ := json.Marshal(body)
@@ -395,9 +389,8 @@ func TestBuildBetaGroupCreate_ShapesFlagsCorrectly(t *testing.T) {
 	}
 }
 
-// TestBuildBetaGroupCreate_PublicLinkLimit asserts that the matching
-// publicLinkLimitEnabled flag is auto-set when --public-link-limit is
-// supplied with a non-zero value.
+// TestBuildBetaGroupCreate_PublicLinkLimit asserts publicLinkLimitEnabled is
+// auto-set when --public-link-limit is supplied non-zero.
 func TestBuildBetaGroupCreate_PublicLinkLimit(t *testing.T) {
 	body := buildBetaGroupCreate("APP-1", "Public", false, true, true, true, 5000, true, true)
 	raw, _ := json.Marshal(body)
@@ -447,11 +440,8 @@ func TestDedupeStrings_StableOrderEmptyDropped(t *testing.T) {
 	}
 }
 
-// TestBetaTestersChangeResult_FilterEmptyAppliedSkipsPOST simulates the
-// idempotency path: when applied is empty, no write should be issued
-// (the runTestflightTestersAdd/Remove early-return). Verified at the
-// helper level: a result with empty Applied yields Changed=false when
-// constructed with Changed=false.
+// TestBetaTestersChangeResult_NoOpRendersChangedFalse asserts a result with
+// empty Applied renders Changed=false.
 func TestBetaTestersChangeResult_NoOpRendersChangedFalse(t *testing.T) {
 	r := &BetaTestersChangeResult{
 		GroupID:   "BG-1",
@@ -555,9 +545,8 @@ func TestFindBetaGroupByName_FixtureReplay(t *testing.T) {
 	}
 }
 
-// TestComputeBetaGroupPatchAttrs_OnlyChangedFlags asserts that an unset
-// flag never produces a patch entry; a flag matching current state is
-// also filtered out.
+// TestComputeBetaGroupPatchAttrs_OnlyChangedFlags asserts unset flags and
+// flags matching current state never enter the patch.
 func TestComputeBetaGroupPatchAttrs_OnlyChangedFlags(t *testing.T) {
 	yes := true
 	cur := asc.BetaGroupAttributes{

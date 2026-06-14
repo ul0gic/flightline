@@ -1,17 +1,4 @@
-// Package asc — typed row models + TSV decoders for /v1/salesReports and
-// /v1/financeReports.
-//
-// Apple's Sales/Finance Reports endpoints respond with content-type
-// "application/a-gzip" carrying a tab-separated-values payload — NOT
-// comma-separated, despite what some Apple docs suggest. The 2A.1 wrapper
-// gunzips transparently; this file decodes the resulting bytes into typed
-// Go structs the cmd-layer can render as table or JSON.
-//
-// Column order matches Apple's iTunes Connect Sales and Trends Reporting
-// Guide. Apple occasionally adds columns at the right end of the row; the
-// decoders are header-driven (not positional) so a future column addition
-// produces zero-value fields rather than a parse error.
-
+// Sales/Finance reports arrive as gzipped TSV (not CSV); decoders are header-driven so new trailing columns don't break parsing.
 package asc
 
 import (
@@ -24,20 +11,8 @@ import (
 	"strings"
 )
 
-// ---------------------------------------------------------------------------
-// Sales report row
-// ---------------------------------------------------------------------------
-
-// SalesReportRow is one row of a SALES / SUBSCRIPTION / SUBSCRIPTION_EVENT
-// report decoded from Apple's TSV stream. Field tags match the JSON contract
-// the cmd-layer renders; column-header mapping happens inside DecodeSalesTSV
-// keyed by the literal Apple header strings.
-//
-// Numeric units / proceeds are int / float64 because Apple's TSV uses
-// integer units and decimal proceeds; missing or blank cells become zero.
-// All other fields stay strings — Apple reports sometimes carry locale-
-// specific punctuation in numeric-looking columns (Customer Price), so the
-// caller decides whether to parse further.
+// SalesReportRow is one row of a SALES/SUBSCRIPTION/SUBSCRIPTION_EVENT report.
+// Non-numeric fields stay string because Apple's TSV column set varies by report.
 type SalesReportRow struct {
 	Provider              string  `json:"provider,omitempty"`
 	ProviderCountry       string  `json:"providerCountry,omitempty"`
@@ -69,14 +44,8 @@ type SalesReportRow struct {
 	OrderType             string  `json:"orderType,omitempty"`
 }
 
-// salesHeaderAlias maps the literal Apple TSV header strings to the
-// SalesReportRow field they populate. Built once at package init so
-// DecodeSalesTSV can do O(1) header-by-name lookups instead of a giant
-// switch in the hot loop.
-//
-// Spelling matches Apple's published header line exactly, including
-// capitalization and spacing. Missing entries render the column as a
-// dropped field (forward-compat: Apple adds new columns over time).
+// salesHeaderAlias maps Apple's published TSV header strings to SalesReportRow fields.
+// Keys must match Apple's spelling exactly; unmapped columns drop silently (forward-compat).
 var salesHeaderAlias = map[string]string{
 	"Provider":                "Provider",
 	"Provider Country":        "ProviderCountry",
@@ -108,14 +77,8 @@ var salesHeaderAlias = map[string]string{
 	"Order Type":              "OrderType",
 }
 
-// ---------------------------------------------------------------------------
-// Finance report row
-// ---------------------------------------------------------------------------
-
-// FinanceReportRow is one row of a FINANCIAL / FINANCE_DETAIL report.
-// Field meanings mirror Apple's "App Store Connect Payments and Financial
-// Reports Guide". As with sales rows, numeric quantity/share fields are
-// typed; everything else stays string.
+// FinanceReportRow is one row of a FINANCIAL/FINANCE_DETAIL report.
+// Non-numeric fields stay string because Apple's TSV column set varies by report.
 type FinanceReportRow struct {
 	StartDate              string  `json:"startDate,omitempty"`
 	EndDate                string  `json:"endDate,omitempty"`
@@ -145,10 +108,7 @@ type FinanceReportRow struct {
 	StandardSubscriptionTy string  `json:"standardSubscriptionType,omitempty"`
 }
 
-// financeHeaderAlias mirrors salesHeaderAlias for the finance report. The
-// key is the literal Apple-published header string; the value is the
-// SalesReportRow / FinanceReportRow field name (matched via reflection-free
-// dispatch in the decoder).
+// financeHeaderAlias mirrors salesHeaderAlias for the finance report.
 var financeHeaderAlias = map[string]string{
 	"Start Date":                   "StartDate",
 	"End Date":                     "EndDate",
@@ -178,21 +138,8 @@ var financeHeaderAlias = map[string]string{
 	"Standard Subscription Type": "StandardSubscriptionTy",
 }
 
-// ---------------------------------------------------------------------------
-// Decoders
-// ---------------------------------------------------------------------------
-
-// DecodeSalesTSV parses Apple's gunzipped sales-report TSV bytes into
-// typed rows. Returns an empty slice (never nil) when the body is the
-// header-only "no sales" response Apple produces for empty days.
-//
-// The decoder is header-driven: column order is read from the first row,
-// then each subsequent data row is mapped by header name. Unknown columns
-// are silently dropped (forward-compat with new Apple columns); missing
-// columns leave the corresponding struct field at its zero value.
-//
-// Whitespace around cells is preserved — Apple's TSV is whitespace-clean,
-// and trimming risks munging fields that legitimately end with a space.
+// DecodeSalesTSV parses Apple's gunzipped sales-report TSV into typed rows.
+// Returns empty (never nil) on no-sales days; unknown columns drop silently.
 func DecodeSalesTSV(b []byte) ([]SalesReportRow, error) {
 	rows, err := readTSV(b)
 	if err != nil {
@@ -213,14 +160,8 @@ func DecodeSalesTSV(b []byte) ([]SalesReportRow, error) {
 	return out, nil
 }
 
-// DecodeFinanceTSV parses Apple's gunzipped finance-report TSV bytes into
-// typed rows. Same forward-compat semantics as DecodeSalesTSV.
-//
-// Apple's finance reports prepend a few "Total" rows at the bottom of the
-// file in some accounts; the decoder treats those as ordinary data rows
-// (the "Sales or Return" cell is empty, so the column-typed renderer
-// just shows the totals). Callers that want strict per-transaction views
-// can filter on SalesOrReturn != "".
+// DecodeFinanceTSV parses Apple's gunzipped finance-report TSV into typed rows.
+// Apple's trailing "Total" summary rows decode as-is; filter on SalesOrReturn != "" for per-transaction views.
 func DecodeFinanceTSV(b []byte) ([]FinanceReportRow, error) {
 	rows, err := readTSV(b)
 	if err != nil {
@@ -241,12 +182,7 @@ func DecodeFinanceTSV(b []byte) ([]FinanceReportRow, error) {
 	return out, nil
 }
 
-// readTSV parses Apple's TSV bytes. csv.Reader with Comma='\t' handles the
-// wire format faithfully, including embedded newlines inside quoted cells
-// (rare but documented for review-note style fields).
-//
-// Returns an empty slice when the input is empty or whitespace-only — this
-// is the "no sales today" shape Apple sends.
+// readTSV parses Apple's TSV bytes; whitespace-only input is the "no sales today" shape Apple sends.
 func readTSV(b []byte) ([][]string, error) {
 	if len(bytes.TrimSpace(b)) == 0 {
 		return nil, nil
@@ -254,9 +190,7 @@ func readTSV(b []byte) ([][]string, error) {
 	r := csv.NewReader(bytes.NewReader(b))
 	r.Comma = '\t'
 	r.LazyQuotes = true
-	// Apple's TSV is variable-width on legitimate boundaries (older months
-	// have fewer columns than newer months). Disable the strict count check
-	// so we don't reject on schema drift mid-file.
+	// Apple's TSV is legitimately variable-width across months; disable the strict count check.
 	r.FieldsPerRecord = -1
 
 	var out [][]string
@@ -273,16 +207,11 @@ func readTSV(b []byte) ([][]string, error) {
 	return out, nil
 }
 
-// salesSetter is one column-assigner: writes the raw cell into the right
-// SalesReportRow field, returning an error if numeric parsing fails. Per-
-// column setters are tiny (1 statement each) so the gocyclo budget stays
-// well under the project's ceiling-of-15 instead of consuming it on a
-// single ~30-arm switch.
+// salesSetter assigns one raw cell into its SalesReportRow field.
+// Per-column setters keep gocyclo off a single ~30-arm switch.
 type salesSetter func(row *SalesReportRow, raw string) error
 
-// salesSetters maps the SalesReportRow field name (the value side of
-// salesHeaderAlias) to its setter. Adding a column = add a header alias
-// entry + a setter entry; the dispatcher stays unchanged.
+// salesSetters maps SalesReportRow field names (salesHeaderAlias values) to their setters.
 var salesSetters = map[string]salesSetter{
 	"Provider":              func(r *SalesReportRow, v string) error { r.Provider = v; return nil },
 	"ProviderCountry":       func(r *SalesReportRow, v string) error { r.ProviderCountry = v; return nil },
@@ -328,9 +257,7 @@ var salesSetters = map[string]salesSetter{
 	"OrderType":          func(r *SalesReportRow, v string) error { r.OrderType = v; return nil },
 }
 
-// assignSalesRow dispatches header names to SalesReportRow setters. Avoids
-// reflection costs of a tag-driven decoder; per-column lookup is a single
-// map probe so the hot loop stays straight-line.
+// assignSalesRow dispatches header names to SalesReportRow setters.
 func assignSalesRow(row *SalesReportRow, headers, cells []string) error {
 	for i, h := range headers {
 		if i >= len(cells) {
@@ -426,8 +353,7 @@ func assignFinanceRow(row *FinanceReportRow, headers, cells []string) error {
 	return nil
 }
 
-// parseInt is the lenient int parser used for cells that may be blank.
-// Empty / whitespace-only → 0; otherwise strconv.Atoi.
+// parseInt parses an int, treating blank cells as 0.
 func parseInt(s string) (int, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -440,9 +366,8 @@ func parseInt(s string) (int, error) {
 	return v, nil
 }
 
-// parseFloat is the lenient float parser. Apple's TSV uses "." as the
-// decimal separator regardless of locale, so we don't need locale-aware
-// parsing here.
+// parseFloat parses a float, treating blank cells as 0.
+// Apple's TSV always uses "." as the decimal separator regardless of locale.
 func parseFloat(s string) (float64, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {

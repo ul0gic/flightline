@@ -1,29 +1,3 @@
-// apply_idempotency_test.go — Phase 4.3.3 Apply idempotency contract.
-//
-// The L2 keystone write contract: applying a desired state.yaml to live
-// ASC, then re-applying the same file against the same backend, must
-// produce ZERO mutating wire calls (PATCH/POST/DELETE) on the second run.
-//
-// This file backs the contract end-to-end against a stateful in-memory
-// fixture server that:
-//
-//  1. Serves an initial live state DIFFERENT from desired.
-//  2. Reflects every PATCH/POST it receives into its in-memory model.
-//  3. Counts requests by method + path so the second run can be asserted
-//     to be GET-only.
-//
-// Surfaces covered (in order of dispatch in apply.go):
-//   - /spec/version/copyright              (PATCH /v1/appStoreVersions/{id})
-//   - /spec/ageRating/<field>              (PATCH /v1/ageRatingDeclarations/{id})
-//   - /spec/categories/primary             (PATCH /v1/appInfos/{id}/relationships/primaryCategory)
-//   - /spec/metadata/locales/en-US/description (PATCH /v1/appStoreVersionLocalizations/{id})
-//   - /spec/iap/products/<id>              (POST /v2/inAppPurchases)
-//
-// Excluded by design:
-//   - screenshots, IAP review screenshot, customProductPages.localizations
-//     return typed errors deferring to L1 verbs (QA-010); they're not
-//     subject to the mutating-call contract here.
-
 package state
 
 import (
@@ -33,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -41,13 +16,8 @@ import (
 	"github.com/ul0gic/flightline/internal/plan"
 )
 
-// statefulApplyFixture is an httptest server that holds an in-memory
-// model of every resource Apply might touch and reflects PATCHes/POSTs
-// into that model so the second fetch sees the new state.
-//
-// All access goes through mu so the fixture is safe to use across
-// concurrent dispatchers (Apply itself is sequential, but t.Parallel
-// might race other tests sharing a process; mu is cheap insurance).
+// statefulApplyFixture is a stateful httptest server; PATCHes/POSTs are reflected into
+// its in-memory model so the second fetch sees updated state. mu guards all model access.
 type statefulApplyFixture struct {
 	t  *testing.T
 	mu sync.Mutex
@@ -138,8 +108,6 @@ func (f *statefulApplyFixture) mutatingRoutes() []string {
 	return out
 }
 
-// handle dispatches one request. Reads/writes the in-memory model under
-// mu and counts.
 func (f *statefulApplyFixture) handle(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	f.totalRequests++
@@ -151,223 +119,155 @@ func (f *statefulApplyFixture) handle(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
-	// --- core lookups -------------------------------------------------
+	if f.serveLookup(w, r) || f.serveMutation(w, r) {
+		return
+	}
+	http.Error(w, "fixture has no route for "+r.Method+" "+r.URL.Path, http.StatusNotFound)
+}
+
+func (f *statefulApplyFixture) serveLookup(w http.ResponseWriter, r *http.Request) bool {
 	switch r.URL.Path {
 	case "/v1/apps":
 		_, _ = io.WriteString(w, `{"data":[{"type":"apps","id":"APP1","attributes":{"bundleId":"com.example.app"}}],"links":{}}`)
-		return
 	case "/v1/apps/APP1/appStoreVersions":
-		f.mu.Lock()
-		body := jsonObj(map[string]any{
-			"data": []any{
-				map[string]any{
-					"type":       "appStoreVersions",
-					"id":         "VER1",
-					"attributes": f.versionAttrs,
-				},
-			},
+		f.writeLocked(w, map[string]any{
+			"data":  []any{map[string]any{"type": "appStoreVersions", "id": "VER1", "attributes": f.versionAttrs}},
 			"links": map[string]any{},
 		})
-		f.mu.Unlock()
-		_, _ = w.Write(body)
-		return
 	case "/v1/apps/APP1/appInfos":
 		_, _ = io.WriteString(w, `{"data":[{"type":"appInfos","id":"AINFO1","attributes":{"state":"PREPARE_FOR_SUBMISSION"}}],"links":{}}`)
-		return
 	case "/v1/appInfos/AINFO1/ageRatingDeclaration":
-		f.mu.Lock()
-		body := jsonObj(map[string]any{
-			"data": map[string]any{
-				"type":       "ageRatingDeclarations",
-				"id":         "AR1",
-				"attributes": f.ageRatingAttrs,
-			},
+		f.writeLocked(w, map[string]any{
+			"data": map[string]any{"type": "ageRatingDeclarations", "id": "AR1", "attributes": f.ageRatingAttrs},
 		})
-		f.mu.Unlock()
-		_, _ = w.Write(body)
-		return
 	case "/v1/appStoreVersions/VER1/build":
 		_, _ = io.WriteString(w, `{"data":{"type":"builds","id":"BUILD1","attributes":{"version":"42","usesNonExemptEncryption":false}}}`)
-		return
 	case "/v1/builds/BUILD1":
 		_, _ = io.WriteString(w, `{"data":{"type":"builds","id":"BUILD1","attributes":{"version":"42"}}}`)
-		return
 	case "/v1/appStoreVersions/VER1/appStoreReviewDetail":
 		_, _ = io.WriteString(w, `{"data":{"type":"appStoreReviewDetails","id":"RD1","attributes":{}}}`)
-		return
 	case "/v1/appStoreVersions/VER1/appStoreVersionLocalizations":
-		f.mu.Lock()
-		body := jsonObj(map[string]any{
-			"data": []any{
-				map[string]any{
-					"type":       "appStoreVersionLocalizations",
-					"id":         "VL1",
-					"attributes": f.versionLocaleEnUSAttrs,
-				},
-			},
+		f.writeLocked(w, map[string]any{
+			"data":  []any{map[string]any{"type": "appStoreVersionLocalizations", "id": "VL1", "attributes": f.versionLocaleEnUSAttrs}},
 			"links": map[string]any{},
 		})
-		f.mu.Unlock()
-		_, _ = w.Write(body)
-		return
 	case "/v1/appInfos/AINFO1/appInfoLocalizations":
 		_, _ = io.WriteString(w, `{"data":[],"links":{}}`)
-		return
 	case "/v1/apps/APP1/appPriceSchedule":
 		_, _ = io.WriteString(w, `{"data":null,"included":[]}`)
-		return
 	case "/v1/apps/APP1/inAppPurchasesV2":
 		f.mu.Lock()
-		out := []any{}
+		out := make([]any, 0, len(f.iaps))
 		for _, e := range f.iaps {
-			out = append(out, map[string]any{
-				"type":       "inAppPurchases",
-				"id":         e.id,
-				"attributes": e.attrs,
-			})
+			out = append(out, map[string]any{"type": "inAppPurchases", "id": e.id, "attributes": e.attrs})
 		}
 		body := jsonObj(map[string]any{"data": out, "links": map[string]any{}})
 		f.mu.Unlock()
 		_, _ = w.Write(body)
-		return
 	case "/v1/apps/APP1/betaGroups":
 		_, _ = io.WriteString(w, `{"data":[],"links":{}}`)
-		return
 	case "/v1/apps/APP1/customProductPages":
 		_, _ = io.WriteString(w, `{"data":[],"links":{}}`)
-		return
+	default:
+		return f.serveLookupPrefix(w, r)
 	}
+	return true
+}
 
-	// --- per-IAP localization list ----------------------------------
-	if strings.HasPrefix(r.URL.Path, "/v2/inAppPurchases/") &&
-		strings.HasSuffix(r.URL.Path, "/inAppPurchaseLocalizations") {
+func (f *statefulApplyFixture) serveLookupPrefix(w http.ResponseWriter, r *http.Request) bool {
+	switch {
+	case strings.HasPrefix(r.URL.Path, "/v2/inAppPurchases/") && strings.HasSuffix(r.URL.Path, "/inAppPurchaseLocalizations"):
 		_, _ = io.WriteString(w, `{"data":[],"links":{}}`)
-		return
-	}
-
-	// --- per-version-localization screenshot sets -------------------
-	if strings.HasPrefix(r.URL.Path, "/v1/appStoreVersionLocalizations/") &&
-		strings.HasSuffix(r.URL.Path, "/appScreenshotSets") {
+		return true
+	case strings.HasPrefix(r.URL.Path, "/v1/appStoreVersionLocalizations/") && strings.HasSuffix(r.URL.Path, "/appScreenshotSets"):
 		_, _ = io.WriteString(w, `{"data":[],"links":{}}`)
+		return true
+	case strings.HasPrefix(r.URL.Path, "/v1/appInfos/AINFO1/relationships/") && r.Method == http.MethodGet:
+		f.serveCategoryGet(w, r)
+		return true
+	}
+	return false
+}
+
+func (f *statefulApplyFixture) serveCategoryGet(w http.ResponseWriter, r *http.Request) {
+	rel := strings.TrimPrefix(r.URL.Path, "/v1/appInfos/AINFO1/relationships/")
+	f.mu.Lock()
+	id := ""
+	switch rel {
+	case "primaryCategory":
+		id = f.primaryCategory
+	case "secondaryCategory":
+		id = f.secondaryCategory
+	}
+	f.mu.Unlock()
+	if id == "" {
+		_, _ = io.WriteString(w, `{"data":null}`)
 		return
 	}
+	_, _ = fmt.Fprintf(w, `{"data":{"type":"appCategories","id":%q}}`, id)
+}
 
-	// --- categories relationships ------------------------------------
-	if strings.HasPrefix(r.URL.Path, "/v1/appInfos/AINFO1/relationships/") {
+func (f *statefulApplyFixture) serveMutation(w http.ResponseWriter, r *http.Request) bool {
+	switch {
+	case strings.HasPrefix(r.URL.Path, "/v1/appInfos/AINFO1/relationships/") && r.Method == http.MethodPatch:
 		rel := strings.TrimPrefix(r.URL.Path, "/v1/appInfos/AINFO1/relationships/")
-		switch r.Method {
-		case http.MethodGet:
-			f.mu.Lock()
-			id := ""
-			switch rel {
-			case "primaryCategory":
-				id = f.primaryCategory
-			case "secondaryCategory":
-				id = f.secondaryCategory
-			}
-			f.mu.Unlock()
-			if id == "" {
-				_, _ = io.WriteString(w, `{"data":null}`)
-				return
-			}
-			_, _ = fmt.Fprintf(w, `{"data":{"type":"appCategories","id":%q}}`, id)
-			return
-		case http.MethodPatch:
-			id := extractRelationshipID(f.t, r)
-			f.mu.Lock()
-			switch rel {
-			case "primaryCategory":
-				f.primaryCategory = id
-			case "secondaryCategory":
-				f.secondaryCategory = id
-			}
-			f.mu.Unlock()
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-	}
-
-	// --- version PATCH -----------------------------------------------
-	if r.URL.Path == "/v1/appStoreVersions/VER1" && r.Method == http.MethodPatch {
-		attrs := extractAttributes(f.t, r)
+		id := extractRelationshipID(f.t, r)
 		f.mu.Lock()
-		for k, v := range attrs {
-			f.versionAttrs[k] = v
+		switch rel {
+		case "primaryCategory":
+			f.primaryCategory = id
+		case "secondaryCategory":
+			f.secondaryCategory = id
 		}
-		body := jsonObj(map[string]any{
-			"data": map[string]any{
-				"type":       "appStoreVersions",
-				"id":         "VER1",
-				"attributes": f.versionAttrs,
-			},
-		})
 		f.mu.Unlock()
-		_, _ = w.Write(body)
-		return
-	}
-
-	// --- ageRating PATCH ---------------------------------------------
-	if r.URL.Path == "/v1/ageRatingDeclarations/AR1" && r.Method == http.MethodPatch {
-		attrs := extractAttributes(f.t, r)
-		f.mu.Lock()
-		for k, v := range attrs {
-			f.ageRatingAttrs[k] = v
-		}
-		body := jsonObj(map[string]any{
-			"data": map[string]any{
-				"type":       "ageRatingDeclarations",
-				"id":         "AR1",
-				"attributes": f.ageRatingAttrs,
-			},
-		})
-		f.mu.Unlock()
-		_, _ = w.Write(body)
-		return
-	}
-
-	// --- version-localization PATCH ----------------------------------
-	if r.URL.Path == "/v1/appStoreVersionLocalizations/VL1" && r.Method == http.MethodPatch {
-		attrs := extractAttributes(f.t, r)
-		f.mu.Lock()
-		for k, v := range attrs {
-			f.versionLocaleEnUSAttrs[k] = v
-		}
-		body := jsonObj(map[string]any{
-			"data": map[string]any{
-				"type":       "appStoreVersionLocalizations",
-				"id":         "VL1",
-				"attributes": f.versionLocaleEnUSAttrs,
-			},
-		})
-		f.mu.Unlock()
-		_, _ = w.Write(body)
-		return
-	}
-
-	// --- IAP create (POST /v2/inAppPurchases) ------------------------
-	if r.URL.Path == "/v2/inAppPurchases" && r.Method == http.MethodPost {
+		w.WriteHeader(http.StatusNoContent)
+		return true
+	case r.URL.Path == "/v1/appStoreVersions/VER1" && r.Method == http.MethodPatch:
+		f.mergeAttrs(w, r, f.versionAttrs, "appStoreVersions", "VER1")
+		return true
+	case r.URL.Path == "/v1/ageRatingDeclarations/AR1" && r.Method == http.MethodPatch:
+		f.mergeAttrs(w, r, f.ageRatingAttrs, "ageRatingDeclarations", "AR1")
+		return true
+	case r.URL.Path == "/v1/appStoreVersionLocalizations/VL1" && r.Method == http.MethodPatch:
+		f.mergeAttrs(w, r, f.versionLocaleEnUSAttrs, "appStoreVersionLocalizations", "VL1")
+		return true
+	case r.URL.Path == "/v2/inAppPurchases" && r.Method == http.MethodPost:
 		attrs := extractAttributes(f.t, r)
 		f.mu.Lock()
 		f.nextIAPID++
-		id := fmt.Sprintf("%d", f.nextIAPID)
+		id := strconv.Itoa(f.nextIAPID)
 		f.iaps = append(f.iaps, iapEntry{id: id, attrs: attrs})
 		body := jsonObj(map[string]any{
-			"data": map[string]any{
-				"type":       "inAppPurchases",
-				"id":         id,
-				"attributes": attrs,
-			},
+			"data": map[string]any{"type": "inAppPurchases", "id": id, "attributes": attrs},
 		})
 		f.mu.Unlock()
 		w.WriteHeader(http.StatusCreated)
 		_, _ = w.Write(body)
-		return
+		return true
 	}
-
-	http.Error(w, "fixture has no route for "+r.Method+" "+r.URL.Path, http.StatusNotFound)
+	return false
 }
 
-// jsonObj marshals m or t.Fatal — fixture-internal helper.
+func (f *statefulApplyFixture) writeLocked(w http.ResponseWriter, body map[string]any) {
+	f.mu.Lock()
+	buf := jsonObj(body)
+	f.mu.Unlock()
+	_, _ = w.Write(buf)
+}
+
+func (f *statefulApplyFixture) mergeAttrs(w http.ResponseWriter, r *http.Request, model map[string]any, resType, id string) {
+	attrs := extractAttributes(f.t, r)
+	f.mu.Lock()
+	for k, v := range attrs {
+		model[k] = v
+	}
+	body := jsonObj(map[string]any{
+		"data": map[string]any{"type": resType, "id": id, "attributes": model},
+	})
+	f.mu.Unlock()
+	_, _ = w.Write(body)
+}
+
 func jsonObj(m any) []byte {
 	buf, err := json.Marshal(m)
 	if err != nil {
@@ -414,10 +314,8 @@ func extractRelationshipID(t *testing.T, r *http.Request) string {
 	return env.Data.ID
 }
 
-// makeDesired constructs the desired state.yaml-equivalent State the
-// idempotency test applies. Mirrors the canonical full-coverage fixture
-// shape but with deliberately-different starting attrs in the fixture
-// (so round 1 has work to do).
+// makeDesired builds a desired State with attrs that differ from the fixture's initial state,
+// so round 1 has work to do.
 func makeDesired() *config.State {
 	releaseType := "MANUAL"
 	copyright := "© NEW COPYRIGHT"
@@ -461,9 +359,8 @@ func makeDesired() *config.State {
 	}
 }
 
-// TestApply_Idempotent_FullSurfaceLoop is the keystone L2 contract test:
-// apply a fresh state.yaml, refetch, rediff, reapply. The second apply
-// MUST issue zero mutating calls and the diff must be empty.
+// TestApply_Idempotent_FullSurfaceLoop is the keystone L2 contract: apply → refetch → rediff → reapply.
+// The second apply MUST issue zero mutating calls and the diff must be empty.
 func TestApply_Idempotent_FullSurfaceLoop(t *testing.T) {
 	withTempCacheDir(t)
 	f := newStatefulApplyFixture(t)
@@ -472,14 +369,13 @@ func TestApply_Idempotent_FullSurfaceLoop(t *testing.T) {
 
 	desired := makeDesired()
 
-	// --- Round 1 -----------------------------------------------------
 	live1, err := Fetch(ctx, c, "com.example.app", FetchOpts{Version: "1.0", Platform: "IOS"})
 	if err != nil {
 		t.Fatalf("round1 Fetch: %v", err)
 	}
 	changes1 := plan.Diff(desired, live1)
 	if len(changes1) == 0 {
-		t.Fatal("round1 Diff is empty — fixture is misconfigured (round 1 should have work)")
+		t.Fatal("round1 Diff is empty: fixture is misconfigured (round 1 should have work)")
 	}
 	res1, err := Apply(ctx, c, changes1, ApplyOpts{
 		Context: ApplyContext{BundleID: "com.example.app", Version: "1.0", Platform: "IOS"},
@@ -504,7 +400,6 @@ func TestApply_Idempotent_FullSurfaceLoop(t *testing.T) {
 		t.Fatalf("round1: expected mutating calls, got 0 (routes hit: %v)", f.mutatingRoutes())
 	}
 
-	// --- Round 2 — refetch must show post-apply state ---------------
 	live2, err := Fetch(ctx, c, "com.example.app", FetchOpts{Version: "1.0", Platform: "IOS"})
 	if err != nil {
 		t.Fatalf("round2 Fetch: %v", err)
@@ -517,7 +412,6 @@ func TestApply_Idempotent_FullSurfaceLoop(t *testing.T) {
 		t.Fatal("round2: expected empty diff after round1 apply")
 	}
 
-	// --- Round 2 apply must be a no-op ------------------------------
 	f.resetCounters()
 	res2, err := Apply(ctx, c, changes2, ApplyOpts{
 		Context: ApplyContext{BundleID: "com.example.app", Version: "1.0", Platform: "IOS"},
@@ -530,33 +424,28 @@ func TestApply_Idempotent_FullSurfaceLoop(t *testing.T) {
 		t.Errorf("round2 Apply.Applied = %d, want 0", len(res2.Applied))
 	}
 	if got := f.mutatingCount(); got != 0 {
-		t.Errorf("round2: idempotency violation — %d mutating call(s); routes hit: %v", got, f.mutatingRoutes())
+		t.Errorf("round2: idempotency violation: %d mutating call(s); routes hit: %v", got, f.mutatingRoutes())
 	}
 }
 
-// TestApply_Idempotent_NoChangesEverProducesZeroMutations is a tighter
-// guard: when desired == live from the start, both rounds issue zero
-// mutating calls. Catches regressions where a dispatcher would PATCH
-// even with no Change to dispatch.
+// TestApply_Idempotent_NoChangesEverProducesZeroMutations guards against dispatchers
+// issuing PATCHes when Diff(live, live) is empty.
 func TestApply_Idempotent_NoChangesEverProducesZeroMutations(t *testing.T) {
 	withTempCacheDir(t)
 	f := newStatefulApplyFixture(t)
 	c := fixtureClient(t, f.srv)
 	ctx := context.Background()
 
-	// Fetch once — capture exactly what the fixture serves as live.
 	live, err := Fetch(ctx, c, "com.example.app", FetchOpts{Version: "1.0", Platform: "IOS"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
-	// Use that as the desired state. By construction, Diff(desired, live)
-	// MUST be empty.
-	changes := plan.Diff(live, live)
+	changes := plan.Diff(live, live) // Diff(live, live) must be empty by construction
 	if len(changes) != 0 {
 		for _, ch := range changes {
 			t.Errorf("Diff(live, live) returned: %+v", ch)
 		}
-		t.Fatal("Diff(live, live) is non-empty — diff engine is non-idempotent on identical inputs")
+		t.Fatal("Diff(live, live) is non-empty: diff engine is non-idempotent on identical inputs")
 	}
 
 	f.resetCounters()
@@ -571,6 +460,6 @@ func TestApply_Idempotent_NoChangesEverProducesZeroMutations(t *testing.T) {
 		t.Errorf("Applied = %d, want 0", len(res.Applied))
 	}
 	if got := f.mutatingCount(); got != 0 {
-		t.Errorf("idempotency violation — %d mutating call(s); routes: %v", got, f.mutatingRoutes())
+		t.Errorf("idempotency violation: %d mutating call(s); routes: %v", got, f.mutatingRoutes())
 	}
 }

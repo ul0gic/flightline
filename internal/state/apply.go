@@ -1,26 +1,3 @@
-// apply.go — orchestrates writing a plan.Change set back to ASC.
-//
-// Apply iterates a Path-sorted []plan.Change in order, dispatches each
-// to the corresponding L1 write call, and persists a checkpoint after
-// every successful change so a Ctrl-C or crash mid-apply doesn't strand
-// the user.
-//
-// Idempotency contract: re-running Apply with the same desired state
-// against the same live state should produce zero outbound PATCH
-// requests. Two paths achieve this:
-//
-//  1. The L1 write functions already diff-then-PATCH (categories, age
-//     rating, version) and turn redundant calls into no-ops at the
-//     wire level.
-//  2. The checkpoint file at $XDG_CACHE_HOME/flightline/apply/<bundle>.json
-//     records every applied (Resource, Path, To) tuple — Resume mode
-//     skips matches without re-issuing the PATCH.
-//
-// The dispatch table (changeDispatch) is the entire surface coverage
-// for v1alpha1. Surfaces marked Unmapped are intentionally left to
-// surface as ChangeError with a QA-009 reference until QA-009 is
-// resolved.
-
 package state
 
 import (
@@ -28,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -39,37 +15,25 @@ import (
 )
 
 // ApplyContext carries the per-invocation app/version coordinates the
-// dispatcher needs to resolve resource IDs (appId, versionId,
-// appInfoId, …). Threaded through ApplyOpts so Apply is reentrant
-// and concurrency-safe — no package-level state.
+// dispatcher needs to resolve resource IDs. No package-level state.
 type ApplyContext struct {
 	BundleID string
 	Version  string
 	Platform string
 
-	// StateDir is the directory state.yaml lives in; relative paths
-	// in the spec (screenshot files, IAP review screenshots,
-	// passwordFile) resolve against it.
+	// StateDir resolves relative spec paths (screenshots, passwordFile).
 	StateDir string
 }
 
 // ApplyOpts gates the apply orchestrator.
 type ApplyOpts struct {
-	// Context carries the bundleId / version / platform / stateDir
-	// the dispatcher needs to resolve resource IDs and relative
-	// paths. Required.
 	Context ApplyContext
 
-	// Confirm must be true for Apply to issue any write. Without
-	// Confirm the function returns an empty result and an error.
+	// Confirm must be true for Apply to issue any write.
 	Confirm bool
-	// Resume loads the checkpoint at $XDG_CACHE_HOME/flightline/apply/<bundle>.json
-	// and skips changes already applied in a previous run.
+	// Resume skips changes already recorded in the checkpoint.
 	Resume bool
-	// DryRun computes the dispatch path for each change without
-	// issuing the underlying PATCH/POST/DELETE. Useful for plan-style
-	// previews from inside the apply orchestrator (cmd/plan reuses
-	// this when called with --dry-run).
+	// DryRun resolves the dispatch path without issuing any write.
 	DryRun bool
 	// Logger is called once per processed change. Nil disables.
 	Logger func(c plan.Change, status string)
@@ -107,21 +71,16 @@ type applyCheckpoint struct {
 	Applied       []checkpointKey `json:"applied"`
 }
 
-// checkpointKey identifies a Change uniquely enough for resume to
-// skip it. We hash on (Resource, Path, JSON(To)) so the same logical
-// change replayed produces the same key.
+// checkpointKey keys a Change by (Resource, Path, JSON(To)) so a
+// replayed change produces the same key for resume to skip.
 type checkpointKey struct {
 	Resource string `json:"resource"`
 	Path     string `json:"path"`
 	ToJSON   string `json:"to"`
 }
 
-// Apply walks changes in their (already-sorted) order, dispatches each
-// to the L1 write code, and persists a checkpoint after every success.
-//
-// On a per-change failure Apply records the error and short-circuits:
-// partial-write state is hard to reason about. Resume picks up where
-// the previous run failed.
+// Apply dispatches each change in order, checkpointing after every
+// success; the first failure short-circuits and Resume continues it.
 func Apply(ctx context.Context, c *asc.Client, changes []plan.Change, opts ApplyOpts) (*ApplyResult, error) {
 	if c == nil {
 		return nil, errors.New("state: Apply: client is nil")
@@ -175,39 +134,14 @@ func Apply(ctx context.Context, c *asc.Client, changes []plan.Change, opts Apply
 		res.Applied = append(res.Applied, ch)
 		prog(ch, "applied")
 
-		// Persist after every success so a kill mid-loop loses at
-		// most the work that was about to be persisted, not work
-		// already done.
+		// Persist after every success so a kill mid-loop loses at most one change.
 		_ = persistApplyCheckpoint(bundleID, append(checkpointKeys(res.Applied), checkpointKeys(res.Skipped)...))
 	}
 
 	return res, nil
 }
 
-// dispatch routes a single Change to its L1 write. The table is the
-// authoritative source for "what does Flightline actually know how to
-// apply" — anything missing here surfaces as ErrUnmappedChange.
-//
-// Coverage matrix (one row per top-level spec surface):
-//
-//	/spec/version/*                    → applyVersionField    (PATCH /v1/appStoreVersions/{id})
-//	/spec/build/number                 → applyBuildAttach     (PATCH version→build relationship)
-//	/spec/metadata/locales/*           → applyMetadataField   (PATCH appStoreVersionLocalizations OR appInfoLocalizations)
-//	/spec/screenshots/locales/*/*      → applyScreenshotSet   (reserve+upload+commit via internal/asc/upload.go)
-//	/spec/iap/products/<id>            → applyIAPProduct      (POST/PATCH /v1/inAppPurchasesV2)
-//	/spec/iap/products/<id>/loc/<locale> → applyIAPLocalization (PATCH /v1/inAppPurchaseLocalizations)
-//	/spec/iap/products/<id>/reviewScreenshot → applyIAPReviewScreenshot
-//	/spec/ageRating/*                  → applyAgeRatingField  (PATCH /v1/ageRatingDeclarations/{id})
-//	/spec/exportCompliance/usesNonExemptEncryption → applyEncryptionFlag (PATCH build)
-//	/spec/exportCompliance/declaration/* → applyEncryptionDeclaration (POST appEncryptionDeclarations)
-//	/spec/reviewerDemo/*               → applyReviewerDemoField (PATCH /v1/appStoreReviewDetails/{id})
-//	/spec/categories/*                 → applyCategoriesField  (PATCH appInfo category relationships)
-//	/spec/pricing/*                    → applyPricingField     (POST /v1/appPriceSchedules)
-//	/spec/testflight/groups/*          → applyTestFlightGroup  (POST/PATCH/DELETE betaGroups + tester membership)
-//	/spec/customProductPages/*         → applyCustomProductPage (POST/PATCH customProductPages + localizations)
-//
-// privacyLabels intentionally absent — Apple's public API doesn't
-// expose appPrivacyDetails (closed ISSUE-002).
+// dispatch routes a Change to its L1 write; returns ErrUnmappedChange for unknown paths.
 func dispatch(ctx context.Context, c *asc.Client, actx ApplyContext, ch plan.Change) error {
 	for _, e := range dispatchTable {
 		if e.match(ch.Path) {
@@ -217,11 +151,8 @@ func dispatch(ctx context.Context, c *asc.Client, actx ApplyContext, ch plan.Cha
 	return errUnmapped(ch)
 }
 
-// dispatchEntry pairs a path predicate with the dispatcher function
-// it routes to. Order matters: the table is scanned linearly and the
-// first match wins, so prefix matches go after their sibling exact
-// matches (e.g. /spec/exportCompliance/usesNonExemptEncryption is
-// listed before /spec/exportCompliance/declaration/).
+// dispatchEntry pairs a path predicate with its dispatcher. Table scanned in order; exact
+// matches must precede sibling prefixes (e.g. usesNonExemptEncryption before declaration/).
 type dispatchEntry struct {
 	match func(string) bool
 	fn    func(context.Context, *asc.Client, ApplyContext, plan.Change) error
@@ -274,10 +205,6 @@ var errUnmapped = func(ch plan.Change) error {
 // match on this with errors.Is.
 var ErrUnmappedChange = errors.New("unmapped change")
 
-// --- per-surface dispatchers ---
-
-// applyVersionField patches one field on the AppStoreVersion. Bundle
-// + version come from ApplyContext; the dispatcher is reentrant.
 func applyVersionField(ctx context.Context, c *asc.Client, actx ApplyContext, ch plan.Change) error {
 	platform := actx.Platform
 	if platform == "" {
@@ -320,7 +247,6 @@ func applyVersionField(ctx context.Context, c *asc.Client, actx ApplyContext, ch
 }
 
 // applyAgeRatingField PATCHes one field on the ageRatingDeclaration.
-// schema → wire field-name remap mirrors the projection in fetch.go.
 func applyAgeRatingField(ctx context.Context, c *asc.Client, actx ApplyContext, ch plan.Change) error {
 	appID, err := resolveAppID(ctx, c, actx.BundleID)
 	if err != nil {
@@ -396,9 +322,7 @@ func applyEncryptionFlag(ctx context.Context, c *asc.Client, actx ApplyContext, 
 	return nil
 }
 
-// ageRatingSchemaToWire maps a schema-shaped leaf field to Apple's
-// wire field name. Mirrors projectAgeRating in fetch.go in reverse.
-// Pulled into a package-level table so the dispatcher stays linear.
+// ageRatingSchemaToWire maps schema leaf names to Apple's wire field names.
 var ageRatingSchemaToWire = map[string]string{
 	"cartoonOrFantasyViolence":                  "violenceCartoonOrFantasy",
 	"realisticViolence":                         "violenceRealistic",
@@ -416,9 +340,8 @@ var ageRatingSchemaToWire = map[string]string{
 	"kidsAgeBand":                               "kidsAgeBand",
 }
 
-// schemaToWireAgeRating resolves a schema JSON-Pointer to Apple's wire
-// field. seventeenPlus is rejected explicitly because Apple derives
-// the 17+ rating; users can't set it directly.
+// schemaToWireAgeRating resolves a schema JSON-Pointer to Apple's wire field.
+// seventeenPlus is rejected: Apple derives it; users cannot set it directly.
 func schemaToWireAgeRating(path string) (string, error) {
 	leaf := strings.TrimPrefix(path, "/spec/ageRating/")
 	if leaf == "seventeenPlus" {
@@ -429,8 +352,6 @@ func schemaToWireAgeRating(path string) (string, error) {
 	}
 	return "", fmt.Errorf("state: unknown ageRating field %q", leaf)
 }
-
-// --- checkpoint plumbing ---
 
 func applyCheckpointPath(bundleID string) (string, error) {
 	if bundleID == "" {
@@ -467,8 +388,7 @@ func checkpointHas(cp *applyCheckpoint, ch plan.Change) bool {
 	return false
 }
 
-// persistApplyCheckpoint writes the checkpoint atomically — same
-// rename-on-close pattern as internal/asc/upload.go.
+// persistApplyCheckpoint writes the checkpoint atomically via rename-on-close.
 func persistApplyCheckpoint(bundleID string, applied []checkpointKey) error {
 	if bundleID == "" {
 		return errors.New("state: persistApplyCheckpoint: bundleID is required")
@@ -526,8 +446,7 @@ func persistApplyCheckpoint(bundleID string, applied []checkpointKey) error {
 	return nil
 }
 
-// loadApplyCheckpoint reads the on-disk checkpoint. Returns
-// (nil, fs.ErrNotExist) when none exists.
+// loadApplyCheckpoint reads the on-disk checkpoint; returns (nil, fs.ErrNotExist) when absent.
 func loadApplyCheckpoint(bundleID string) (*applyCheckpoint, error) {
 	path, err := applyCheckpointPath(bundleID)
 	if err != nil {
@@ -546,6 +465,3 @@ func loadApplyCheckpoint(bundleID string) (*applyCheckpoint, error) {
 	}
 	return &cp, nil
 }
-
-// silence url import if no callers reach in (kept for intent).
-var _ = url.Values{}

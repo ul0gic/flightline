@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -10,19 +11,16 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// BuildView is one row of the builds list/get output.
 type BuildView struct {
 	ID         string              `json:"id"`
 	Type       string              `json:"type"`
 	Attributes asc.BuildAttributes `json:"attributes"`
 }
 
-// BuildList is the table-aware view for `builds list`.
 type BuildList struct {
 	Builds []BuildView `json:"builds"`
 }
 
-// TableRows implements TableRenderable for the builds list view.
 func (l BuildList) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"BUILD", "STATE", "EXPIRED", "UPLOADED", "ID"}
 	rows = make([][]string, 0, len(l.Builds))
@@ -39,7 +37,6 @@ func (l BuildList) TableRows() (headers []string, rows [][]string) {
 	return headers, rows
 }
 
-// TableRows for a single build. Vertical layout reads better for one record.
 func (b *BuildView) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
 	rows = [][]string{
@@ -57,10 +54,8 @@ func (b *BuildView) TableRows() (headers []string, rows [][]string) {
 	return headers, rows
 }
 
-// expiredCell highlights expiry in the table column. Apple's API surfaces
-// expiry as a boolean snapshot; if the build is expired we want it loud
-// because expired builds can't ship to TestFlight or be attached to a
-// version submission.
+// expiredCell flags expiry loudly: expired builds can't ship to TestFlight
+// or attach to a version submission.
 func expiredCell(a asc.BuildAttributes) string {
 	if a.Expired == nil {
 		return ""
@@ -83,9 +78,9 @@ var buildsListCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runBuildsList,
-	Example: `  fline builds list com.example.myapp
-  fline builds list com.example.myapp --limit 20
-  fline builds list com.example.myapp --output json | jq -r '.builds[].version'`,
+	Example: `  flightline builds list com.example.myapp
+  flightline builds list com.example.myapp --limit 20
+  flightline builds list com.example.myapp --output json | jq -r '.builds[].version'`,
 }
 
 var buildsGetCmd = &cobra.Command{
@@ -94,8 +89,8 @@ var buildsGetCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runBuildsGet,
-	Example: `  fline builds get com.example.myapp --build 42
-  fline builds get com.example.myapp --build 42 --output json | jq .attributes.processingState`,
+	Example: `  flightline builds get com.example.myapp --build 42
+  flightline builds get com.example.myapp --build 42 --output json | jq .attributes.processingState`,
 }
 
 var buildsAttachCmd = &cobra.Command{
@@ -104,8 +99,8 @@ var buildsAttachCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runBuildsAttach,
-	Example: `  fline builds attach com.example.myapp --version 1.0.1 --build 42
-  fline builds attach com.example.myapp --version 1.0.1 --build 42 --platform IOS --output json`,
+	Example: `  flightline builds attach com.example.myapp --version 1.0.1 --build 42
+  flightline builds attach com.example.myapp --version 1.0.1 --build 42 --platform IOS --output json`,
 }
 
 var (
@@ -158,7 +153,7 @@ func runBuildsGet(cmd *cobra.Command, args []string) error {
 	bundleID := args[0]
 	build := strings.TrimSpace(buildsGetBuild)
 	if build == "" {
-		return fmt.Errorf("builds: --build is required")
+		return errors.New("builds: --build is required")
 	}
 
 	c, err := newClient()
@@ -193,7 +188,6 @@ func runBuildsGet(cmd *cobra.Command, args []string) error {
 	return Render(view, outputMode())
 }
 
-// collectBuilds walks the paging iterator and returns flattened BuildView rows.
 func collectBuilds(ctx context.Context, c *asc.Client, path string, query url.Values, limit int) ([]BuildView, error) {
 	out := make([]BuildView, 0, defaultListCap(limit))
 	for page, err := range asc.Pages[asc.BuildAttributes](ctx, c, path, query) {
@@ -211,15 +205,7 @@ func collectBuilds(ctx context.Context, c *asc.Client, path string, query url.Va
 }
 
 // BuildAttachResult is the JSON-stable envelope for `builds attach`.
-//
-// Fields:
-//   - Action is one of "attached" | "noop". "attached" means a PATCH was
-//     issued and Apple now points the version at this build; "noop" means
-//     the version was already attached to the same build and no PATCH was
-//     issued.
-//   - Changed is true iff a PATCH was issued.
-//   - Version / Build / VersionID / BuildID identify the involved resources
-//     so JSON consumers don't need a follow-up GET to know what got linked.
+// Action is "attached" (PATCH linked the build) or "noop" (already linked).
 type BuildAttachResult struct {
 	Action    string `json:"action"`
 	Changed   bool   `json:"changed"`
@@ -230,7 +216,6 @@ type BuildAttachResult struct {
 	Platform  string `json:"platform,omitempty"`
 }
 
-// TableRows implements TableRenderable for the attach result.
 func (r *BuildAttachResult) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
 	rows = [][]string{
@@ -245,46 +230,31 @@ func (r *BuildAttachResult) TableRows() (headers []string, rows [][]string) {
 	return headers, rows
 }
 
-// buildLinkageEnvelope is Apple's
-// `/v1/appStoreVersions/{id}/relationships/build` payload — both for GET
-// (current attached build, may be {"data": null}) and PATCH (new linkage).
-//
-// Apple's GET response surfaces ONLY the {type, id} ref, not the full Build
-// resource. That keeps the idempotency probe a single round-trip rather
-// than fetching the full build record.
+// buildLinkageEnvelope is the relationships/build payload for GET (may be
+// {"data": null}) and PATCH. GET returns only the {type,id} ref.
 type buildLinkageEnvelope struct {
 	Data *buildLinkageRef `json:"data"`
 }
 
-// buildLinkageRef is the `{type:"builds", id:"..."}` ref used in linkage
-// payloads. Pointer to allow Apple's "no build attached" response (data:
-// null) to round-trip without false-positive matching.
+// buildLinkageRef is a pointer so Apple's data:null ("no build attached")
+// round-trips without false-positive matching.
 type buildLinkageRef struct {
 	Type string `json:"type"`
 	ID   string `json:"id"`
 }
 
-// runBuildsAttach implements `builds attach`. Idempotent path:
-//
-//  1. resolveAppID(bundleId)
-//  2. lookup version by --version + --platform → versionID
-//  3. lookup build by --build → buildID
-//  4. GET /v1/appStoreVersions/{versionID}/relationships/build
-//  5. if existing.id == buildID → action="noop", no PATCH
-//     else PATCH the same path with the new linkage → action="attached"
-//
-// Surfaces actionable typed errors when either lookup misses; "no build
-// found" / "no version found" name the bundleId and the failing identifier.
+// runBuildsAttach is idempotent: it PATCHes the build linkage only when the
+// currently-attached build differs, otherwise returns action="noop".
 func runBuildsAttach(cmd *cobra.Command, args []string) error {
 	bundleID := args[0]
 	versionStr := strings.TrimSpace(buildsAttachVersion)
 	buildNum := strings.TrimSpace(buildsAttachBuild)
 	platform := strings.TrimSpace(buildsAttachPlatform)
 	if versionStr == "" {
-		return fmt.Errorf("builds: --version is required")
+		return errors.New("builds: --version is required")
 	}
 	if buildNum == "" {
-		return fmt.Errorf("builds: --build is required")
+		return errors.New("builds: --build is required")
 	}
 
 	c, err := newClient()
@@ -341,9 +311,7 @@ func runBuildsAttach(cmd *cobra.Command, args []string) error {
 	return Render(result, outputMode())
 }
 
-// lookupBuild is the same shape as lookupVersion (cmd/versions.go) but for
-// builds: returns (nil, nil) when no build with `version=<num>` exists for
-// the app. Centralized here so 3.1.3 callers stay simple.
+// lookupBuild returns (nil, nil) when no build with version=<num> exists.
 func lookupBuild(ctx context.Context, c *asc.Client, appID, buildNum string) (*BuildView, error) {
 	q := url.Values{
 		"filter[version]": {buildNum},
@@ -365,8 +333,7 @@ func lookupBuild(ctx context.Context, c *asc.Client, appID, buildNum string) (*B
 	}, nil
 }
 
-// getAttachedBuild GETs the linkage relationship on a version. Returns nil
-// when Apple's response is `{"data": null}` (no build attached yet).
+// getAttachedBuild returns nil when Apple's response is data:null (none attached).
 func getAttachedBuild(ctx context.Context, c *asc.Client, versionID string) (*buildLinkageRef, error) {
 	path := "/v1/appStoreVersions/" + url.PathEscape(versionID) + "/relationships/build"
 	resp, err := asc.Get[buildLinkageEnvelope](ctx, c, path, nil)
@@ -376,8 +343,7 @@ func getAttachedBuild(ctx context.Context, c *asc.Client, versionID string) (*bu
 	return resp.Data, nil
 }
 
-// patchAttachedBuild PATCHes the linkage relationship. Apple returns 204
-// No Content on success; we don't need a typed return shape.
+// patchAttachedBuild PATCHes the linkage relationship (Apple returns 204).
 func patchAttachedBuild(ctx context.Context, c *asc.Client, versionID string, body buildLinkageEnvelope) error {
 	path := "/v1/appStoreVersions/" + url.PathEscape(versionID) + "/relationships/build"
 	if _, err := asc.Patch[buildLinkageEnvelope](ctx, c, path, nil, body); err != nil {

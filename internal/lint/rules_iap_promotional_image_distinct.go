@@ -8,22 +8,8 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// iapPromotionalImageDistinctRule fires when an IAP's review screenshot
-// (the closest analog Apple exposes to "promotional image" via its public
-// API — see note below) shares a sourceFileChecksum with any of the app's
-// store screenshots. Apple Guideline 2.3.2 calls reusing a store screenshot
-// as IAP-promo art a hard rejection.
-//
-// API note: Apple's public API does NOT expose IAP "promotional artwork"
-// (the StoreKit promoted-purchase image) directly — the closest accessible
-// asset is the review screenshot at
-// /v2/inAppPurchases/{id}/appStoreReviewScreenshot. In practice, developers
-// who hit 2.3.2 are reusing a screenshot file across surfaces; the
-// checksum-equality check catches that exact misuse regardless of which
-// surface the file ended up on. When Apple exposes promotional-artwork
-// hashes we'll add a sibling check.
-//
-// Live-only.
+// iapPromotionalImageDistinctRule fires when an IAP review screenshot shares a checksum with an app screenshot (Guideline 2.3.2 hard rejection).
+// Uses /v2/inAppPurchases/{id}/appStoreReviewScreenshot: promotional-artwork hashes are not yet in the public API. Live-only.
 type iapPromotionalImageDistinctRule struct{}
 
 func init() { Register(iapPromotionalImageDistinctRule{}) }
@@ -48,9 +34,7 @@ func (r iapPromotionalImageDistinctRule) Check(ctx CheckContext) []Diagnostic {
 
 	appHashes, err := r.collectAppScreenshotHashes(ctx, appID)
 	if err != nil {
-		// Don't gate on a screenshot fetch error — flip to a warning so the
-		// rest of preflight runs. Screenshot endpoints are deeply nested and
-		// occasional 5xx isn't a rejection signal.
+		// Downgrade to warning: screenshot endpoints are deeply nested and occasional 5xx isn't a rejection signal.
 		return []Diagnostic{{
 			RuleID:   r.ID(),
 			Severity: SeverityWarning,
@@ -96,9 +80,7 @@ func (r iapPromotionalImageDistinctRule) Check(ctx CheckContext) []Diagnostic {
 	return out
 }
 
-// collectAppScreenshotHashes walks every locale's screenshot sets and
-// returns a set of sourceFileChecksum values. Empty checksums are skipped
-// (Apple sometimes returns nil for in-flight uploads).
+// collectAppScreenshotHashes returns all sourceFileChecksum values across every locale. Skips empty (in-flight uploads).
 func (iapPromotionalImageDistinctRule) collectAppScreenshotHashes(ctx CheckContext, appID string) (map[string]struct{}, error) {
 	versions, err := iapAppVersions(ctx, appID)
 	if err != nil {
@@ -141,8 +123,7 @@ func addSetHashes(ctx CheckContext, setID string, hashes map[string]struct{}) {
 	}
 }
 
-// fetchIAPScreenshotHash returns the IAP review screenshot's
-// sourceFileChecksum or "" when missing.
+// fetchIAPScreenshotHash returns the IAP review screenshot's sourceFileChecksum or "" when absent.
 func (iapPromotionalImageDistinctRule) fetchIAPScreenshotHash(ctx CheckContext, iapID string) string {
 	resp, err := asc.Get[asc.Single[asc.IAPReviewScreenshotAttributes]](
 		ctx.Ctx, ctx.Client, "/v2/inAppPurchases/"+iapID+"/appStoreReviewScreenshot", url.Values{},
@@ -156,11 +137,6 @@ func (iapPromotionalImageDistinctRule) fetchIAPScreenshotHash(ctx CheckContext, 
 	}
 	return resp.Data.Attributes.SourceFileChecksum
 }
-
-// iapAppVersions, iapVersionLocalizations, iapLocalizationSets are thin
-// HTTP shims. Kept inside this rule file since promotional-image is the
-// only rule that needs the screenshot graph today; if a second rule ever
-// needs it we'll lift them into a shared helper file.
 
 type idOnly struct{ ID string }
 

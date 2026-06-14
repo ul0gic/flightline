@@ -18,16 +18,7 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// gzReportServer spins a programmable httptest.Server that serves
-// /v1/salesReports and /v1/financeReports with gzipped TSV bodies. Unlike
-// the JSON-only startFixtureServer in helpers_test.go, this one emits the
-// content-type Apple actually uses for these endpoints
-// ("application/a-gzip") so the asc-side gunzip path runs end-to-end.
-//
-// Routes are keyed by URL path; the handler responds with the named TSV
-// fixture from internal/asc/testdata/golden/<class>/<name>.tsv, gzipped.
-// Unknown paths produce a 404 with a fixture-no-route diagnostic body
-// matching the JSON helper's shape so test failures are self-locating.
+// Serves gzipped TSV with Apple's "application/a-gzip" content-type so the asc-side gunzip path runs end-to-end.
 func gzReportServer(t *testing.T, routes map[string]string) *httptest.Server {
 	t.Helper()
 	captured := make(map[string]string, len(routes))
@@ -62,9 +53,7 @@ func gzReportServer(t *testing.T, routes map[string]string) *httptest.Server {
 	return srv
 }
 
-// resetSalesFlags wipes the package-level flag vars between table-driven
-// cases. cobra binds globals once at init; without an explicit reset, a
-// later case inherits the previous case's values and assertions diverge.
+// Cobra binds these globals once at init, so a table case must reset them or it inherits the prior case's values.
 func resetSalesFlags() {
 	salesDays = 0
 	salesMonth = ""

@@ -18,9 +18,7 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// fixtureClient wires an asc.Client to an httptest server with an
-// ephemeral P-256 key (never a real .p8). Mirrors the helper in
-// internal/cmd/helpers_test.go.
+// fixtureClient wires an asc.Client to an httptest server with an ephemeral P-256 key.
 func fixtureClient(t *testing.T, srv *httptest.Server) *asc.Client {
 	t.Helper()
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -50,9 +48,6 @@ func fixtureClient(t *testing.T, srv *httptest.Server) *asc.Client {
 	return c
 }
 
-// TestFetch_VersionAndAgeRating — the happy path: app exists, version
-// exists, age rating populated, build attached. Ensures the wire
-// projection emits the schema-shaped fields.
 func TestFetch_VersionAndAgeRating(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -94,8 +89,6 @@ func TestFetch_VersionAndAgeRating(t *testing.T) {
 	}
 }
 
-// TestFetch_AppNotFound — ASC returns an empty app collection; Fetch
-// emits a typed error naming the bundleId.
 func TestFetch_AppNotFound(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/apps" {
@@ -117,7 +110,6 @@ func TestFetch_AppNotFound(t *testing.T) {
 	}
 }
 
-// TestFetch_RequiredArgs — defensive guards.
 func TestFetch_RequiredArgs(t *testing.T) {
 	if _, err := Fetch(context.Background(), nil, "x", FetchOpts{}); err == nil {
 		t.Error("expected error for nil client")
@@ -130,6 +122,4 @@ func TestFetch_RequiredArgs(t *testing.T) {
 	}
 }
 
-// silenceURLLint quiets the unused-import warning when net/url isn't
-// referenced after a refactor — kept for intent.
 var _ = url.Values{}

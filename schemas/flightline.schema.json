@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://flightline.dev/schemas/v1alpha1/state.schema.json",
   "title": "Flightline AppState",
-  "description": "Declarative desired state for an App Store Connect app version. Authored as YAML, validated against this schema, applied via `fline apply` against the live ASC API.\n\nSee https://github.com/ul0gic/flightline for the lifecycle (fetch -> edit -> lint -> plan -> preflight -> apply -> submit).",
+  "description": "Declarative desired state for an App Store Connect app version. Authored as YAML, validated against this schema, applied via `flightline apply` against the live ASC API.\n\nSee https://github.com/ul0gic/flightline for the lifecycle (fetch -> edit -> lint -> plan -> preflight -> apply -> submit).",
   "type": "object",
   "additionalProperties": false,
   "required": ["apiVersion", "kind", "metadata", "spec"],
@@ -104,7 +104,7 @@
     "metadataSpec": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Per-locale store metadata. Keys are Apple locale codes (en-US, es-MX, fr-FR, etc.). Some fields live on appStoreVersionLocalization, others on appInfoLocalization — Flightline handles the cross-resource routing.",
+      "description": "Per-locale store metadata. Keys are Apple locale codes (en-US, es-MX, fr-FR, etc.). Some fields live on appStoreVersionLocalization, others on appInfoLocalization: Flightline handles the cross-resource routing.",
       "properties": {
         "locales": {
           "type": "object",
@@ -120,14 +120,14 @@
     "metadataLocale": {
       "type": "object",
       "additionalProperties": false,
-      "description": "One locale's metadata. All fields are optional — only set what you want managed.",
+      "description": "One locale's metadata. All fields are optional: only set what you want managed.",
       "properties": {
         "name":             { "type": "string", "maxLength": 30, "description": "App name. Apple App Store enforces 30-char ceiling." },
         "subtitle":         { "type": "string", "maxLength": 30, "description": "App subtitle." },
         "description":      { "type": "string", "maxLength": 4000, "description": "Long description (App Store listing body)." },
         "keywords":         { "type": "string", "maxLength": 100, "description": "Comma-separated keywords. No spaces around commas." },
         "whatsNew":         { "type": "string", "maxLength": 4000, "description": "What's New text for this version." },
-        "promotionalText":  { "type": "string", "maxLength": 170, "description": "Promotional text. Can be updated without resubmission — useful for time-sensitive copy." },
+        "promotionalText":  { "type": "string", "maxLength": 170, "description": "Promotional text. Can be updated without resubmission: useful for time-sensitive copy." },
         "marketingUrl":     { "type": "string", "format": "uri" },
         "supportUrl":       { "type": "string", "format": "uri" },
         "privacyPolicyUrl": { "type": "string", "format": "uri" }
@@ -235,7 +235,7 @@
     "ageRatingSpec": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Apple's full age-rating questionnaire. Each field is the answer to a category. Field names match Apple's AgeRatingDeclaration attributes — see openapi.oas.json.",
+      "description": "Apple's full age-rating questionnaire. Each field is the answer to a category. Field names match Apple's AgeRatingDeclaration attributes: see openapi.oas.json.",
       "properties": {
         "cartoonOrFantasyViolence":         { "$ref": "#/$defs/ageRatingFrequency" },
         "realisticViolence":                { "$ref": "#/$defs/ageRatingFrequency" },
@@ -378,7 +378,7 @@
     "customProductPagesSpec": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Custom Product Pages — alt screenshots/descriptions for ad-driven traffic.",
+      "description": "Custom Product Pages: alt screenshots/descriptions for ad-driven traffic.",
       "patternProperties": {
         "^[A-Za-z0-9 _-]+$": { "$ref": "#/$defs/customProductPage" }
       },

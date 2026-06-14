@@ -1,17 +1,6 @@
 package asc
 
-// Apple's age rating questionnaire enums. Three shapes:
-//
-//   - Frequency enums (NONE | INFREQUENT_OR_MILD | FREQUENT_OR_INTENSE |
-//     INFREQUENT | FREQUENT) — applied to most content categories.
-//   - Boolean fields — yes/no questions like advertising or messagingAndChat.
-//   - Override enums — manual age-rating overrides (general, Korea, etc.).
-//
-// The frequency enum is the same across all categories so we surface it via
-// shared constants rather than per-field enum types — Apple's spec encodes
-// the same enum inline at every site.
-//
-// Source: jq '.components.schemas.AgeRatingDeclaration.properties.attributes.properties' openapi.oas.json
+// Frequency values are shared across all age-rating categories; Apple encodes the same enum at every site.
 const (
 	AgeRatingFrequencyNone              = "NONE"
 	AgeRatingFrequencyInfrequentOrMild  = "INFREQUENT_OR_MILD"
@@ -24,22 +13,8 @@ const (
 	KidsAgeBandNineToEleven = "NINE_TO_ELEVEN"
 )
 
-// AgeRatingDeclarationAttributes is the full ASC age-rating questionnaire
-// surface — every field Apple asks during App Store Connect's age-rating
-// flow. Flightline keeps the entire shape because L3 preflight rules will
-// flag missing answers (they are a frequent rejection cause).
-//
-// Source: jq '.components.schemas.AgeRatingDeclaration.properties.attributes.properties' openapi.oas.json
-//
-// Notes on field shapes:
-//   - Frequency-enum fields are strings; pointer-bool fields use *bool because
-//     nil ("not yet answered") and false ("explicitly no") have different
-//     operational meaning during the L3 preflight check.
-//   - AgeRatingOverride is deprecated by Apple in favor of AgeRatingOverrideV2;
-//     we surface both so older app records still decode cleanly.
-//   - DeveloperAgeRatingInfoURL is a free-form URL Apple shows the reviewer.
-//
-// Reused by Phase 3 write verbs (`age-rating set`); add fields conservatively.
+// AgeRatingDeclarationAttributes is the full age-rating questionnaire. *bool fields distinguish
+// nil ("unanswered") from false ("explicitly no"), which matters for L3 preflight checks.
 type AgeRatingDeclarationAttributes struct {
 	// Boolean fields (yes/no questions)
 	Advertising            *bool `json:"advertising,omitempty"`
@@ -75,18 +50,7 @@ type AgeRatingDeclarationAttributes struct {
 	DeveloperAgeRatingInfoURL string `json:"developerAgeRatingInfoUrl,omitempty"`
 }
 
-// AppInfoAttributes is the subset of Apple's AppInfo.attributes Flightline
-// reads. AppInfo is the per-review-cycle metadata bag (state mirrors version
-// state); for age-rating reads we use it to pick the right appInfo for a
-// version (each version has a corresponding appInfo in matching lifecycle
-// state).
-//
-// Source: jq '.components.schemas.AppInfo.properties.attributes.properties' openapi.oas.json
-//
-// Apple's older age-rating fields (australiaAgeRating, brazilAgeRating, …)
-// are all marked deprecated; the source of truth is the related
-// ageRatingDeclaration resource, not AppInfo.attributes. Flightline surfaces
-// only the fields needed to pick the right appInfo for a version.
+// AppInfoAttributes is the subset of AppInfo.attributes needed to match an appInfo to a version lifecycle state.
 type AppInfoAttributes struct {
 	State string `json:"state,omitempty"`
 }

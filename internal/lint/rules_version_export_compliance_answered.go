@@ -6,15 +6,8 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// versionExportComplianceAnsweredRule fires when the version's
-// usesNonExemptEncryption answer is missing. Apple blocks submission until
-// it's set; the build itself can carry the answer (ITSAppUsesNonExemptEncryption
-// in Info.plist) or it can be set per-version. Flightline checks the spec
-// answer (offline) and the live build attribute (live).
-//
-// Mode: Both. Offline checks State.Spec.ExportCompliance.UsesNonExemptEncryption.
-// Live re-fetches the build attached to the version and reads its
-// usesNonExemptEncryption.
+// versionExportComplianceAnsweredRule fires when usesNonExemptEncryption is unanswered.
+// Apple blocks submission until it is set (via ITSAppUsesNonExemptEncryption in Info.plist or per-version). Mode=Both.
 type versionExportComplianceAnsweredRule struct{}
 
 func init() { Register(versionExportComplianceAnsweredRule{}) }
@@ -35,9 +28,7 @@ func (r versionExportComplianceAnsweredRule) checkOffline(ctx CheckContext) []Di
 		return nil
 	}
 	ec := ctx.State.Spec.ExportCompliance
-	// "Not managed" (nil ExportCompliance) is intentionally NOT flagged
-	// here — the user may rely on the build's Info.plist answer. Only
-	// when ExportCompliance IS managed but the answer is unset do we fire.
+	// Nil ExportCompliance means the user relies on Info.plist; only fire when managed but unset.
 	if ec == nil {
 		return nil
 	}
@@ -49,7 +40,7 @@ func (r versionExportComplianceAnsweredRule) checkOffline(ctx CheckContext) []Di
 			Path:     "/spec/exportCompliance/usesNonExemptEncryption",
 			FixHint: "set the answer: `spec.exportCompliance.usesNonExemptEncryption: false` (most apps) " +
 				"or `true` plus a declaration block. See docs/state-yaml.md#spec-exportcompliance.",
-			Reference: "PRD §L3 — version.export-compliance-answered",
+			Reference: "PRD §L3: version.export-compliance-answered",
 		}}
 	}
 	return nil
@@ -72,8 +63,7 @@ func (r versionExportComplianceAnsweredRule) checkLive(ctx CheckContext) []Diagn
 		ctx.Ctx, ctx.Client, "/v1/appStoreVersions/"+versionID+"/build", nil,
 	)
 	if err != nil {
-		// No attached build is also a problem, but the rules_build_attached_and_valid
-		// rule owns that diagnostic. Here we only care whether the answer is set.
+		// build.attached-and-valid owns the no-build diagnostic; skip here.
 		return nil
 	}
 	if resp.Data.Attributes.UsesNonExemptEncryption == nil {
@@ -83,8 +73,8 @@ func (r versionExportComplianceAnsweredRule) checkLive(ctx CheckContext) []Diagn
 			Message:  "the build attached to this version has not declared usesNonExemptEncryption",
 			Path:     "/spec/exportCompliance/usesNonExemptEncryption",
 			FixHint: "answer the export-compliance question in App Store Connect, or " +
-				"`fline export-compliance set <bundleId> --version <v> --uses-non-exempt-encryption=false`.",
-			Reference: "PRD §L3 — version.export-compliance-answered",
+				"`flightline export-compliance set <bundleId> --version <v> --uses-non-exempt-encryption=false`.",
+			Reference: "PRD §L3: version.export-compliance-answered",
 		}}
 	}
 	return nil

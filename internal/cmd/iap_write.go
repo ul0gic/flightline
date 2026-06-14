@@ -10,16 +10,15 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// iapCreateRequest is the wire body for POST /v2/inAppPurchases. Mirrors
-// components.schemas.InAppPurchaseV2CreateRequest. Apple requires
-// productId, name, inAppPurchaseType, and the app relationship. reviewNote
-// and familySharable are optional but commonly set on first create.
+// iapCreateRequest is the wire body for POST /v2/inAppPurchases. Apple requires
+// productId, name, inAppPurchaseType, and the app relationship.
 type iapCreateRequest struct {
 	Data iapCreateData `json:"data"`
 }
@@ -38,9 +37,8 @@ type iapCreateAttrs struct {
 	FamilySharable    *bool  `json:"familySharable,omitempty"`
 }
 
-// iapUpdateRequest is the wire body for PATCH /v2/inAppPurchases/{id}.
-// Apple's update surface only mutates name, reviewNote, familySharable —
-// productId and inAppPurchaseType are immutable post-create.
+// iapUpdateRequest is the PATCH body for /v2/inAppPurchases/{id}; productId and
+// inAppPurchaseType are immutable post-create.
 type iapUpdateRequest struct {
 	Data iapUpdateData `json:"data"`
 }
@@ -57,9 +55,7 @@ type iapUpdateAttrs struct {
 	FamilySharable *bool   `json:"familySharable,omitempty"`
 }
 
-// iapLocalizationCreateRequest is the wire body for POST
-// /v1/inAppPurchaseLocalizations. Mirrors
-// InAppPurchaseLocalizationCreateRequest.
+// iapLocalizationCreateRequest is the POST body for /v1/inAppPurchaseLocalizations.
 type iapLocalizationCreateRequest struct {
 	Data iapLocalizationCreateData `json:"data"`
 }
@@ -76,8 +72,8 @@ type iapLocalizationCreateAttrs struct {
 	Description string `json:"description,omitempty"`
 }
 
-// iapLocalizationUpdateRequest is the wire body for PATCH
-// /v1/inAppPurchaseLocalizations/{id}. Locale is immutable.
+// iapLocalizationUpdateRequest is the PATCH body for
+// /v1/inAppPurchaseLocalizations/{id}; locale is immutable.
 type iapLocalizationUpdateRequest struct {
 	Data iapLocalizationUpdateData `json:"data"`
 }
@@ -93,7 +89,6 @@ type iapLocalizationUpdateAttrs struct {
 	Description *string `json:"description,omitempty"`
 }
 
-// relRefBlock is the JSON:API to-one relationship envelope.
 type relRefBlock struct {
 	Data relRef `json:"data"`
 }
@@ -103,9 +98,8 @@ type relRef struct {
 	ID   string `json:"id"`
 }
 
-// IAPWriteResult is the JSON-stable view returned by iap create/update/delete.
-// noop=true means "current state already matched; no PATCH issued" (the
-// idempotency contract).
+// IAPWriteResult is the JSON-stable view for iap create/update/delete;
+// noop=true means current state already matched.
 type IAPWriteResult struct {
 	Action     string            `json:"action"`
 	ID         string            `json:"id"`
@@ -115,7 +109,6 @@ type IAPWriteResult struct {
 	Attributes asc.IAPAttributes `json:"attributes,omitempty"`
 }
 
-// TableRows for IAPWriteResult — vertical layout, one field per row.
 func (r *IAPWriteResult) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
 	rows = [][]string{
@@ -123,7 +116,7 @@ func (r *IAPWriteResult) TableRows() (headers []string, rows [][]string) {
 		{"ID", r.ID},
 		{"TYPE", r.Type},
 		{"PRODUCT_ID", r.ProductID},
-		{"NOOP", fmt.Sprintf("%t", r.NoOp)},
+		{"NOOP", strconv.FormatBool(r.NoOp)},
 		{"NAME", r.Attributes.Name},
 		{"IAP_TYPE", r.Attributes.InAppPurchaseType},
 		{"STATE", r.Attributes.State},
@@ -133,7 +126,6 @@ func (r *IAPWriteResult) TableRows() (headers []string, rows [][]string) {
 	return headers, rows
 }
 
-// IAPLocalizationWriteResult is the JSON-stable view for `iap localizations set`.
 type IAPLocalizationWriteResult struct {
 	Action     string                        `json:"action"`
 	ID         string                        `json:"id"`
@@ -142,14 +134,13 @@ type IAPLocalizationWriteResult struct {
 	Attributes asc.IAPLocalizationAttributes `json:"attributes,omitempty"`
 }
 
-// TableRows for IAPLocalizationWriteResult.
 func (r *IAPLocalizationWriteResult) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
 	rows = [][]string{
 		{"ACTION", r.Action},
 		{"ID", r.ID},
 		{"TYPE", r.Type},
-		{"NOOP", fmt.Sprintf("%t", r.NoOp)},
+		{"NOOP", strconv.FormatBool(r.NoOp)},
 		{"LOCALE", r.Attributes.Locale},
 		{"NAME", r.Attributes.Name},
 		{"DESCRIPTION", r.Attributes.Description},
@@ -159,7 +150,7 @@ func (r *IAPLocalizationWriteResult) TableRows() (headers []string, rows [][]str
 }
 
 // IAPScreenshotUploadResult is the JSON-stable view for `iap review-screenshot
-// upload`. Checksum is the MD5 hex sent to Apple as sourceFileChecksum.
+// upload`; Checksum is the MD5 hex sent as sourceFileChecksum.
 type IAPScreenshotUploadResult struct {
 	Action      string `json:"action"`
 	ID          string `json:"id"`
@@ -172,7 +163,6 @@ type IAPScreenshotUploadResult struct {
 	TemplateURL string `json:"templateUrl,omitempty"`
 }
 
-// TableRows for IAPScreenshotUploadResult.
 func (r *IAPScreenshotUploadResult) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
 	rows = [][]string{
@@ -183,15 +173,11 @@ func (r *IAPScreenshotUploadResult) TableRows() (headers []string, rows [][]stri
 		{"PRODUCT_ID", r.ProductID},
 		{"FILE_NAME", r.FileName},
 		{"CHECKSUM", r.Checksum},
-		{"NOOP", fmt.Sprintf("%t", r.NoOp)},
+		{"NOOP", strconv.FormatBool(r.NoOp)},
 		{"TEMPLATE_URL", r.TemplateURL},
 	}
 	return headers, rows
 }
-
-// ----------------------------------------------------------------------------
-// cobra wiring
-// ----------------------------------------------------------------------------
 
 var iapCreateCmd = &cobra.Command{
 	Use:          "create <bundleId>",
@@ -203,8 +189,8 @@ var iapCreateCmd = &cobra.Command{
 
 Idempotent: if an IAP with --product-id already exists for this app, returns
 the existing record with noop=true rather than failing or creating a duplicate.`,
-	Example: `  fline iap create com.example.myapp --product-id com.example.myapp.lifetime --type NON_CONSUMABLE --name "Lifetime Pro"
-  fline iap create com.example.myapp --product-id com.example.myapp.coins --type CONSUMABLE --name Coins --review-note "Currency for the in-app store"`,
+	Example: `  flightline iap create com.example.myapp --product-id com.example.myapp.lifetime --type NON_CONSUMABLE --name "Lifetime Pro"
+  flightline iap create com.example.myapp --product-id com.example.myapp.coins --type CONSUMABLE --name Coins --review-note "Currency for the in-app store"`,
 }
 
 var iapUpdateCmd = &cobra.Command{
@@ -217,10 +203,10 @@ var iapUpdateCmd = &cobra.Command{
 an existing In-App Purchase. Idempotent: if every flag matches the current
 value, returns noop=true without issuing a PATCH.
 
-productId and inAppPurchaseType are immutable post-create — to change either,
+productId and inAppPurchaseType are immutable post-create: to change either,
 delete and recreate.`,
-	Example: `  fline iap update com.example.myapp --product com.example.myapp.lifetime --name "Lifetime Pro v2"
-  fline iap update com.example.myapp --product com.example.myapp.lifetime --review-note "updated reviewer steps"`,
+	Example: `  flightline iap update com.example.myapp --product com.example.myapp.lifetime --name "Lifetime Pro v2"
+  flightline iap update com.example.myapp --product com.example.myapp.lifetime --review-note "updated reviewer steps"`,
 }
 
 var iapDeleteCmd = &cobra.Command{
@@ -229,12 +215,12 @@ var iapDeleteCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runIAPDelete,
-	Long: `delete removes an In-App Purchase. Destructive — requires --yes to confirm.
+	Long: `delete removes an In-App Purchase. Destructive: requires --yes to confirm.
 
 Idempotent: if the IAP doesn't exist, returns noop=true without issuing a
 DELETE. Apple may refuse deletion of an IAP that has been APPROVED and is
 visible on the store; that case surfaces as a typed APIError.`,
-	Example: `  fline iap delete com.example.myapp --product com.example.myapp.lifetime --yes`,
+	Example: `  flightline iap delete com.example.myapp --product com.example.myapp.lifetime --yes`,
 }
 
 var iapLocalizationsSetCmd = &cobra.Command{
@@ -246,8 +232,8 @@ var iapLocalizationsSetCmd = &cobra.Command{
 	Long: `set creates the localization for --locale if it does not exist, or PATCHes
 the mutable fields (name, description) if it does. Idempotent: when the
 existing localization already matches the supplied flags, returns noop=true.`,
-	Example: `  fline iap localizations set com.example.myapp --product com.example.myapp.lifetime --locale en-US --name "Lifetime Pro" --description "Unlock everything, forever."
-  fline iap localizations set com.example.myapp --product com.example.myapp.lifetime --locale fr-FR --name "Pro à vie" --description "Tout débloquer, pour toujours."`,
+	Example: `  flightline iap localizations set com.example.myapp --product com.example.myapp.lifetime --locale en-US --name "Lifetime Pro" --description "Unlock everything, forever."
+  flightline iap localizations set com.example.myapp --product com.example.myapp.lifetime --locale fr-FR --name "Pro à vie" --description "Tout débloquer, pour toujours."`,
 }
 
 var iapReviewScreenshotCmd = &cobra.Command{
@@ -267,12 +253,12 @@ Apple's CDN, and commits the upload with the local MD5.
 Idempotent: if a screenshot with the same sourceFileChecksum is already
 attached to this IAP, returns noop=true without re-uploading. Use
 --resume to pick up a partial upload from the on-disk checkpoint.`,
-	Example: `  fline iap review-screenshot upload com.example.myapp --product com.example.myapp.lifetime --file ./review/lifetime.png
-  fline iap review-screenshot upload com.example.myapp --product com.example.myapp.lifetime --file ./review/lifetime.png --resume`,
+	Example: `  flightline iap review-screenshot upload com.example.myapp --product com.example.myapp.lifetime --file ./review/lifetime.png
+  flightline iap review-screenshot upload com.example.myapp --product com.example.myapp.lifetime --file ./review/lifetime.png --resume`,
 }
 
-// Per-subcommand flag state. Pointer-bool flags use string-flag indirection so
-// "unset" is observable for idempotent diffing — see resolveTriBool.
+// Bool flags use string indirection so "unset" stays observable for
+// idempotent diffing: see resolveTriBool.
 var (
 	iapCreateProductID      string
 	iapCreateType           string
@@ -341,10 +327,6 @@ func init() {
 	iapCmd.AddCommand(iapReviewScreenshotCmd)
 }
 
-// ----------------------------------------------------------------------------
-// runIAPCreate — POST /v2/inAppPurchases or noop.
-// ----------------------------------------------------------------------------
-
 func runIAPCreate(cmd *cobra.Command, args []string) error {
 	bundleID := args[0]
 	productID := strings.TrimSpace(iapCreateProductID)
@@ -374,8 +356,7 @@ func runIAPCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Idempotent pre-flight: if a record with this productId already exists for
-	// this app, return it as a noop. Apple would otherwise 409.
+	// Existing productId returns a noop; Apple would otherwise 409.
 	if existingID, existingAttrs, err := lookupIAP(cmd.Context(), c, appID, productID); err == nil {
 		return Render(&IAPWriteResult{
 			Action:     "create",
@@ -415,10 +396,6 @@ func runIAPCreate(cmd *cobra.Command, args []string) error {
 		Attributes: resp.Data.Attributes,
 	}, outputMode())
 }
-
-// ----------------------------------------------------------------------------
-// runIAPUpdate — PATCH /v2/inAppPurchases/{id} or noop.
-// ----------------------------------------------------------------------------
 
 func runIAPUpdate(cmd *cobra.Command, args []string) error {
 	bundleID := args[0]
@@ -488,10 +465,6 @@ func runIAPUpdate(cmd *cobra.Command, args []string) error {
 	}, outputMode())
 }
 
-// ----------------------------------------------------------------------------
-// runIAPDelete — DELETE /v2/inAppPurchases/{id} or noop.
-// ----------------------------------------------------------------------------
-
 func runIAPDelete(cmd *cobra.Command, args []string) error {
 	bundleID := args[0]
 	productID := strings.TrimSpace(iapDeleteProduct)
@@ -511,7 +484,7 @@ func runIAPDelete(cmd *cobra.Command, args []string) error {
 
 	existingID, _, err := lookupIAP(cmd.Context(), c, appID, productID)
 	if err != nil {
-		// No record → noop. Idempotent contract.
+		// No record → idempotent noop.
 		return Render(&IAPWriteResult{
 			Action:    "delete",
 			ID:        "",
@@ -532,10 +505,6 @@ func runIAPDelete(cmd *cobra.Command, args []string) error {
 		NoOp:      false,
 	}, outputMode())
 }
-
-// ----------------------------------------------------------------------------
-// runIAPLocalizationsSet — POST or PATCH the localization for one locale.
-// ----------------------------------------------------------------------------
 
 func runIAPLocalizationsSet(cmd *cobra.Command, args []string) error {
 	bundleID := args[0]
@@ -560,7 +529,6 @@ func runIAPLocalizationsSet(cmd *cobra.Command, args []string) error {
 	}
 
 	if existing == nil {
-		// Create.
 		body := iapLocalizationCreateRequest{
 			Data: iapLocalizationCreateData{
 				Type: "inAppPurchaseLocalizations",
@@ -589,7 +557,6 @@ func runIAPLocalizationsSet(cmd *cobra.Command, args []string) error {
 		}, outputMode())
 	}
 
-	// Update — diff only changed fields.
 	body := iapLocalizationUpdateRequest{
 		Data: iapLocalizationUpdateData{
 			Type: "inAppPurchaseLocalizations",
@@ -631,11 +598,8 @@ func runIAPLocalizationsSet(cmd *cobra.Command, args []string) error {
 	}, outputMode())
 }
 
-// ----------------------------------------------------------------------------
-// runIAPReviewScreenshotUpload — reserve → PUT chunks → commit, idempotent on
-// matching MD5 against the currently-attached screenshot.
-// ----------------------------------------------------------------------------
-
+// runIAPReviewScreenshotUpload reserves, PUTs chunks, then commits; idempotent
+// when the local MD5 matches the currently-attached screenshot.
 func runIAPReviewScreenshotUpload(cmd *cobra.Command, args []string) error {
 	bundleID := args[0]
 	productID := strings.TrimSpace(iapShotUploadProduct)
@@ -651,8 +615,7 @@ func runIAPReviewScreenshotUpload(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Idempotency: hash the local file, compare to the IAP's current screenshot
-	// sourceFileChecksum. If it matches, skip the upload.
+	// Skip the upload when the local hash matches the current sourceFileChecksum.
 	localMD5, err := fileMD5Hex(file)
 	if err != nil {
 		return fmt.Errorf("iap review-screenshot upload: %w", err)
@@ -679,7 +642,6 @@ func runIAPReviewScreenshotUpload(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Best-effort fetch of the templated URL after commit.
 	templateURL := ""
 	if u, err := fetchIAPReviewScreenshotURL(cmd.Context(), c, iapID); err == nil {
 		templateURL = u
@@ -698,13 +660,8 @@ func runIAPReviewScreenshotUpload(cmd *cobra.Command, args []string) error {
 	}, outputMode())
 }
 
-// ----------------------------------------------------------------------------
-// helpers (file-local; cross-cutting helpers live in shared cmd files)
-// ----------------------------------------------------------------------------
-
 // lookupIAP returns the IAP record for (appID, productID) or a typed error
-// when no record exists. Used by create (idempotency check) and delete (skip
-// when already gone).
+// when no record exists.
 func lookupIAP(ctx context.Context, c *asc.Client, appID, productID string) (string, asc.IAPAttributes, error) {
 	q := url.Values{
 		"filter[productId]": {productID},
@@ -720,9 +677,8 @@ func lookupIAP(ctx context.Context, c *asc.Client, appID, productID string) (str
 	return page.Data[0].ID, page.Data[0].Attributes, nil
 }
 
-// findLocalization returns the existing localization resource for (iapID,
-// locale) or nil when none. A real API error returns (nil, err); not-found is
-// a nil resource with no error.
+// findLocalization returns the localization for (iapID, locale), or (nil, nil)
+// when none exists.
 func findLocalization(ctx context.Context, c *asc.Client, iapID, locale string) (*asc.Resource[asc.IAPLocalizationAttributes], error) {
 	q := url.Values{
 		"filter[locale]": {locale},
@@ -742,10 +698,8 @@ func findLocalization(ctx context.Context, c *asc.Client, iapID, locale string) 
 	return nil, nil
 }
 
-// currentIAPScreenshot returns the IAP's currently-attached screenshot (if
-// any). ok=false means no screenshot or fetch failed; callers proceed with a
-// fresh upload either way. checksum is sourceFileChecksum (MD5 hex);
-// templateURL is the rendered-image CDN URL with {w}x{h}{f} placeholders.
+// currentIAPScreenshot returns the attached screenshot's checksum
+// (sourceFileChecksum, MD5 hex) and CDN templateURL; ok=false on none or fetch error.
 func currentIAPScreenshot(ctx context.Context, c *asc.Client, iapID string) (checksum, templateURL string, ok bool) {
 	resp, err := asc.Get[asc.Single[asc.IAPReviewScreenshotAttributes]](
 		ctx, c, "/v2/inAppPurchases/"+iapID+"/appStoreReviewScreenshot", nil,
@@ -759,7 +713,6 @@ func currentIAPScreenshot(ctx context.Context, c *asc.Client, iapID string) (che
 	return resp.Data.Attributes.SourceFileChecksum, resp.Data.Attributes.ImageAsset.TemplateURL, true
 }
 
-// isValidIAPType gates the --type flag for create. Apple's enum.
 func isValidIAPType(t string) bool {
 	switch t {
 	case asc.IAPTypeConsumable, asc.IAPTypeNonConsumable, asc.IAPTypeNonRenewingSubscription:
@@ -768,9 +721,8 @@ func isValidIAPType(t string) bool {
 	return false
 }
 
-// resolveTriBool parses a --flag string into *bool: "" → nil (unset),
-// "true"/"false" → typed pointer. Any other value is a user error. Three-state
-// is the difference between "leave alone" and "explicitly set to false".
+// resolveTriBool parses a flag string into *bool: "" → nil (unset), else a
+// typed pointer. Three-state distinguishes "leave alone" from "set to false".
 func resolveTriBool(flagName, raw string) (*bool, error) {
 	v := strings.TrimSpace(strings.ToLower(raw))
 	if v == "" {
@@ -787,7 +739,6 @@ func resolveTriBool(flagName, raw string) (*bool, error) {
 	return nil, fmt.Errorf("--%s: %q is not a boolean (use true | false)", flagName, raw)
 }
 
-// boolPtrEq compares two *bool by value.
 func boolPtrEq(a, b *bool) bool {
 	if a == nil || b == nil {
 		return a == b
@@ -795,11 +746,8 @@ func boolPtrEq(a, b *bool) bool {
 	return *a == *b
 }
 
-// fileMD5Hex streams the file at path through MD5 and returns the lowercase
-// hex digest. Mirrors asc.computeFileMD5; duplicated at the cmd layer because
-// asc keeps the helper unexported (defense against accidental external use).
-// MD5 is required by Apple's sourceFileChecksum protocol — not used for
-// security here, only for upload integrity.
+// fileMD5Hex returns the file's MD5 hex digest. MD5 is Apple's
+// sourceFileChecksum protocol: upload integrity, not security.
 func fileMD5Hex(path string) (string, error) {
 	f, err := os.Open(path) //nolint:gosec // path supplied by trusted caller (--file flag)
 	if err != nil {
@@ -813,8 +761,6 @@ func fileMD5Hex(path string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// baseFileName returns the trailing path element of p. Thin wrapper so
-// callers don't import filepath just for one site.
 func baseFileName(p string) string {
 	return filepath.Base(p)
 }

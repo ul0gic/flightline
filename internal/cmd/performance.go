@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -10,11 +12,7 @@ import (
 )
 
 // PerformanceView is the read-side view for `performance app|build`.
-//
-// Surfaces Apple's xcodeMetrics envelope keyed by bundleId (and optional
-// buildNumber for the build-scoped variant). Insights and ProductData are
-// passed through as Apple shaped them so JSON consumers see the wire shape
-// they'd see from a curl against ASC.
+// Insights and ProductData pass through as Apple shaped them in xcodeMetrics.
 type PerformanceView struct {
 	BundleID    string                       `json:"bundleId"`
 	BuildNumber string                       `json:"buildNumber,omitempty"`
@@ -25,10 +23,7 @@ type PerformanceView struct {
 	Note        string                       `json:"note,omitempty"`
 }
 
-// TableRows for the performance view. Vertical layout summarizes the
-// metric categories and any insight call-outs; consumers wanting the full
-// dataset payload must use --output json (the dataset arrays are too deep
-// to fit in a tabular view).
+// TableRows summarizes metric categories; the full dataset only renders under --output json.
 func (v *PerformanceView) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
 	rows = [][]string{
@@ -47,7 +42,7 @@ func (v *PerformanceView) TableRows() (headers []string, rows [][]string) {
 
 	if v.Insights != nil {
 		if n := len(v.Insights.Regressions); n > 0 {
-			rows = append(rows, []string{"REGRESSIONS", fmt.Sprintf("%d", n)})
+			rows = append(rows, []string{"REGRESSIONS", strconv.Itoa(n)})
 			for i := range v.Insights.Regressions {
 				ins := &v.Insights.Regressions[i]
 				rows = append(rows, []string{
@@ -57,7 +52,7 @@ func (v *PerformanceView) TableRows() (headers []string, rows [][]string) {
 			}
 		}
 		if n := len(v.Insights.TrendingUp); n > 0 {
-			rows = append(rows, []string{"TRENDING_UP", fmt.Sprintf("%d", n)})
+			rows = append(rows, []string{"TRENDING_UP", strconv.Itoa(n)})
 			for i := range v.Insights.TrendingUp {
 				ins := &v.Insights.TrendingUp[i]
 				rows = append(rows, []string{
@@ -95,11 +90,11 @@ var performanceCmd = &cobra.Command{
 	Use:   "performance",
 	Short: "Read Xcode Organizer performance metrics",
 	Long: `performance groups read commands over Apple's perfPowerMetrics
-endpoints — the same battery / memory / hangs / launches / disk-writes
+endpoints: the same battery / memory / hangs / launches / disk-writes
 metrics the Xcode Organizer "Metrics" tab shows.
 
-  - app <bundleId>                    — app-level (cross-build aggregate)
-  - build <bundleId> --build <number> — build-specific metrics
+  - app <bundleId>                   : app-level (cross-build aggregate)
+  - build <bundleId> --build <number>: build-specific metrics
 
 Filter by --platform, --category (HANG | LAUNCH | MEMORY | DISK |
 BATTERY | TERMINATION | ANIMATION), and --device.`,
@@ -111,9 +106,9 @@ var performanceAppCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runPerformanceApp,
-	Example: `  fline performance app com.example.myapp
-  fline performance app com.example.myapp --category MEMORY
-  fline performance app com.example.myapp --output json | jq '.insights.regressions'`,
+	Example: `  flightline performance app com.example.myapp
+  flightline performance app com.example.myapp --category MEMORY
+  flightline performance app com.example.myapp --output json | jq '.insights.regressions'`,
 }
 
 var performanceBuildCmd = &cobra.Command{
@@ -122,8 +117,8 @@ var performanceBuildCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runPerformanceBuild,
-	Example: `  fline performance build com.example.myapp --build 42
-  fline performance build com.example.myapp --build 42 --category HANG --output json`,
+	Example: `  flightline performance build com.example.myapp --build 42
+  flightline performance build com.example.myapp --build 42 --category HANG --output json`,
 }
 
 var (
@@ -187,7 +182,7 @@ func runPerformanceBuild(cmd *cobra.Command, args []string) error {
 	bundleID := args[0]
 	build := strings.TrimSpace(performanceBuildBuild)
 	if build == "" {
-		return fmt.Errorf("performance: --build is required")
+		return errors.New("performance: --build is required")
 	}
 
 	c, err := newClient()
@@ -236,9 +231,7 @@ func runPerformanceBuild(cmd *cobra.Command, args []string) error {
 	return Render(view, outputMode())
 }
 
-// perfPowerQuery builds the filter[] tuple Apple's perfPowerMetrics
-// endpoints accept. Empty inputs are skipped so callers always default to
-// "no filter" rather than silently constraining the result.
+// perfPowerQuery builds the filter[] tuple for perfPowerMetrics; empty inputs default to no filter.
 func perfPowerQuery(platform, category, device string) url.Values {
 	q := url.Values{}
 	if p := strings.TrimSpace(platform); p != "" {

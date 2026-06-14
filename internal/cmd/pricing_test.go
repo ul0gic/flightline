@@ -72,11 +72,9 @@ func TestPricingView_TableRows_VerticalLayout(t *testing.T) {
 	if len(headers) != 2 {
 		t.Errorf("headers = %d, want 2", len(headers))
 	}
-	// Without a basePrice we still get the schedule + availability rows.
 	if len(rows) < 9 {
 		t.Errorf("rows = %d, want >= 9", len(rows))
 	}
-	// One row should mention auto-equalized when no basePrice is attached.
 	foundAutoEqualized := false
 	for _, r := range rows {
 		if strings.Contains(r[1], "auto-equalized") {
@@ -109,7 +107,6 @@ func TestPricingCommand_RegisteredOnRoot(t *testing.T) {
 	}
 }
 
-// TestPricing_JSONOutputStability locks the top-level keys for `pricing get`.
 func TestPricing_JSONOutputStability(t *testing.T) {
 	v := &PricingView{
 		BundleID:     "com.example.alpha",
@@ -126,7 +123,7 @@ func TestPricing_JSONOutputStability(t *testing.T) {
 	}
 	for _, key := range []string{"bundleId", "schedule", "availability"} {
 		if _, ok := decoded[key]; !ok {
-			t.Errorf("missing top-level key %q — JSON contract drift. Got: %v", key, mapKeys(decoded))
+			t.Errorf("missing top-level key %q: JSON contract drift. Got: %v", key, mapKeys(decoded))
 		}
 	}
 	sched, ok := decoded["schedule"].(map[string]any)
@@ -135,7 +132,7 @@ func TestPricing_JSONOutputStability(t *testing.T) {
 	}
 	for _, key := range []string{"baseTerritoryId", "manualPriceCount", "automaticPriceCount"} {
 		if _, ok := sched[key]; !ok {
-			t.Errorf("schedule missing key %q — JSON contract drift", key)
+			t.Errorf("schedule missing key %q: JSON contract drift", key)
 		}
 	}
 	avail, ok := decoded["availability"].(map[string]any)
@@ -144,12 +141,11 @@ func TestPricing_JSONOutputStability(t *testing.T) {
 	}
 	for _, key := range []string{"availableTotal", "availableCount"} {
 		if _, ok := avail[key]; !ok {
-			t.Errorf("availability missing key %q — JSON contract drift", key)
+			t.Errorf("availability missing key %q: JSON contract drift", key)
 		}
 	}
 }
 
-// TestPriceWindow_FormattingCases exercises the date-window rendering.
 func TestPriceWindow_FormattingCases(t *testing.T) {
 	cases := []struct {
 		start, end, want string
@@ -160,7 +156,6 @@ func TestPriceWindow_FormattingCases(t *testing.T) {
 		{"", "", ""},
 	}
 	for _, c := range cases {
-		c := c
 		t.Run(c.start+"|"+c.end, func(t *testing.T) {
 			got := priceWindow(c.start, c.end)
 			if got != c.want {
@@ -170,7 +165,6 @@ func TestPriceWindow_FormattingCases(t *testing.T) {
 	}
 }
 
-// TestWindowCovers_Boundaries asserts the [start,end) window logic.
 func TestWindowCovers_Boundaries(t *testing.T) {
 	cases := []struct {
 		today, start, end string
@@ -190,10 +184,6 @@ func TestWindowCovers_Boundaries(t *testing.T) {
 	}
 }
 
-// TestPricing_FixtureReplay_ScheduleAndPricePoint exercises fetchPriceSchedule
-// against the schedule + price-point fixtures: the active-window manual price
-// for the base territory is found, and the follow-up GET fills
-// customerPrice/proceeds.
 func TestPricing_FixtureReplay_ScheduleAndPricePoint(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
@@ -243,8 +233,6 @@ func TestPricing_FixtureReplay_ScheduleAndPricePoint(t *testing.T) {
 	}
 }
 
-// TestPricing_FixtureReplay_Availability exercises fetchAppAvailability:
-// 4 territories sideloaded, 3 available, availableInNewTerritories=true.
 func TestPricing_FixtureReplay_Availability(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
@@ -272,8 +260,6 @@ func TestPricing_FixtureReplay_Availability(t *testing.T) {
 	}
 }
 
-// TestPricing_FixtureReplay_AppNotFound asserts the resolveAppID error path
-// surfaces the missing bundleId.
 func TestPricing_FixtureReplay_AppNotFound(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_notFound"},
@@ -288,7 +274,6 @@ func TestPricing_FixtureReplay_AppNotFound(t *testing.T) {
 	}
 }
 
-// TestPricingSet_RegisteredOnGroup confirms the cobra subcommand wiring.
 func TestPricingSet_RegisteredOnGroup(t *testing.T) {
 	var pcmd *cobra.Command
 	for _, c := range rootCmd.Commands() {
@@ -317,10 +302,8 @@ func TestPricingSet_RegisteredOnGroup(t *testing.T) {
 	}
 }
 
-// TestBuildPricingScheduleCreate_Shape locks the JSON:API shape Apple
-// expects. The local id "${TIER}" wires the manualPrices linkage to the
-// inline appPrice; territory + appPricePoint relationships sit on the
-// inline price.
+// TestBuildPricingScheduleCreate_Shape: local id "${TIER}" wires the
+// manualPrices linkage to the inline appPrice that carries the relationships.
 func TestBuildPricingScheduleCreate_Shape(t *testing.T) {
 	body := buildPricingScheduleCreate("APP-1", "USA", "PP-USA-999", "2025-01-01", "")
 	raw, err := json.Marshal(body)
@@ -347,8 +330,6 @@ func TestBuildPricingScheduleCreate_Shape(t *testing.T) {
 	}
 }
 
-// TestBuildPricingScheduleCreate_OmitsEmptyDates asserts both date fields
-// are omitted when neither flag was supplied — Apple defaults them.
 func TestBuildPricingScheduleCreate_OmitsEmptyDates(t *testing.T) {
 	body := buildPricingScheduleCreate("APP-1", "USA", "PP-USA-999", "", "")
 	raw, _ := json.Marshal(body)
@@ -360,8 +341,6 @@ func TestBuildPricingScheduleCreate_OmitsEmptyDates(t *testing.T) {
 	}
 }
 
-// TestPricingSetResult_TableRows_NoChange asserts the no-change NOTE row
-// renders for idempotent runs.
 func TestPricingSetResult_TableRows_NoChange(t *testing.T) {
 	r := &PricingSetResult{
 		BundleID:      "com.example.alpha",
@@ -370,7 +349,7 @@ func TestPricingSetResult_TableRows_NoChange(t *testing.T) {
 		BaseTerritory: "USA",
 		PricePointID:  "PP-USA-999",
 		ScheduleID:    "1234567890",
-		Note:          "no change (idempotent) — current schedule already matches",
+		Note:          "no change (idempotent): current schedule already matches",
 	}
 	_, rows := r.TableRows()
 	foundNote := false
@@ -384,7 +363,6 @@ func TestPricingSetResult_TableRows_NoChange(t *testing.T) {
 	}
 }
 
-// TestPricingSetResult_JSONShape locks the JSON contract for `pricing set`.
 func TestPricingSetResult_JSONShape(t *testing.T) {
 	r := &PricingSetResult{
 		BundleID: "com.example.alpha", AppID: "1234567890",
@@ -406,10 +384,8 @@ func TestPricingSetResult_JSONShape(t *testing.T) {
 	}
 }
 
-// TestFetchCurrentBaseSchedule_FixtureReplay walks the read path against
-// the existing pricing_get fixture and confirms (schedID, baseTerritory,
-// basePricePoint) is extracted as expected — the active manual price
-// covering today is MP-USA-1 → PP-USA-999.
+// TestFetchCurrentBaseSchedule_FixtureReplay: the active manual price covering
+// today is MP-USA-1 → PP-USA-999.
 func TestFetchCurrentBaseSchedule_FixtureReplay(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps/1234567890/appPriceSchedule": {File: "pricing_get"},

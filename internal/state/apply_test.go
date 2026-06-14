@@ -16,10 +16,8 @@ import (
 	"github.com/ul0gic/flightline/internal/plan"
 )
 
-// withTempCacheDir reroutes os.UserCacheDir into a temp dir for the
-// duration of the test by setting XDG_CACHE_HOME (Linux) and HOME.
-// macOS UserCacheDir reads $HOME/Library/Caches; setting both works
-// on both platforms.
+// withTempCacheDir reroutes os.UserCacheDir into a temp dir. Sets both XDG_CACHE_HOME
+// (Linux) and HOME ($HOME/Library/Caches on macOS) so it works cross-platform.
 func withTempCacheDir(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -52,7 +50,6 @@ func TestApply_RequiresBundleID(t *testing.T) {
 	}
 }
 
-// TestApply_EmptyChanges — no changes, no calls.
 func TestApply_EmptyChanges(t *testing.T) {
 	withTempCacheDir(t)
 	var calls int32
@@ -73,8 +70,6 @@ func TestApply_EmptyChanges(t *testing.T) {
 	}
 }
 
-// TestApply_VersionCopyrightOneCall — one change → resolveAppID + list
-// versions + PATCH version. Three calls total; the last is the PATCH.
 func TestApply_VersionCopyrightOneCall(t *testing.T) {
 	withTempCacheDir(t)
 	var patches int32
@@ -117,9 +112,6 @@ func TestApply_VersionCopyrightOneCall(t *testing.T) {
 	}
 }
 
-// TestApply_ResumeSkipsApplied — pre-seed a checkpoint matching the
-// change, run Apply with Resume; the change must be skipped and zero
-// PATCHes issued.
 func TestApply_ResumeSkipsApplied(t *testing.T) {
 	withTempCacheDir(t)
 	var patches int32
@@ -170,8 +162,6 @@ func TestApply_ResumeSkipsApplied(t *testing.T) {
 	}
 }
 
-// TestApply_DryRunIssuesNoCalls — DryRun records intent but never
-// hits the wire.
 func TestApply_DryRunIssuesNoCalls(t *testing.T) {
 	withTempCacheDir(t)
 	var calls int32
@@ -199,9 +189,6 @@ func TestApply_DryRunIssuesNoCalls(t *testing.T) {
 	}
 }
 
-// TestApply_UnmappedSurfacesError — a path the dispatch table doesn't
-// recognise must surface as ErrUnmappedChange. /spec/futureSurface/foo
-// is intentionally outside every covered prefix.
 func TestApply_UnmappedSurfacesError(t *testing.T) {
 	withTempCacheDir(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {}))
@@ -226,8 +213,6 @@ func TestApply_UnmappedSurfacesError(t *testing.T) {
 	}
 }
 
-// TestSchemaToWireAgeRating — sanity check the rename map for a few
-// representative entries.
 func TestSchemaToWireAgeRating(t *testing.T) {
 	cases := map[string]string{
 		"/spec/ageRating/cartoonOrFantasyViolence": "violenceCartoonOrFantasy",

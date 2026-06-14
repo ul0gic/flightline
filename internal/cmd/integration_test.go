@@ -12,10 +12,7 @@ import (
 	"github.com/ul0gic/flightline/internal/auth"
 )
 
-// requireCreds skips the test when ASC creds aren't in the environment.
-// Integration runs are explicit (`go test -tags=integration ./...`); the
-// skip keeps a no-creds invocation green so CI matrices that lack secrets
-// don't fail spuriously.
+// Skips (not fails) without creds so CI matrices lacking secrets stay green.
 func requireCreds(t *testing.T) (keyID, issuerID, keyPath string) {
 	t.Helper()
 	keyID = os.Getenv("APP_STORE_CONNECT_KEY_ID")

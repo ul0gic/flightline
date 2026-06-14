@@ -45,9 +45,6 @@ func TestScreenshotsCmd_Registered(t *testing.T) {
 	}
 }
 
-// TestIsValidDeviceSet exercises the device-set validator. Spot-check
-// the iPhone, iPad, Watch, TV, and Vision Pro buckets so a future enum
-// drift is loud.
 func TestIsValidDeviceSet(t *testing.T) {
 	good := []string{
 		"APP_IPHONE_67", "APP_IPAD_PRO_3GEN_129", "APP_DESKTOP",
@@ -201,10 +198,7 @@ func TestScreenshotUploadResult_TableRows(t *testing.T) {
 	}
 }
 
-// ----- fixture-replay tests -----
-
-// TestFindOrCreateScreenshotSet_Existing exercises the warm path: a set
-// already exists for (locale, displayType), so no POST is issued.
+// TestFindOrCreateScreenshotSet_Existing: a set already exists, so no POST.
 func TestFindOrCreateScreenshotSet_Existing(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/appStoreVersionLocalizations/AC000000001/appScreenshotSets": {File: "screenshot_set_list_existing"},
@@ -219,8 +213,7 @@ func TestFindOrCreateScreenshotSet_Existing(t *testing.T) {
 	}
 }
 
-// TestFindOrCreateScreenshotSet_Create exercises the cold path: no set
-// exists, POST creates one and returns the new id.
+// TestFindOrCreateScreenshotSet_Create: no set exists, so POST creates one.
 func TestFindOrCreateScreenshotSet_Create(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/appStoreVersionLocalizations/AC000000001/appScreenshotSets": {File: "screenshot_set_list_empty"},
@@ -236,7 +229,6 @@ func TestFindOrCreateScreenshotSet_Create(t *testing.T) {
 	}
 }
 
-// TestListScreenshotsByChecksum confirms checksum -> entry mapping.
 func TestListScreenshotsByChecksum(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/appScreenshotSets/SS000000001/appScreenshots": {File: "screenshots_list_with_checksum"},
@@ -258,8 +250,6 @@ func TestListScreenshotsByChecksum(t *testing.T) {
 	}
 }
 
-// TestListScreenshotsByChecksum_Empty exercises the cold-set branch:
-// empty appScreenshots payload yields an empty map, no error.
 func TestListScreenshotsByChecksum_Empty(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/appScreenshotSets/SS000000001/appScreenshots": {File: "screenshots_list_empty"},
@@ -274,10 +264,8 @@ func TestListScreenshotsByChecksum_Empty(t *testing.T) {
 	}
 }
 
-// TestProcessOneScreenshot_Skip exercises the idempotency hot-path: the
-// file's MD5 already matches a slot in the existing index, so the function
-// returns "skipped" without calling Client.Upload (we'd see a 404 on the
-// upload routes if it tried).
+// TestProcessOneScreenshot_Skip: matching MD5 returns "skipped" without
+// calling Upload (no upload route registered, so a real call would 404).
 func TestProcessOneScreenshot_Skip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "hello.png")
@@ -290,8 +278,6 @@ func TestProcessOneScreenshot_Skip(t *testing.T) {
 		helloHash: {assetID: "SH000000002", fileName: "02.png"},
 	}
 
-	// No fixture server route registered for upload — if Upload tried to
-	// run, the test would surface a connection refused or a fixture 404.
 	srv := startFixtureServer(t, map[string]fixtureRoute{})
 	c := fixtureASCClient(t, srv)
 
@@ -310,9 +296,8 @@ func TestProcessOneScreenshot_Skip(t *testing.T) {
 	}
 }
 
-// TestProcessOneScreenshot_Upload exercises the full reserve -> PUT ->
-// commit dance via a fake Apple-side server. Stresses the integration
-// between the cmd-layer orchestration and the asc.Upload helper.
+// TestProcessOneScreenshot_Upload exercises reserve -> PUT -> commit against a
+// fake Apple-side server.
 func TestProcessOneScreenshot_Upload(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "01.png")
@@ -321,7 +306,7 @@ func TestProcessOneScreenshot_Upload(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	// Chunk PUT URL is served by a separate test server so our route
+	// Chunk PUT URL is served by a separate test server so the route
 	// table on the ASC server stays narrow.
 	chunkSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {
@@ -381,7 +366,7 @@ func TestProcessOneScreenshot_Upload(t *testing.T) {
 		t.Fatalf("asc.New: %v", err)
 	}
 
-	t.Setenv("FLINE_CACHE_HOME", t.TempDir())
+	t.Setenv("FLIGHTLINE_CACHE_HOME", t.TempDir())
 
 	entry, err := processOneScreenshot(context.Background(), c, "SS000000001", path, map[string]existingScreenshotEntry{})
 	if err != nil {
@@ -395,8 +380,6 @@ func TestProcessOneScreenshot_Upload(t *testing.T) {
 	}
 }
 
-// TestScreenshotSetCreate_WireBody locks the JSON shape of the create
-// body so a future struct refactor can't silently rename fields.
 func TestScreenshotSetCreate_WireBody(t *testing.T) {
 	body := screenshotSetCreateRequest{
 		Data: screenshotSetCreateData{
@@ -429,8 +412,6 @@ func TestScreenshotSetCreate_WireBody(t *testing.T) {
 	}
 }
 
-// md5HexOfHelper is a test-local md5 hasher used for fixtures. Avoids
-// recomputing the digest at the call site.
 func md5HexOfHelper(t *testing.T, b []byte) string {
 	t.Helper()
 	h := md5.Sum(b) //nolint:gosec // test fixture, not security-sensitive

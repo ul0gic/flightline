@@ -7,14 +7,8 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// buildAttachedAndValidRule fires when the version under preflight either
-// has no build attached or has a build whose processingState is not VALID.
-// Apple blocks submission until both conditions are met:
-//   - the version's `build` relationship resolves (data block present),
-//   - the resolved Build.attributes.processingState == "VALID".
-//
-// Mode=Live only — the build's processing state is a wire-only concept;
-// nothing in the authored YAML can determine VALID-ness ahead of time.
+// buildAttachedAndValidRule fires when no build is attached or processingState != "VALID".
+// Apple blocks submission until the build relationship resolves and processingState == "VALID" (live-only).
 type buildAttachedAndValidRule struct{}
 
 func init() { Register(buildAttachedAndValidRule{}) }
@@ -40,9 +34,7 @@ func (r buildAttachedAndValidRule) Check(ctx CheckContext) []Diagnostic {
 		ctx.Ctx, ctx.Client, "/v1/appStoreVersions/"+versionID+"/build", nil,
 	)
 	if err != nil {
-		// 404 here means "no build attached" — that's a rule violation, not
-		// an infrastructure error. Apple sometimes returns 200 with empty
-		// data instead; both shapes are handled here.
+		// 404 means "no build attached" (a rule violation); Apple sometimes returns 200+empty data instead.
 		if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "NOT_FOUND") {
 			return []Diagnostic{r.notAttachedDiag(ctx)}
 		}
@@ -65,8 +57,8 @@ func (r buildAttachedAndValidRule) Check(ctx CheckContext) []Diagnostic {
 		),
 		Path: "/spec/build",
 		FixHint: "wait for Apple to finish processing (PROCESSING -> VALID), or re-upload " +
-			"if the build is FAILED/INVALID. `fline builds list <bundleId>` shows current state.",
-		Reference: "PRD §L3 — build.attached-and-valid",
+			"if the build is FAILED/INVALID. `flightline builds list <bundleId>` shows current state.",
+		Reference: "PRD §L3: build.attached-and-valid",
 	}}
 }
 
@@ -77,10 +69,10 @@ func (r buildAttachedAndValidRule) notAttachedDiag(ctx CheckContext) Diagnostic 
 		Message:  fmt.Sprintf("version %q has no build attached", ctx.Version),
 		Path:     "/spec/build",
 		FixHint: fmt.Sprintf(
-			"upload via Xcode/altool, wait for VALID, then `fline builds attach %s --version %s --build <n>`.",
+			"upload via Xcode/altool, wait for VALID, then `flightline builds attach %s --version %s --build <n>`.",
 			ctx.BundleID, ctx.Version,
 		),
-		Reference: "PRD §L3 — build.attached-and-valid",
+		Reference: "PRD §L3: build.attached-and-valid",
 	}
 }
 

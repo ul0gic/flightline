@@ -8,7 +8,7 @@ import (
 	"github.com/ul0gic/flightline/internal/state"
 )
 
-// TestApplyResult_TableEmpty — no changes renders the (none) row.
+// TestApplyResult_TableEmpty: no changes renders the (none) row.
 func TestApplyResult_TableEmpty(t *testing.T) {
 	r := &ApplyResult{}
 	headers, rows := r.TableRows()
@@ -20,7 +20,7 @@ func TestApplyResult_TableEmpty(t *testing.T) {
 	}
 }
 
-// TestApplyResult_TableMixed — applied + skipped + errors render in
+// TestApplyResult_TableMixed: applied + skipped + errors render in
 // stable order with status labels.
 func TestApplyResult_TableMixed(t *testing.T) {
 	r := &ApplyResult{

@@ -1,19 +1,7 @@
 package asc
 
-// VersionAttributes is the subset of Apple's AppStoreVersion.attributes
-// Flightline reads. The wire-shape contract: field names match Apple's casing
-// (`versionString`, not `version_string`), enums match Apple's spec exactly.
-//
-// Source: jq '.components.schemas.AppStoreVersion.properties.attributes.properties' openapi.oas.json
-//
-// Notes on state fields:
-//   - AppStoreState is deprecated by Apple in favor of the modern review
-//     submission flow, but older versions still surface state through it.
-//     Flightline reads BOTH so callers see whichever Apple populates.
-//   - AppVersionState is the newer field; some endpoints emit one, some
-//     emit the other depending on the version's lifecycle position.
-//
-// Reused by Phase 3 write verbs (`versions update`); add fields conservatively.
+// VersionAttributes is the subset of Apple's AppStoreVersion.attributes Flightline reads.
+// AppStoreState (deprecated) and AppVersionState both surfaced; Apple populates one or the other depending on lifecycle position.
 type VersionAttributes struct {
 	Platform            string `json:"platform,omitempty"`
 	VersionString       string `json:"versionString,omitempty"`

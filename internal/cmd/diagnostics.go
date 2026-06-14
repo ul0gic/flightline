@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"sort"
@@ -12,25 +13,20 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// DiagnosticSignatureView is one row of the diagnostics list output.
 type DiagnosticSignatureView struct {
 	ID         string                            `json:"id"`
 	Type       string                            `json:"type"`
 	Attributes asc.DiagnosticSignatureAttributes `json:"attributes"`
 }
 
-// DiagnosticSignatureList is the table-aware view for `diagnostics list`.
 type DiagnosticSignatureList struct {
 	BundleID   string                    `json:"bundleId"`
 	BuildID    string                    `json:"buildId"`
 	Signatures []DiagnosticSignatureView `json:"signatures"`
 }
 
-// TableRows implements TableRenderable for the diagnostics list view.
-//
-// Signatures are surfaced sorted by weight desc (most-impactful first); the
-// signature column truncates because Apple's signatures can be hundreds of
-// characters wide and would blow out the table.
+// Signature column truncates: Apple's signatures can be hundreds of chars
+// wide and would blow out the table.
 func (l DiagnosticSignatureList) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"WEIGHT", "TYPE", "SIGNATURE", "INSIGHT", "ID"}
 	rows = make([][]string, 0, len(l.Signatures))
@@ -47,12 +43,7 @@ func (l DiagnosticSignatureList) TableRows() (headers []string, rows [][]string)
 	return headers, rows
 }
 
-// DiagnosticGetView is the read-side view for `diagnostics get <signatureId>`.
-//
-// Apple's v4.3 spec exposes only /v1/diagnosticSignatures/{id}/logs (no
-// /v1/diagnosticSignatures/{id} get); the get verb resolves to the logs
-// endpoint and surfaces ProductData (insights + call-stack trees) plus a
-// version string.
+// Apple exposes no signature get, so this resolves the /logs endpoint instead.
 type DiagnosticGetView struct {
 	SignatureID string                      `json:"signatureId"`
 	Version     string                      `json:"version,omitempty"`
@@ -60,8 +51,7 @@ type DiagnosticGetView struct {
 	Note        string                      `json:"note,omitempty"`
 }
 
-// TableRows for the diagnostics get view. Vertical layout summarizes the
-// log payload; consumers wanting the full stack trace must use --output json.
+// Full stack trace is only in --output json; the table summarizes.
 func (v *DiagnosticGetView) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
 	rows = [][]string{
@@ -78,7 +68,6 @@ func (v *DiagnosticGetView) TableRows() (headers []string, rows [][]string) {
 			[]string{"INSIGHTS", strconv.Itoa(len(pd.DiagnosticInsights))},
 			[]string{"LOGS", strconv.Itoa(len(pd.DiagnosticLogs))},
 		)
-		// Surface the first log's metadata so the table is glanceable.
 		if len(pd.DiagnosticLogs) > 0 {
 			md := pd.DiagnosticLogs[0].DiagnosticMetaData
 			rows = append(rows,
@@ -92,7 +81,6 @@ func (v *DiagnosticGetView) TableRows() (headers []string, rows [][]string) {
 	return headers, rows
 }
 
-// formatWeight renders Apple's float weight as a fixed-precision number.
 // JSON output retains the float; only the table view rounds.
 func formatWeight(w float64) string {
 	if w == 0 {
@@ -101,8 +89,6 @@ func formatWeight(w float64) string {
 	return strconv.FormatFloat(w, 'f', 2, 64)
 }
 
-// insightSummary collapses the (optional) insight payload into a short
-// glanceable cell — direction + count of reference versions.
 func insightSummary(in *asc.DiagnosticInsight) string {
 	if in == nil {
 		return ""
@@ -121,13 +107,13 @@ var diagnosticsCmd = &cobra.Command{
 	Use:   "diagnostics",
 	Short: "Read crash and hang diagnostic signatures (build-scoped)",
 	Long: `diagnostics groups read commands over Apple's diagnostic signatures
-resource. Apple deduplicates crash and hang reports into signatures —
+resource. Apple deduplicates crash and hang reports into signatures:
 same call stack, same crash, regardless of how many users hit it.
 
 Apple v4.3 only exposes diagnostic signatures scoped to a build:
 
-  - list <bundleId> --build <number>     — list signatures for a build
-  - get <signatureId>                    — fetch the full log payload
+  - list <bundleId> --build <number>    : list signatures for a build
+  - get <signatureId>                   : fetch the full log payload
 
 There is no app-wide aggregation API in v4.3; --build is required on list.`,
 }
@@ -138,9 +124,9 @@ var diagnosticsListCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runDiagnosticsList,
-	Example: `  fline diagnostics list com.example.myapp --build 42
-  fline diagnostics list com.example.myapp --build 42 --type HANGS
-  fline diagnostics list com.example.myapp --build 42 --output json | jq '.signatures[].attributes.weight'`,
+	Example: `  flightline diagnostics list com.example.myapp --build 42
+  flightline diagnostics list com.example.myapp --build 42 --type HANGS
+  flightline diagnostics list com.example.myapp --build 42 --output json | jq '.signatures[].attributes.weight'`,
 }
 
 var diagnosticsGetCmd = &cobra.Command{
@@ -149,8 +135,8 @@ var diagnosticsGetCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runDiagnosticsGet,
-	Example: `  fline diagnostics get DIAG-SIG-1234
-  fline diagnostics get DIAG-SIG-1234 --output json`,
+	Example: `  flightline diagnostics get DIAG-SIG-1234
+  flightline diagnostics get DIAG-SIG-1234 --output json`,
 }
 
 var (
@@ -174,7 +160,7 @@ func runDiagnosticsList(cmd *cobra.Command, args []string) error {
 	bundleID := args[0]
 	build := strings.TrimSpace(diagnosticsListBuild)
 	if build == "" {
-		return fmt.Errorf("diagnostics: --build is required")
+		return errors.New("diagnostics: --build is required")
 	}
 
 	c, err := newClient()
@@ -215,8 +201,7 @@ func runDiagnosticsList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Sort newest-first by weight (most user-impacting first). Apple's
-	// API does not expose a sort param for this collection in v4.3.
+	// Apple's API exposes no sort param for this collection in v4.3.
 	sort.SliceStable(views, func(i, j int) bool {
 		return views[i].Attributes.Weight > views[j].Attributes.Weight
 	})
@@ -231,15 +216,14 @@ func runDiagnosticsList(cmd *cobra.Command, args []string) error {
 func runDiagnosticsGet(cmd *cobra.Command, args []string) error {
 	signatureID := strings.TrimSpace(args[0])
 	if signatureID == "" {
-		return fmt.Errorf("diagnostics: signature id is required")
+		return errors.New("diagnostics: signature id is required")
 	}
 	c, err := newClient()
 	if err != nil {
 		return err
 	}
 
-	// The /logs endpoint returns a non-JSON:API custom envelope: read it
-	// directly via Get into the typed DiagnosticLogsResponse.
+	// The /logs endpoint returns a non-JSON:API custom envelope.
 	logs, err := asc.Get[asc.DiagnosticLogsResponse](
 		cmd.Context(), c, "/v1/diagnosticSignatures/"+signatureID+"/logs", nil,
 	)
@@ -258,10 +242,6 @@ func runDiagnosticsGet(cmd *cobra.Command, args []string) error {
 	return Render(view, outputMode())
 }
 
-// collectDiagnosticSignatures walks the paging iterator. Diagnostic
-// signatures are bounded per build (typically <100), so paging is rare —
-// but the helper still uses Pages for consistency with every other list
-// surface.
 func collectDiagnosticSignatures(ctx context.Context, c *asc.Client, path string, query url.Values, limit int) ([]DiagnosticSignatureView, error) {
 	out := make([]DiagnosticSignatureView, 0, defaultListCap(limit))
 	for page, err := range asc.Pages[asc.DiagnosticSignatureAttributes](ctx, c, path, query) {

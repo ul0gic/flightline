@@ -1,13 +1,5 @@
 package asc
 
-// Async-poll wrapper tests.
-//
-// The wrapper is fixture-driven via a programmable httptest.Server (defined
-// inline below — the route table needs to mutate response bodies between
-// polls, which the JSON-file-backed fixtureServer in fixture_test.go can't
-// express). State-persistence tests use t.TempDir() + FLINE_STATE_HOME to
-// keep them hermetic.
-
 import (
 	"bytes"
 	"compress/gzip"
@@ -28,40 +20,23 @@ import (
 	"time"
 )
 
-// ---------------------------------------------------------------------------
-// Programmable async-server harness
-// ---------------------------------------------------------------------------
-
-// asyncFixture is a programmable httptest.Server that lets a test step
-// through the analytics request lifecycle (queued → processing → completed
-// → failed) by mutating the in-memory model between polls.
+// asyncFixture is a programmable httptest.Server that steps a test through the
+// analytics request lifecycle by mutating the in-memory model between polls.
 type asyncFixture struct {
 	srv *httptest.Server
 
-	mu sync.Mutex
-	// stoppedDueToInactivity drives the parent-request "stopped" branch.
+	mu                     sync.Mutex
 	stoppedDueToInactivity bool
-	// reports is the current set of analyticsReports under the request.
-	// Mutate to simulate "more reports just landed".
-	reports []reportRow
-	// instances are keyed by reportID.
-	instances map[ReportID][]instanceRow
-	// segments are keyed by instanceID.
-	segments map[InstanceID][]segmentRow
-	// segmentBlobs are gzipped CSV bodies keyed by signed-URL path.
-	segmentBlobs map[string][]byte
-	// observedSignedURLAuth records whether the inbound request to the
-	// "signed URL" path included an Authorization header — Apple's CDN
-	// rejects bearer tokens, so we assert this stays false.
+	reports                []reportRow
+	instances              map[ReportID][]instanceRow
+	segments               map[InstanceID][]segmentRow
+	segmentBlobs           map[string][]byte
+	// Must stay false: Apple's CDN rejects bearer tokens on signed URLs.
 	observedSignedURLAuth atomic.Bool
 
-	// reportListCalls counts GET /v1/analyticsReportRequests/{id}/reports
-	// hits so the resume test can assert continuation rather than restart.
 	reportListCalls atomic.Int32
-	// accessType is echoed on the parent-request response.
-	accessType AnalyticsAccessType
-	// requestID is the only request the fixture knows about.
-	requestID RequestID
+	accessType      AnalyticsAccessType
+	requestID       RequestID
 }
 
 type reportRow struct {
@@ -95,13 +70,8 @@ func newAsyncFixture(t *testing.T) *asyncFixture {
 	return f
 }
 
-// serve is the request router. Each branch takes f.mu briefly to read the
-// current model, then writes the JSON envelope. Signed-URL fetches go
-// through serveSignedURL and explicitly inspect the inbound Authorization
-// header.
 func (f *asyncFixture) serve(w http.ResponseWriter, r *http.Request) {
-	// Signed-URL CDN path comes back through this same httptest.Server in
-	// tests so we can observe the absence of an Authorization header.
+	// The CDN path loops back through this same server so the test can observe the absent auth header.
 	if strings.HasPrefix(r.URL.Path, "/cdn/segments/") {
 		f.serveSignedURL(w, r)
 		return
@@ -189,7 +159,6 @@ func (f *asyncFixture) serveListReports(w http.ResponseWriter) {
 }
 
 func (f *asyncFixture) serveListInstances(w http.ResponseWriter, r *http.Request) {
-	// /v1/analyticsReports/{id}/instances → extract {id}
 	parts := strings.Split(r.URL.Path, "/")
 	reportID := ReportID(parts[3])
 	f.mu.Lock()
@@ -243,11 +212,9 @@ func (f *asyncFixture) serveListSegments(w http.ResponseWriter, r *http.Request)
 }
 
 func (f *asyncFixture) serveGetSegment(w http.ResponseWriter, r *http.Request) {
-	// /v1/analyticsReportSegments/{id}
 	parts := strings.Split(r.URL.Path, "/")
 	segmentID := parts[3]
-	// Build a signed URL pointing at the fixture's own /cdn/segments/<id>
-	// path so the no-Authorization-header test runs against this server.
+	// Point the signed URL back at this server so the no-auth-header test can run against it.
 	signed := f.srv.URL + "/cdn/segments/" + segmentID
 	body := map[string]any{
 		"data": map[string]any{
@@ -264,9 +231,7 @@ func (f *asyncFixture) serveGetSegment(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(body)
 }
 
-// serveSignedURL is the CDN handler. It records whether the inbound request
-// carried an Authorization header (it must NOT) and returns a gzipped CSV
-// blob keyed by the URL path.
+// serveSignedURL records whether the inbound request carried an Authorization header (it must not).
 func (f *asyncFixture) serveSignedURL(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Authorization") != "" {
 		f.observedSignedURLAuth.Store(true)
@@ -275,7 +240,6 @@ func (f *asyncFixture) serveSignedURL(w http.ResponseWriter, r *http.Request) {
 	blob, ok := f.segmentBlobs[r.URL.Path]
 	f.mu.Unlock()
 	if !ok {
-		// Default blob: a gzipped CSV with a single line.
 		blob = gzipBytes([]byte("date,impressions\n2026-05-01,42\n"))
 	}
 	w.Header().Set("Content-Type", "application/a-gzip")
@@ -295,9 +259,8 @@ func gzipBytes(in []byte) []byte {
 	return buf.Bytes()
 }
 
-// asyncFixtureClient is the equivalent of fixtureClient but pointed at the
-// asyncFixture's server. The signed-URL handler runs on the same httptest
-// host so we can verify the Authorization-header invariant in-process.
+// asyncFixtureClient points a Client at the asyncFixture's server; the signed-URL handler
+// shares that host so the Authorization-header invariant is verifiable in-process.
 func asyncFixtureClient(t *testing.T, f *asyncFixture) *Client {
 	t.Helper()
 	keyPath := writeFixtureKey(t)
@@ -314,10 +277,6 @@ func asyncFixtureClient(t *testing.T, f *asyncFixture) *Client {
 	c.SetBaseURL(f.srv.URL)
 	return c
 }
-
-// ---------------------------------------------------------------------------
-// RequestAnalyticsReport — happy path + validation
-// ---------------------------------------------------------------------------
 
 func TestRequestAnalyticsReport_HappyPath(t *testing.T) {
 	t.Parallel()
@@ -363,12 +322,7 @@ func TestRequestAnalyticsReport_Validation(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// PollAnalyticsReport — lifecycle scenarios
-// ---------------------------------------------------------------------------
-
-// fastPoll is the test poll cadence: small enough to keep tests sub-second,
-// but non-zero so the backoff branch still exercises select / time.After.
+// fastPoll keeps tests sub-second but non-zero so the backoff select/time.After branch still runs.
 var fastPoll = PollOpts{
 	InitialBackoff: 1 * time.Millisecond,
 	MaxBackoff:     2 * time.Millisecond,
@@ -381,7 +335,6 @@ func TestPollAnalyticsReport_QueuedThenCompleted(t *testing.T) {
 	f := newAsyncFixture(t)
 	c := asyncFixtureClient(t, f)
 
-	// Initially: queued (no reports). After two poll cycles, reports land.
 	go func() {
 		time.Sleep(3 * time.Millisecond)
 		f.mu.Lock()
@@ -418,7 +371,6 @@ func TestPollAnalyticsReport_StoppedDueToInactivity(t *testing.T) {
 	f.accessType = AccessTypeOngoing
 	c := asyncFixtureClient(t, f)
 
-	// Flip the stopped flag mid-poll.
 	go func() {
 		time.Sleep(3 * time.Millisecond)
 		f.mu.Lock()
@@ -450,7 +402,7 @@ func TestPollAnalyticsReport_ContextCancel(t *testing.T) {
 	c := asyncFixtureClient(t, f)
 
 	ctx, cancel := context.WithCancel(t.Context())
-	cancel() // cancel before polling starts
+	cancel()
 
 	var sawErr error
 	for r, err := range c.PollAnalyticsReport(ctx, f.requestID, fastPoll) {
@@ -507,10 +459,6 @@ func TestPollAnalyticsReport_DedupAcrossPolls(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// ListAnalyticsInstances / ListAnalyticsSegments
-// ---------------------------------------------------------------------------
-
 func TestListAnalyticsInstances(t *testing.T) {
 	t.Parallel()
 	f := newAsyncFixture(t)
@@ -564,10 +512,6 @@ func TestListAnalyticsSegments(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// DownloadAnalyticsSegment — gunzip + no-Authorization-header invariant
-// ---------------------------------------------------------------------------
-
 func TestDownloadAnalyticsSegment_NoAuthHeaderOnSignedURL(t *testing.T) {
 	t.Parallel()
 	f := newAsyncFixture(t)
@@ -584,7 +528,7 @@ func TestDownloadAnalyticsSegment_NoAuthHeaderOnSignedURL(t *testing.T) {
 		t.Fatalf("body: got %q, want %q", got, want)
 	}
 	if f.observedSignedURLAuth.Load() {
-		t.Fatal("signed-URL request carried an Authorization header — must NOT (Apple's CDN rejects)")
+		t.Fatal("signed-URL request carried an Authorization header: must NOT (Apple's CDN rejects)")
 	}
 }
 
@@ -596,10 +540,6 @@ func TestDownloadAnalyticsSegment_EmptyID(t *testing.T) {
 		t.Fatal("want error for empty segmentID")
 	}
 }
-
-// ---------------------------------------------------------------------------
-// FetchSalesReport / FetchFinanceReport — synchronous gzipped CSV
-// ---------------------------------------------------------------------------
 
 func TestFetchSalesReport_GunzipsCSV(t *testing.T) {
 	t.Parallel()
@@ -690,16 +630,11 @@ func TestFetchFinanceReport_RejectsMissingFilters(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// AsyncState — round-trip, atomic write, corruption rejection, schema gate
-// ---------------------------------------------------------------------------
-
-// withStateRoot points stateRoot() at t.TempDir() for the duration of the
-// test via the FLINE_STATE_HOME escape hatch.
+// withStateRoot points stateRoot() at t.TempDir() via the FLIGHTLINE_STATE_HOME escape hatch.
 func withStateRoot(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	t.Setenv("FLINE_STATE_HOME", dir)
+	t.Setenv("FLIGHTLINE_STATE_HOME", dir)
 	return dir
 }
 
@@ -744,7 +679,6 @@ func TestAsyncState_RoundTrip(t *testing.T) {
 		t.Errorf("DownloadedSegments = %+v", got.DownloadedSegments)
 	}
 
-	// File is at the expected location and mode 0600.
 	expectedPath := filepath.Join(root, "com.example.app", "analytics.json")
 	info, err := os.Stat(expectedPath)
 	if err != nil {
@@ -839,9 +773,7 @@ func TestAsyncState_AtomicRenamePreservesOriginalOnFailure(t *testing.T) {
 		t.Fatalf("seed Persist: %v", err)
 	}
 
-	// Simulate a mid-write Ctrl-C by leaving a stale .tmp-* file in the
-	// directory before retrying — the next Persist should clean up after
-	// itself and the original file should be unaffected.
+	// A stale .tmp-* from a mid-write Ctrl-C must not shadow the canonical file.
 	dir := filepath.Join(root, "com.example.app")
 	stale, err := os.CreateTemp(dir, "analytics.json.tmp-stale-*")
 	if err != nil {
@@ -850,22 +782,18 @@ func TestAsyncState_AtomicRenamePreservesOriginalOnFailure(t *testing.T) {
 	_, _ = stale.WriteString("partial garbage")
 	_ = stale.Close()
 
-	// Re-load should still succeed — the stale temp file does NOT shadow
-	// the canonical analytics.json.
 	got, err := LoadAsyncState("com.example.app", ReportClassAnalytics)
 	if err != nil {
 		t.Fatalf("LoadAsyncState after stale temp: %v", err)
 	}
 	if got.Status != "completed" {
-		t.Errorf("Status = %q, want \"completed\" — original was clobbered", got.Status)
+		t.Errorf("Status = %q, want \"completed\": original was clobbered", got.Status)
 	}
 }
 
 func TestAsyncState_ResumeAfterCtrlC(t *testing.T) {
 	withStateRoot(t)
 
-	// 1. First run: persist progress mid-flow with two reports already
-	//    yielded and one segment downloaded.
 	saved := AsyncState{
 		BundleID:    "com.example.app",
 		ReportClass: ReportClassAnalytics,
@@ -883,8 +811,6 @@ func TestAsyncState_ResumeAfterCtrlC(t *testing.T) {
 		t.Fatalf("Persist: %v", err)
 	}
 
-	// 2. Ctrl-C, fresh process: load the state and verify the resume info
-	//    is intact so the caller can skip already-fetched work.
 	loaded, err := LoadAsyncState("com.example.app", ReportClassAnalytics)
 	if err != nil {
 		t.Fatalf("Load after Ctrl-C: %v", err)
@@ -915,16 +841,8 @@ func TestStateFilePath_Composition(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Resume continuation: prove a fresh client + saved state continues from
-// where the previous client stopped, rather than restarting from zero.
-// ---------------------------------------------------------------------------
-
 func TestPollAnalyticsReport_ResumeContinuesFromSavedReports(t *testing.T) {
-	// No t.Parallel — withStateRoot uses t.Setenv which is incompatible
-	// with parallel tests in the same scope.
-
-	// First "session": persist state with RPT-A already yielded.
+	// No t.Parallel: withStateRoot's t.Setenv is incompatible with parallel tests.
 	withStateRoot(t)
 	if err := PersistAsyncState(AsyncState{
 		BundleID:    "com.example.app",
@@ -940,9 +858,7 @@ func TestPollAnalyticsReport_ResumeContinuesFromSavedReports(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	// Second "session": fresh fixture + fresh client. The fixture exposes
-	// RPT-A and RPT-B; the resume path should treat RPT-A as already-seen
-	// and yield only RPT-B, then complete.
+	// Fixture exposes RPT-A and RPT-B; the resume path treats RPT-A as seen and yields only RPT-B.
 	f := newAsyncFixture(t)
 	c := asyncFixtureClient(t, f)
 	f.reports = []reportRow{
@@ -975,15 +891,8 @@ func TestPollAnalyticsReport_ResumeContinuesFromSavedReports(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Verify that DownloadAnalyticsSegment surfaces a typed APIError when the
-// initial GET fails (defensive — keep the error envelope contract).
-// ---------------------------------------------------------------------------
-
 func TestDownloadAnalyticsSegment_PropagatesAPIError(t *testing.T) {
 	t.Parallel()
-	// A bare httptest.Server that always returns 403 with an Apple-shaped
-	// errors[] body so we can assert the typed envelope flows through.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)

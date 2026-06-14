@@ -12,9 +12,7 @@ import (
 	"github.com/ul0gic/flightline/internal/lint"
 )
 
-// preflightFor runs the same rule pass runPreflight does, but bypasses
-// newClient (which needs a real .p8) and Render (which writes to stdout).
-// Returns the LintResult so tests can assert on it directly.
+// Runs runPreflight's rule pass but bypasses newClient (needs a real .p8) and Render.
 func preflightFor(t *testing.T, c *asc.Client, bundleID, versionStr string) *LintResult {
 	t.Helper()
 	stateInput, sourcePath, schemaDiags, err := resolvePreflightState(context.Background(), c, bundleID, versionStr, "IOS")
@@ -76,7 +74,7 @@ func happyPathServer(t *testing.T) *httptest.Server {
 		case strings.HasSuffix(r.URL.Path, "/betaGroups"):
 			_, _ = w.Write([]byte(`{"data":[]}`))
 		default:
-			// Default to empty data — most fetch helpers swallow benign errors.
+			// Default to empty data: most fetch helpers swallow benign errors.
 			_, _ = w.Write([]byte(`{"data":[]}`))
 		}
 	}))

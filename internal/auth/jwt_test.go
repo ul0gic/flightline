@@ -19,9 +19,7 @@ import (
 	"time"
 )
 
-// writeTestKey generates an ephemeral P-256 key, marshals it as PKCS8 PEM, and
-// writes it to a tempfile at the requested mode. Returns (path, public key).
-// The key never leaves the test process — never commit a real .p8.
+// writeTestKey writes an ephemeral P-256 PKCS8 PEM key at the given mode; never commit a real .p8.
 func writeTestKey(t *testing.T, mode os.FileMode) (string, *ecdsa.PublicKey) {
 	t.Helper()
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

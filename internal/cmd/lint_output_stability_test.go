@@ -12,8 +12,7 @@ import (
 	"github.com/ul0gic/flightline/internal/lint"
 )
 
-// stableLintTopLevelKeys is the locked set of keys at the top level of
-// `fline lint --output json`. Adding fields is fine; removing or
+// Locked top-level keys of `flightline lint --output json`; removing or
 // renaming is a breaking change.
 var stableLintTopLevelKeys = []string{
 	"bundleId",
@@ -24,17 +23,13 @@ var stableLintTopLevelKeys = []string{
 	"version",
 }
 
-// stableSummaryKeys is the locked set of keys in the summary block.
 var stableSummaryKeys = []string{
 	"error",
 	"info",
 	"warning",
 }
 
-// stableDiagnosticKeys is the locked set of per-diagnostic keys. fixHint,
-// path, and reference are optional in the JSON tag so the marshaled shape
-// will only include them when populated; the test below verifies they
-// surface when set.
+// fixHint, path, reference are omitempty: only present when populated.
 var stableDiagnosticKeys = []string{
 	"fixHint",
 	"message",
@@ -44,13 +39,9 @@ var stableDiagnosticKeys = []string{
 	"severity",
 }
 
-// stableSeverityValues is the locked, lowercase string form for severity.
-// The Severity.MarshalJSON contract is part of the wire surface.
+// Severity.MarshalJSON wire contract: lowercase tokens.
 var stableSeverityValues = []string{"error", "info", "warning"}
 
-// TestLintOutput_TopLevelKeysStable runs `lint` against a YAML that fires
-// multiple rules and asserts the top-level JSON keys are exactly the
-// stable set.
 func TestLintOutput_TopLevelKeysStable(t *testing.T) {
 	body := `apiVersion: flightline.dev/v1alpha1
 kind: AppState
@@ -87,7 +78,6 @@ spec:
 	}
 }
 
-// TestLintOutput_SummaryKeysStable freezes summary's key set.
 func TestLintOutput_SummaryKeysStable(t *testing.T) {
 	p := writeTempState(t, goodStateYAML)
 	viper.Reset()
@@ -110,10 +100,6 @@ func TestLintOutput_SummaryKeysStable(t *testing.T) {
 	}
 }
 
-// TestLintOutput_DiagnosticKeysStable runs lint against a YAML crafted
-// to make every optional diagnostic field surface (fixHint, path,
-// reference). Asserts the union of observed diagnostic keys is exactly
-// the stable set.
 func TestLintOutput_DiagnosticKeysStable(t *testing.T) {
 	body := `apiVersion: flightline.dev/v1alpha1
 kind: AppState
@@ -140,8 +126,13 @@ spec:
 	if len(probe.Diagnostics) == 0 {
 		t.Fatalf("expected at least one diagnostic; out=%s", out)
 	}
+	assertDiagnosticKeysStable(t, probe.Diagnostics, "output")
+}
+
+func assertDiagnosticKeysStable(t *testing.T, diags []map[string]any, surface string) {
+	t.Helper()
 	union := map[string]struct{}{}
-	for _, d := range probe.Diagnostics {
+	for _, d := range diags {
 		for k := range d {
 			union[k] = struct{}{}
 		}
@@ -152,36 +143,29 @@ spec:
 	}
 	sort.Strings(got)
 	for _, want := range []string{"ruleId", "severity", "message"} {
-		found := false
-		for _, k := range got {
-			if k == want {
-				found = true
-				break
-			}
-		}
-		if !found {
+		if !sliceContains(got, want) {
 			t.Errorf("required diagnostic key %q never appeared (got keys: %v)",
 				want, got)
 		}
 	}
 	for _, k := range got {
-		known := false
-		for _, allowed := range stableDiagnosticKeys {
-			if k == allowed {
-				known = true
-				break
-			}
-		}
-		if !known {
-			t.Errorf("unexpected diagnostic key %q in output (want subset of %v)",
-				k, stableDiagnosticKeys)
+		if !sliceContains(stableDiagnosticKeys, k) {
+			t.Errorf("unexpected diagnostic key %q in %s (want subset of %v)",
+				k, surface, stableDiagnosticKeys)
 		}
 	}
 }
 
-// TestLintOutput_SeverityValuesStable forces a fixture that produces
-// diagnostics at error and info severity and asserts the wire form is
-// the lowercase token. This guards the Severity.MarshalJSON contract.
+func sliceContains(haystack []string, needle string) bool {
+	for _, s := range haystack {
+		if s == needle {
+			return true
+		}
+	}
+	return false
+}
+
+// Guards the Severity.MarshalJSON contract: wire form is the lowercase token.
 func TestLintOutput_SeverityValuesStable(t *testing.T) {
 	body := `apiVersion: flightline.dev/v1alpha1
 kind: AppState
@@ -222,9 +206,8 @@ spec:
 	}
 }
 
-// TestLintOutput_DiagnosticsArrayAlwaysPresent asserts the diagnostics
-// array exists even when zero rules fire. Consumers that index on
-// `.diagnostics[]` must never see null.
+// Consumers indexing `.diagnostics[]` must never see null, even with zero
+// rules fired.
 func TestLintOutput_DiagnosticsArrayAlwaysPresent(t *testing.T) {
 	p := writeTempState(t, goodStateYAML)
 	viper.Reset()
@@ -237,9 +220,7 @@ func TestLintOutput_DiagnosticsArrayAlwaysPresent(t *testing.T) {
 	}
 }
 
-// TestRegisteredRules_HaveStableIDs walks every registered rule and
-// asserts the ID matches the documented kebab/dot pattern. ID drift is a
-// breaking change to the JSON contract.
+// Rule ID drift is a breaking change to the JSON contract.
 func TestRegisteredRules_HaveStableIDs(t *testing.T) {
 	for _, r := range lint.All() {
 		id := r.ID()
@@ -256,8 +237,6 @@ func TestRegisteredRules_HaveStableIDs(t *testing.T) {
 	}
 }
 
-// TestRegisteredRules_SeverityIsKnown asserts every rule's default
-// severity round-trips through MarshalJSON to one of the locked tokens.
 func TestRegisteredRules_SeverityIsKnown(t *testing.T) {
 	for _, r := range lint.All() {
 		s := r.Severity()
@@ -281,7 +260,6 @@ func TestRegisteredRules_SeverityIsKnown(t *testing.T) {
 	}
 }
 
-// keysOf returns the sorted keys of a map for comparison.
 func keysOf(m map[string]any) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {

@@ -8,10 +8,8 @@ import (
 	"testing"
 )
 
-// fullCoverageHandler returns an httptest handler that serves a
-// canonical app with one row per surface populated. The bundleId,
-// version, and resource IDs match the assertions in
-// TestFetch_FullSurfaceCoverage so the projection is verifiable.
+// fullCoverageHandler returns an httptest handler with one row per surface, matching the
+// resource IDs used in TestFetch_FullSurfaceCoverage.
 func fullCoverageHandler(t *testing.T) http.Handler {
 	t.Helper()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -71,9 +69,8 @@ func fullCoverageHandler(t *testing.T) http.Handler {
 	})
 }
 
-// TestFetch_FullSurfaceCoverage verifies every spec surface in the
-// schema (except the intentionally-absent privacyLabels) ends up
-// populated by Fetch. This is the keystone test for L2 coverage.
+// TestFetch_FullSurfaceCoverage verifies every spec surface (except privacyLabels, absent by design)
+// ends up populated by Fetch.
 func TestFetch_FullSurfaceCoverage(t *testing.T) {
 	srv := httptest.NewServer(fullCoverageHandler(t))
 	defer srv.Close()

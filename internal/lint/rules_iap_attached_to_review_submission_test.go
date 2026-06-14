@@ -16,9 +16,8 @@ func TestIAPAttachedToReviewSubmission_OfflineNoOp(t *testing.T) {
 	}
 }
 
-// TestIAPAttachedToReviewSubmission_FiresWhenIAPNotInSubmission stands up an
-// httptest server that returns one READY_TO_SUBMIT IAP and a submission whose
-// items reference some OTHER iap. The rule should flag the missing one.
+// TestIAPAttachedToReviewSubmission_FiresWhenIAPNotInSubmission verifies the rule flags a READY_TO_SUBMIT IAP
+// when the submission's items reference a different IAP.
 func TestIAPAttachedToReviewSubmission_FiresWhenIAPNotInSubmission(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")

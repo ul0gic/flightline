@@ -12,8 +12,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-// goodStateYAML returns a state that should pass schema + every offline
-// rule cleanly. Used as the baseline for mutation tests.
+// Baseline that passes schema + every offline rule; mutation tests diverge from it.
 const goodStateYAML = `apiVersion: flightline.dev/v1alpha1
 kind: AppState
 metadata:
@@ -49,8 +48,6 @@ func writeTempState(t *testing.T, body string) string {
 	return p
 }
 
-// captureStdout swaps os.Stdout for a buffer for the duration of fn,
-// returning everything written.
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
 	old := os.Stdout
@@ -72,8 +69,6 @@ func captureStdout(t *testing.T, fn func()) string {
 	return buf.String()
 }
 
-// TestRunLint_GoodStateNoErrors covers the happy path: a clean state
-// should not produce error-severity diagnostics.
 func TestRunLint_GoodStateNoErrors(t *testing.T) {
 	p := writeTempState(t, goodStateYAML)
 	viper.Reset()
@@ -81,7 +76,7 @@ func TestRunLint_GoodStateNoErrors(t *testing.T) {
 	out := captureStdout(t, func() {
 		err := runLint(lintCmd, []string{p})
 		if err != nil {
-			var le errLintErrors
+			var le lintFailedError
 			if errors.As(err, &le) {
 				t.Errorf("got lint errors on good state: %d", le.count)
 			} else {
@@ -101,8 +96,6 @@ func TestRunLint_GoodStateNoErrors(t *testing.T) {
 	}
 }
 
-// TestRunLint_MissingAgeRatingFires verifies the rule fires through the
-// command path and surfaces in the JSON.
 func TestRunLint_MissingAgeRatingFires(t *testing.T) {
 	body := `apiVersion: flightline.dev/v1alpha1
 kind: AppState
@@ -118,9 +111,9 @@ spec:
 	viper.Set("output", "json")
 	out := captureStdout(t, func() {
 		err := runLint(lintCmd, []string{p})
-		var le errLintErrors
+		var le lintFailedError
 		if !errors.As(err, &le) {
-			t.Errorf("expected errLintErrors, got %v", err)
+			t.Errorf("expected lintFailedError, got %v", err)
 		}
 	})
 	var res LintResult
@@ -139,8 +132,7 @@ spec:
 	}
 }
 
-// TestLintResult_JSONShapeStable freezes the top-level keys so future
-// edits cannot remove or rename them without explicit intent.
+// Freezes the top-level JSON keys: removing or renaming one is a contract break.
 func TestLintResult_JSONShapeStable(t *testing.T) {
 	res := &LintResult{
 		BundleID:   "com.example.x",
@@ -176,15 +168,14 @@ func TestLintCommand_TableMode(t *testing.T) {
 	viper.Set("output", "table")
 	out := captureStdout(t, func() {
 		err := runLint(lintCmd, []string{p})
-		_ = err // table mode may still surface info-level rows
+		_ = err
 	})
 	if !bytes.Contains([]byte(out), []byte("SEVERITY")) {
 		t.Errorf("table output missing header; got:\n%s", out)
 	}
 }
 
-// TestLint_LoaderErrorPropagates ensures a malformed YAML surfaces as a
-// loader error before any rule runs.
+// A malformed YAML must surface as a loader error before any rule runs.
 func TestLint_LoaderErrorPropagates(t *testing.T) {
 	p := writeTempState(t, "this is not yaml: [unterminated\n")
 	viper.Reset()
@@ -193,11 +184,10 @@ func TestLint_LoaderErrorPropagates(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error from the loader")
 	}
-	var le errLintErrors
+	var le lintFailedError
 	if errors.As(err, &le) {
-		t.Errorf("expected loader error, got errLintErrors")
+		t.Errorf("expected loader error, got lintFailedError")
 	}
-	// Loader errors include file:line information.
 	msg := err.Error()
 	if msg == "" {
 		t.Error("empty error message")

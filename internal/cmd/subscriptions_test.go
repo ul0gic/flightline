@@ -178,7 +178,7 @@ func TestSubscriptions_JSONOutputStability_List(t *testing.T) {
 	}
 	for _, key := range []string{"id", "type", "attributes", "memberCount"} {
 		if _, ok := decoded.Groups[0][key]; !ok {
-			t.Errorf("missing per-row key %q — JSON contract drift", key)
+			t.Errorf("missing per-row key %q: JSON contract drift", key)
 		}
 	}
 }
@@ -215,8 +215,7 @@ func TestSubscriptions_FixtureReplay_GroupsList(t *testing.T) {
 }
 
 // TestSubscriptions_FixtureReplay_GetWithIncludes exercises the multi-fetch
-// detail path: groups list → subscription lookup → localizations / intro
-// offers / prices loaders.
+// detail path: groups list, subscription lookup, then the include loaders.
 func TestSubscriptions_FixtureReplay_GetWithIncludes(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},

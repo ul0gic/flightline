@@ -4,49 +4,24 @@ import (
 	"bytes"
 	"encoding/json"
 	"sort"
+	"strconv"
 	"testing"
 )
 
-// TestJSONStability_AllCommands locks the top-level JSON keys for every
-// read command Flightline exposes. Adding a new key is safe; renaming or
-// removing one is a breaking change for shell pipelines (`jq '.foo.bar'`)
-// and LLM consumers parsing structured output.
-//
-// Each row exercises the production view struct through the shared
-// renderTo() pipeline (the same code path Render() uses with --output json).
-// Coverage is shape-only: we assert documented top-level keys are present
-// and nothing more — value assertions live in the per-command tests where
-// they belong.
-//
-// When this fails, the diff between expected and actual keys names the
-// breaking surface. Fix by either:
-//   - restoring the missing key (preserve the contract), or
-//   - adding the key to wantTopLevel here AND bumping a major version
-//     (intentional break with a documented migration note).
+// TestJSONStability_AllCommands locks the top-level JSON keys for every read
+// command. Adding a key is safe; renaming or removing one breaks consumers.
 func TestJSONStability_AllCommands(t *testing.T) {
 	cases := []struct {
-		// name identifies the command + variant. Reads as
-		// "<command> <subcommand>" e.g. "apps list", "iap get".
 		name string
-
-		// view is a populated instance of the production view type the
-		// command renders. Fields are filled with realistic placeholder
-		// values; the test only inspects keys, not values.
 		view any
 
-		// wantTopLevel is the documented JSON contract — every key here
-		// MUST appear in the rendered output. Sorted alphabetically by
-		// convention (mapKeys() sorts the diagnostic output too).
+		// wantTopLevel keys MUST appear in the rendered output.
 		wantTopLevel []string
 
-		// nestedKeys, when non-nil, asserts a nested object's keys.
-		// Use for view structs whose primary contract is nested under
-		// a single "data" / "attributes" wrapper (e.g. AppList.apps[]).
-		// Path is a JSON path into the decoded map; nil = top level only.
+		// nestedPath/nestedKeys, when set, assert keys on a nested object.
 		nestedPath []string
 		nestedKeys []string
 	}{
-		// ---- apps ----
 		{
 			name: "apps list",
 			view: AppList{
@@ -80,7 +55,6 @@ func TestJSONStability_AllCommands(t *testing.T) {
 			wantTopLevel: []string{"id", "type", "attributes"},
 		},
 
-		// ---- whoami ----
 		{
 			name: "whoami",
 			view: WhoamiInfo{
@@ -93,7 +67,6 @@ func TestJSONStability_AllCommands(t *testing.T) {
 			wantTopLevel: []string{"keyId", "issuerId", "vendorNumber", "authorized", "apiBaseUrl"},
 		},
 
-		// ---- versions ----
 		{
 			name: "versions list",
 			view: VersionList{
@@ -109,7 +82,6 @@ func TestJSONStability_AllCommands(t *testing.T) {
 			wantTopLevel: []string{"id", "type", "attributes"},
 		},
 
-		// ---- builds ----
 		{
 			name: "builds list",
 			view: BuildList{
@@ -125,7 +97,6 @@ func TestJSONStability_AllCommands(t *testing.T) {
 			wantTopLevel: []string{"id", "type", "attributes"},
 		},
 
-		// ---- review-submissions ----
 		{
 			name: "review-submissions list",
 			view: ReviewSubmissionList{
@@ -145,11 +116,10 @@ func TestJSONStability_AllCommands(t *testing.T) {
 			},
 			wantTopLevel: []string{"items"},
 			nestedPath:   []string{"items", "0"},
-			// referenceType / referenceId are omitempty — populated above.
+			// referenceType / referenceId are omitempty: populated above.
 			nestedKeys: []string{"id", "type", "attributes", "referenceType", "referenceId"},
 		},
 
-		// ---- rejection ----
 		{
 			name: "rejection",
 			view: &RejectionReport{
@@ -164,7 +134,6 @@ func TestJSONStability_AllCommands(t *testing.T) {
 			wantTopLevel: []string{"bundleId", "version", "note"},
 		},
 
-		// ---- iap ----
 		{
 			name: "iap list",
 			view: IAPList{
@@ -189,7 +158,6 @@ func TestJSONStability_AllCommands(t *testing.T) {
 			nestedKeys:   []string{"id", "type", "attributes"},
 		},
 
-		// ---- age-rating ----
 		{
 			name: "age-rating get",
 			view: &AgeRatingView{
@@ -200,7 +168,6 @@ func TestJSONStability_AllCommands(t *testing.T) {
 			wantTopLevel: []string{"id", "type", "attributes", "versionState"},
 		},
 
-		// ---- export-compliance ----
 		{
 			name: "export-compliance get",
 			view: &ExportComplianceView{
@@ -210,7 +177,6 @@ func TestJSONStability_AllCommands(t *testing.T) {
 			wantTopLevel: []string{"bundleId", "versionString", "build"},
 		},
 
-		// ---- privacy-labels (v4.3 stub) ----
 		{
 			name: "privacy-labels get",
 			view: &PrivacyLabelsView{
@@ -222,7 +188,6 @@ func TestJSONStability_AllCommands(t *testing.T) {
 			wantTopLevel: []string{"bundleId", "supported", "reason", "reference"},
 		},
 
-		// ---- territories ----
 		{
 			name: "territories list",
 			view: TerritoryList{
@@ -233,7 +198,6 @@ func TestJSONStability_AllCommands(t *testing.T) {
 			nestedKeys:   []string{"id", "type", "attributes"},
 		},
 
-		// ---- categories ----
 		{
 			name: "categories list",
 			view: CategoryList{
@@ -251,11 +215,10 @@ func TestJSONStability_AllCommands(t *testing.T) {
 				AppInfoState:    "READY_FOR_DISTRIBUTION",
 				PrimaryCategory: "PRODUCTIVITY",
 			},
-			// AppInfoState / PrimaryCategory etc. are omitempty — populated above.
+			// AppInfoState / PrimaryCategory etc. are omitempty: populated above.
 			wantTopLevel: []string{"bundleId", "appInfoId", "appInfoState", "primaryCategory"},
 		},
 
-		// ---- pricing ----
 		{
 			name: "pricing get",
 			view: &PricingView{
@@ -276,7 +239,6 @@ func TestJSONStability_AllCommands(t *testing.T) {
 			wantTopLevel: []string{"bundleId", "schedule", "availability"},
 		},
 
-		// ---- testflight ----
 		{
 			name: "testflight groups list",
 			view: BetaGroupList{
@@ -307,7 +269,6 @@ func TestJSONStability_AllCommands(t *testing.T) {
 			wantTopLevel: []string{"bundleId", "buildId", "buildNumber", "id", "type", "attributes"},
 		},
 
-		// ---- custom-product-pages ----
 		{
 			name: "custom-product-pages list",
 			view: CustomProductPageList{
@@ -323,7 +284,6 @@ func TestJSONStability_AllCommands(t *testing.T) {
 			wantTopLevel: []string{"id", "type", "attributes"},
 		},
 
-		// ---- reviews ----
 		{
 			name: "reviews list",
 			view: ReviewList{
@@ -349,7 +309,6 @@ func TestJSONStability_AllCommands(t *testing.T) {
 			wantTopLevel: []string{"bundleId", "summarizations"},
 		},
 
-		// ---- beta-feedback ----
 		{
 			name: "beta-feedback crash",
 			view: BetaFeedbackCrashList{
@@ -379,7 +338,6 @@ func TestJSONStability_AllCommands(t *testing.T) {
 			wantTopLevel: []string{"id", "type", "savedTo", "bytes"},
 		},
 
-		// ---- diagnostics ----
 		{
 			name: "diagnostics list",
 			view: DiagnosticSignatureList{
@@ -400,7 +358,6 @@ func TestJSONStability_AllCommands(t *testing.T) {
 			wantTopLevel: []string{"signatureId", "version"},
 		},
 
-		// ---- performance ----
 		{
 			name: "performance app",
 			view: &PerformanceView{
@@ -420,7 +377,6 @@ func TestJSONStability_AllCommands(t *testing.T) {
 			wantTopLevel: []string{"bundleId", "buildNumber", "buildId", "version"},
 		},
 
-		// ---- subscriptions ----
 		{
 			name: "subscriptions list",
 			view: SubscriptionGroupList{
@@ -444,11 +400,9 @@ func TestJSONStability_AllCommands(t *testing.T) {
 		},
 	}
 
-	// Sanity: every documented command in build-plan.md appears here.
-	// 22 commands, several with multiple variants → expect 30+ rows. If the
-	// count drops below the floor, a row was deleted accidentally.
+	// A drop below the floor means a stability row was deleted accidentally.
 	if len(cases) < 30 {
-		t.Fatalf("test case count = %d, want >= 30 — a command stability row was removed", len(cases))
+		t.Fatalf("test case count = %d, want >= 30: a command stability row was removed", len(cases))
 	}
 
 	for _, tc := range cases {
@@ -457,49 +411,51 @@ func TestJSONStability_AllCommands(t *testing.T) {
 			if err := renderTo(&buf, tc.view, "json", true); err != nil {
 				t.Fatalf("renderTo: %v\nview: %T", err, tc.view)
 			}
-
-			// Decode into either an object or array depending on shape.
-			// All the registered views serialize to objects at top level.
 			var decoded map[string]any
 			if err := json.Unmarshal(buf.Bytes(), &decoded); err != nil {
 				t.Fatalf("decode top-level object: %v\nraw: %s", err, buf.String())
 			}
-
-			gotKeys := sortedMapKeys(decoded)
-			for _, key := range tc.wantTopLevel {
-				if _, ok := decoded[key]; !ok {
-					t.Errorf("missing top-level key %q — JSON output is a contract; "+
-						"adding fields is safe but removing/renaming breaks consumers "+
-						"(shell pipelines using `jq`, LLM consumers parsing structured output, "+
-						"and the L2 state-as-code layer that round-trips this shape).\n"+
-						"Got keys: %v", key, gotKeys)
-				}
-			}
-
+			assertKeysPresent(t, decoded, tc.wantTopLevel)
 			if tc.nestedPath != nil {
-				nested := walkPath(t, decoded, tc.nestedPath)
-				if nested == nil {
-					return // walkPath already emitted an error
-				}
-				nestedMap, ok := nested.(map[string]any)
-				if !ok {
-					t.Fatalf("nested path %v resolved to %T, want object", tc.nestedPath, nested)
-				}
-				gotNested := sortedMapKeys(nestedMap)
-				for _, key := range tc.nestedKeys {
-					if _, ok := nestedMap[key]; !ok {
-						t.Errorf("missing nested key %q at path %v — JSON contract drift in row shape. Got: %v",
-							key, tc.nestedPath, gotNested)
-					}
-				}
+				assertNestedKeys(t, decoded, tc.nestedPath, tc.nestedKeys)
 			}
 		})
 	}
 }
 
-// sortedMapKeys returns the top-level keys of a JSON object in stable order.
-// Used in failure diagnostics so missing-key errors print a deterministic
-// "got" set across test runs.
+// assertKeysPresent fails for any key absent from the decoded JSON object.
+func assertKeysPresent(t *testing.T, decoded map[string]any, want []string) {
+	t.Helper()
+	for _, key := range want {
+		if _, ok := decoded[key]; !ok {
+			t.Errorf("missing top-level key %q: JSON output is a contract; adding "+
+				"fields is safe but removing/renaming breaks consumers (jq pipelines, "+
+				"LLM parsers, the L2 state-as-code round-trip).\nGot keys: %v",
+				key, sortedMapKeys(decoded))
+		}
+	}
+}
+
+// assertNestedKeys descends path into decoded and fails for any missing key.
+func assertNestedKeys(t *testing.T, decoded map[string]any, path, want []string) {
+	t.Helper()
+	nested := walkPath(t, decoded, path)
+	if nested == nil {
+		return // walkPath already emitted an error
+	}
+	nestedMap, ok := nested.(map[string]any)
+	if !ok {
+		t.Fatalf("nested path %v resolved to %T, want object", path, nested)
+	}
+	for _, key := range want {
+		if _, ok := nestedMap[key]; !ok {
+			t.Errorf("missing nested key %q at path %v: JSON contract drift in row shape. Got: %v",
+				key, path, sortedMapKeys(nestedMap))
+		}
+	}
+}
+
+// sortedMapKeys returns a JSON object's keys in stable order for diagnostics.
 func sortedMapKeys(m map[string]any) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
@@ -510,10 +466,7 @@ func sortedMapKeys(m map[string]any) []string {
 }
 
 // walkPath descends into a decoded JSON object via a path of keys / array
-// indices. Numeric strings (e.g. "0") select array indices; other strings
-// select object keys. Returns nil and emits a t.Errorf if the path is bad.
-//
-// Kept tiny on purpose — this is test scaffolding, not a path library.
+// indices. Numeric segments select array indices; others select object keys.
 func walkPath(t *testing.T, root map[string]any, path []string) any {
 	t.Helper()
 	var cur any = root
@@ -527,30 +480,29 @@ func walkPath(t *testing.T, root map[string]any, path []string) any {
 			}
 			cur = next
 		case []any:
-			for j, c := range []byte(seg) {
-				if j == 0 && c == '-' {
-					t.Errorf("walkPath: negative index %q at path %v", seg, path)
-					return nil
-				}
-				if c < '0' || c > '9' {
-					t.Errorf("walkPath: non-numeric array index %q at path %v", seg, path)
-					return nil
-				}
-			}
-			// Manual atoi to avoid a strconv import for the trivial case.
-			idx := 0
-			for _, c := range []byte(seg) {
-				idx = idx*10 + int(c-'0')
-			}
-			if idx >= len(v) {
-				t.Errorf("walkPath: index %d out of range (len=%d) at path %v", idx, len(v), path)
-				return nil
-			}
-			cur = v[idx]
+			cur = indexInto(t, v, seg, path)
 		default:
 			t.Errorf("walkPath: cannot descend into %T at index %d in path %v", cur, i, path)
 			return nil
 		}
+		if cur == nil {
+			return nil
+		}
 	}
 	return cur
+}
+
+// indexInto resolves a numeric path segment against a JSON array.
+func indexInto(t *testing.T, arr []any, seg string, path []string) any {
+	t.Helper()
+	idx, err := strconv.Atoi(seg)
+	if err != nil || idx < 0 {
+		t.Errorf("walkPath: invalid array index %q at path %v", seg, path)
+		return nil
+	}
+	if idx >= len(arr) {
+		t.Errorf("walkPath: index %d out of range (len=%d) at path %v", idx, len(arr), path)
+		return nil
+	}
+	return arr[idx]
 }

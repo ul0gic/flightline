@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -10,24 +11,9 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// metadata splits across two Apple resources:
-//
-//   - appStoreVersionLocalizations: description, keywords, whatsNew,
-//     promotionalText, marketingUrl, supportUrl. Owned by the version.
-//   - appInfoLocalizations: name, subtitle. Owned by the appInfo. The
-//     "editable" appInfo for the version's lifecycle bucket is the one we
-//     write to (matching the live appInfo would mutate already-shipping
-//     listings).
-//
-// `metadata set` accepts the union of both flag sets and routes each field
-// to its right resource. Idempotent: GET both localizations first, diff
-// against the requested change, PATCH each resource only when its slice
-// of fields actually differs. A bare `metadata set` with no field flags
-// is a hard error — there is nothing to write — rather than a silent
-// no-op masquerading as success.
+// Writes target the editable appInfo, never the live one: the live appInfo mutates already-shipping listings.
 
-// metadataASCVersionLocalizationAttrs mirrors Apple's
-// AppStoreVersionLocalization.attributes — only the fields Flightline writes.
+// Mirrors AppStoreVersionLocalization.attributes: only the fields Flightline writes.
 type metadataASCVersionLocalizationAttrs struct {
 	Locale          string `json:"locale,omitempty"`
 	Description     string `json:"description,omitempty"`
@@ -38,44 +24,35 @@ type metadataASCVersionLocalizationAttrs struct {
 	SupportURL      string `json:"supportUrl,omitempty"`
 }
 
-// metadataAppInfoLocalizationAttrs mirrors Apple's
-// AppInfoLocalization.attributes — only the fields Flightline writes.
+// Mirrors AppInfoLocalization.attributes: only the fields Flightline writes.
 type metadataAppInfoLocalizationAttrs struct {
 	Locale   string `json:"locale,omitempty"`
 	Name     string `json:"name,omitempty"`
 	Subtitle string `json:"subtitle,omitempty"`
 }
 
-// MetadataView is the joined per-locale snapshot of both localization
-// resources for a version. Stable JSON contract.
+// MetadataView is the joined per-locale snapshot of both localization resources; stable JSON contract.
 type MetadataView struct {
-	Locale          string `json:"locale"`
-	Name            string `json:"name,omitempty"`
-	Subtitle        string `json:"subtitle,omitempty"`
-	Description     string `json:"description,omitempty"`
-	Keywords        string `json:"keywords,omitempty"`
-	WhatsNew        string `json:"whatsNew,omitempty"`
-	PromotionalText string `json:"promotionalText,omitempty"`
-	MarketingURL    string `json:"marketingUrl,omitempty"`
-	SupportURL      string `json:"supportUrl,omitempty"`
-	// Resource IDs — useful for downstream tooling that wants to PATCH
-	// the same localizations directly.
+	Locale                string `json:"locale"`
+	Name                  string `json:"name,omitempty"`
+	Subtitle              string `json:"subtitle,omitempty"`
+	Description           string `json:"description,omitempty"`
+	Keywords              string `json:"keywords,omitempty"`
+	WhatsNew              string `json:"whatsNew,omitempty"`
+	PromotionalText       string `json:"promotionalText,omitempty"`
+	MarketingURL          string `json:"marketingUrl,omitempty"`
+	SupportURL            string `json:"supportUrl,omitempty"`
 	VersionLocalizationID string `json:"versionLocalizationId,omitempty"`
 	AppInfoLocalizationID string `json:"appInfoLocalizationId,omitempty"`
 }
 
-// MetadataSetResult is the JSON-stable envelope for `metadata set`.
-//
-// Action is one of "noop" | "version" | "app-info" | "both" — describes
-// which resources received PATCHes. Changed is true iff at least one
-// PATCH was issued. Metadata is the after-state view of the locale.
+// MetadataSetResult is the stable JSON envelope for `metadata set`; Action is "noop"|"version"|"app-info"|"both".
 type MetadataSetResult struct {
 	Action   string       `json:"action"`
 	Changed  bool         `json:"changed"`
 	Metadata MetadataView `json:"metadata"`
 }
 
-// TableRows for MetadataSetResult — vertical layout, one row per field.
 func (r *MetadataSetResult) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
 	rows = [][]string{
@@ -94,10 +71,7 @@ func (r *MetadataSetResult) TableRows() (headers []string, rows [][]string) {
 	return headers, rows
 }
 
-// truncateForTable shortens long-form copy with a single-character ellipsis
-// in the table view. JSON output stays full-fidelity — only the table cell
-// is summarised. `n` names the byte-count cap; we avoid `max`/`cap`/`len`
-// because each shadows a predeclared builtin in Go 1.21+.
+// JSON output stays full-fidelity; only the table view truncates. Param `n` avoids the max/cap/len builtins.
 func truncateForTable(s string, n int) string {
 	if len(s) <= n {
 		return s
@@ -111,7 +85,7 @@ var metadataCmd = &cobra.Command{
 	Long: `metadata writes per-locale strings into appStoreVersionLocalizations
 (description, keywords, whatsNew, promotionalText, marketing/support URLs)
 and appInfoLocalizations (name, subtitle). Both resources are diff-then-PATCH
-idempotent — re-running with the same arguments is a no-op.`,
+idempotent: re-running with the same arguments is a no-op.`,
 }
 
 var metadataSetCmd = &cobra.Command{
@@ -120,10 +94,10 @@ var metadataSetCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runMetadataSet,
-	Example: `  fline metadata set com.example.myapp --version 1.0.1 --locale en-US --name "MyApp" --subtitle "Slogan"
-  fline metadata set com.example.myapp --version 1.0.1 --locale en-US --description "..." --keywords "..."
-  fline metadata set com.example.myapp --version 1.0.1 --locale en-US --whats-new "Bug fixes."
-  fline metadata set com.example.myapp --version 1.0.1 --locale en-US --output json`,
+	Example: `  flightline metadata set com.example.myapp --version 1.0.1 --locale en-US --name "MyApp" --subtitle "Slogan"
+  flightline metadata set com.example.myapp --version 1.0.1 --locale en-US --description "..." --keywords "..."
+  flightline metadata set com.example.myapp --version 1.0.1 --locale en-US --whats-new "Bug fixes."
+  flightline metadata set com.example.myapp --version 1.0.1 --locale en-US --output json`,
 }
 
 var (
@@ -159,17 +133,12 @@ func init() {
 	rootCmd.AddCommand(metadataCmd)
 }
 
-// metadataFlagSet bundles the flags every subcommand wraps so the set of
-// fields the user actually passed can be inspected uniformly.
 type metadataFlagSet struct {
 	name, subtitle, description, keywords,
 	whatsNew, promotionalText, marketingURL, supportURL bool
 }
 
-// readChangedFlags returns a metadataFlagSet recording which content flags
-// the user explicitly set. Used by the diff path so unset flags don't
-// accidentally clear server-side fields (Apple's PATCH semantics on a
-// nullable string treat empty-string as "clear").
+// Tracks only explicitly-set flags: Apple's PATCH treats empty-string as "clear", so unset flags must not be sent.
 func readChangedFlags(cmd *cobra.Command) metadataFlagSet {
 	return metadataFlagSet{
 		name:            cmd.Flags().Changed("name"),
@@ -183,19 +152,14 @@ func readChangedFlags(cmd *cobra.Command) metadataFlagSet {
 	}
 }
 
-// anyVersionFlag reports whether any flag belonging to the version
-// localization bucket was set. Used to decide whether to GET that resource.
 func (f metadataFlagSet) anyVersionFlag() bool {
 	return f.description || f.keywords || f.whatsNew || f.promotionalText || f.marketingURL || f.supportURL
 }
 
-// anyAppInfoFlag reports whether any flag belonging to the app-info
-// localization bucket was set.
 func (f metadataFlagSet) anyAppInfoFlag() bool {
 	return f.name || f.subtitle
 }
 
-// any reports whether at least one content flag was set.
 func (f metadataFlagSet) any() bool {
 	return f.anyVersionFlag() || f.anyAppInfoFlag()
 }
@@ -206,14 +170,14 @@ func runMetadataSet(cmd *cobra.Command, args []string) error {
 	platform := strings.TrimSpace(metadataSetPlatform)
 	locale := strings.TrimSpace(metadataSetLocale)
 	if versionStr == "" {
-		return fmt.Errorf("metadata: --version is required")
+		return errors.New("metadata: --version is required")
 	}
 	if locale == "" {
-		return fmt.Errorf("metadata: --locale is required")
+		return errors.New("metadata: --locale is required")
 	}
 	flags := readChangedFlags(cmd)
 	if !flags.any() {
-		return fmt.Errorf("metadata: no content flags set; pass at least one of --name --subtitle --description --keywords --whats-new --promotional-text --marketing-url --support-url")
+		return errors.New("metadata: no content flags set; pass at least one of --name --subtitle --description --keywords --whats-new --promotional-text --marketing-url --support-url")
 	}
 
 	c, err := newClient()
@@ -250,10 +214,7 @@ func runMetadataSet(cmd *cobra.Command, args []string) error {
 	return Render(result, outputMode())
 }
 
-// applyVersionLocalizationDiff handles the version-localization slice of
-// `metadata set`. Returns (patched, err): patched=true iff a PATCH was
-// issued. No-op (false, nil) when no version-tier flags are set or when
-// the diff produces no changes. Updates view in place with the post-state.
+// Returns patched=true iff a PATCH was issued; updates view in place with the post-state.
 func applyVersionLocalizationDiff(
 	cmd *cobra.Command,
 	c *asc.Client,
@@ -289,8 +250,6 @@ func applyVersionLocalizationDiff(
 	return true, nil
 }
 
-// applyAppInfoLocalizationDiff handles the app-info-localization slice of
-// `metadata set`. Same shape as applyVersionLocalizationDiff.
 func applyAppInfoLocalizationDiff(
 	cmd *cobra.Command,
 	c *asc.Client,
@@ -329,8 +288,6 @@ func applyAppInfoLocalizationDiff(
 	return true, nil
 }
 
-// computeAction maps the (patchedVersion, patchedAppInfo) pair onto the
-// stable "action" enum exposed in JSON output.
 func computeAction(patchedVersion, patchedAppInfo bool) string {
 	switch {
 	case patchedVersion && patchedAppInfo:
@@ -344,10 +301,7 @@ func computeAction(patchedVersion, patchedAppInfo bool) string {
 	}
 }
 
-// getVersionLocalization fetches the appStoreVersionLocalization for the
-// given version + locale. Returns ("", zero, nil) when no localization
-// exists for the locale — same "missing-but-not-an-error" idiom as
-// lookupVersion / lookupBuild.
+// Returns ("", zero, nil) when no localization exists for the locale: missing is not an error.
 func getVersionLocalization(ctx context.Context, c *asc.Client, versionID, locale string) (string, metadataASCVersionLocalizationAttrs, error) {
 	q := url.Values{
 		"filter[locale]": {locale},
@@ -365,8 +319,6 @@ func getVersionLocalization(ctx context.Context, c *asc.Client, versionID, local
 	return page.Data[0].ID, page.Data[0].Attributes, nil
 }
 
-// getAppInfoLocalization fetches the appInfoLocalization for the given
-// appInfo + locale. Same "missing → zero values" idiom.
 func getAppInfoLocalization(ctx context.Context, c *asc.Client, appInfoID, locale string) (string, metadataAppInfoLocalizationAttrs, error) {
 	q := url.Values{
 		"filter[locale]": {locale},
@@ -384,10 +336,7 @@ func getAppInfoLocalization(ctx context.Context, c *asc.Client, appInfoID, local
 	return page.Data[0].ID, page.Data[0].Attributes, nil
 }
 
-// versionLocalizationPatch is the wire body for a version-localization
-// PATCH. Pointer-typed strings let omitempty drop unset fields so a bare
-// `metadata set --description X` PATCH never accidentally clears unrelated
-// fields.
+// Pointer-typed strings let omitempty drop unset fields so a partial PATCH never clears unrelated fields.
 type versionLocalizationPatch struct {
 	Data versionLocalizationPatchData `json:"data"`
 }
@@ -407,10 +356,7 @@ type versionLocalizationPatchAttributes struct {
 	SupportURL      *string `json:"supportUrl,omitempty"`
 }
 
-// diffVersionLocAttrs builds a patch body containing only the fields the
-// user explicitly set AND that differ from the live record. Returns
-// (patchAttributes, anyChanged). When anyChanged=false the caller skips
-// the PATCH entirely.
+// Emits only fields the user set AND that differ from the live record; anyChanged=false means skip the PATCH.
 func diffVersionLocAttrs(
 	flags metadataFlagSet,
 	cur metadataASCVersionLocalizationAttrs,
@@ -445,8 +391,6 @@ func diffVersionLocAttrs(
 	return out, changed
 }
 
-// patchVersionLocalization issues the PATCH and returns the post-state
-// attributes so callers can render the after-image.
 func patchVersionLocalization(ctx context.Context, c *asc.Client, locID string, attrs versionLocalizationPatchAttributes) (metadataASCVersionLocalizationAttrs, error) {
 	body := versionLocalizationPatch{
 		Data: versionLocalizationPatchData{
@@ -464,8 +408,6 @@ func patchVersionLocalization(ctx context.Context, c *asc.Client, locID string, 
 	return resp.Data.Attributes, nil
 }
 
-// appInfoLocalizationPatch is the wire body for an app-info-localization
-// PATCH. Same pointer-omitempty idiom as the version variant.
 type appInfoLocalizationPatch struct {
 	Data appInfoLocalizationPatchData `json:"data"`
 }
@@ -481,8 +423,6 @@ type appInfoLocalizationPatchAttributes struct {
 	Subtitle *string `json:"subtitle,omitempty"`
 }
 
-// diffAppInfoLocAttrs builds a patch body for the app-info localization
-// resource. Same shape as diffVersionLocAttrs.
 func diffAppInfoLocAttrs(
 	flags metadataFlagSet,
 	cur metadataAppInfoLocalizationAttrs,
@@ -501,8 +441,6 @@ func diffAppInfoLocAttrs(
 	return out, changed
 }
 
-// patchAppInfoLocalization issues the PATCH and returns the post-state
-// attributes.
 func patchAppInfoLocalization(ctx context.Context, c *asc.Client, locID string, attrs appInfoLocalizationPatchAttributes) (metadataAppInfoLocalizationAttrs, error) {
 	body := appInfoLocalizationPatch{
 		Data: appInfoLocalizationPatchData{
@@ -520,9 +458,6 @@ func patchAppInfoLocalization(ctx context.Context, c *asc.Client, locID string, 
 	return resp.Data.Attributes, nil
 }
 
-// copyVersionLocAttrsIntoView mirrors the live attrs into the joined view
-// (callers populate from the current GET; if a PATCH lands they overwrite
-// with the post-state).
 func copyVersionLocAttrsIntoView(v *MetadataView, a metadataASCVersionLocalizationAttrs) {
 	v.Description = a.Description
 	v.Keywords = a.Keywords
@@ -532,7 +467,6 @@ func copyVersionLocAttrsIntoView(v *MetadataView, a metadataASCVersionLocalizati
 	v.SupportURL = a.SupportURL
 }
 
-// copyAppInfoLocAttrsIntoView mirrors app-info attrs into the joined view.
 func copyAppInfoLocAttrsIntoView(v *MetadataView, a metadataAppInfoLocalizationAttrs) {
 	v.Name = a.Name
 	v.Subtitle = a.Subtitle

@@ -101,8 +101,8 @@ whitespace, unexpected null fields, Apple-internal `id` formats), capture
 once and redact:
 
 ```bash
-# 1. Issue the request with fline itself or curl + a fresh JWT.
-fline apps list --output json > /tmp/apps_list_raw.json
+# 1. Issue the request with flightline itself or curl + a fresh JWT.
+flightline apps list --output json > /tmp/apps_list_raw.json
 
 # 2. Run the redaction pass:
 sed -E '

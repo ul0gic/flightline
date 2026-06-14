@@ -1,9 +1,4 @@
-// Package auth handles App Store Connect API authentication.
-//
-// Apple requires ES256 JWTs (ECDSA P-256 over SHA-256) signed against a .p8
-// private key, with the signature in IEEE P1363 raw format (r||s, each 32
-// bytes fixed-width) — NOT ASN.1 DER. This is the most common rolled-your-own
-// gotcha; never use ecdsa.SignASN1 here.
+// Package auth handles ASC API auth. Signatures are IEEE P1363 raw (r||s): never ecdsa.SignASN1.
 package auth
 
 import (
@@ -35,12 +30,7 @@ const jwtTTL = 20 * time.Minute
 // p256SigSize is the IEEE P1363 raw signature size for P-256: r||s, 32 bytes each.
 const p256SigSize = 64
 
-// Mint signs an App Store Connect API JWT.
-//
-// keyID is the 10-char ASC API key id (e.g. "ABC1234DEF").
-// issuerID is the issuer UUID from App Store Connect → Users and Access → Integrations.
-// keyPath is the absolute path to AuthKey_<KEY_ID>.p8; it must be mode 0600 or stricter.
-//
+// Mint signs an ASC JWT using the .p8 at keyPath (must be mode 0600).
 // The returned token is valid for 20 minutes (Apple's ceiling).
 func Mint(keyID, issuerID, keyPath string) (string, error) {
 	priv, err := loadKey(keyPath)
@@ -81,7 +71,7 @@ func Mint(keyID, issuerID, keyPath string) (string, error) {
 	}
 
 	// IEEE P1363 raw signature: r || s, fixed-width 32 bytes each (P-256).
-	// Apple rejects ASN.1 DER signatures — never use ecdsa.SignASN1 here.
+	// Apple rejects ASN.1 DER signatures: never use ecdsa.SignASN1 here.
 	sig := make([]byte, p256SigSize)
 	r.FillBytes(sig[0:32])
 	s.FillBytes(sig[32:64])
@@ -89,7 +79,6 @@ func Mint(keyID, issuerID, keyPath string) (string, error) {
 	return signingInput + "." + base64.RawURLEncoding.EncodeToString(sig), nil
 }
 
-// loadKey reads a .p8 file, verifies its mode, and parses out the ECDSA P-256 private key.
 func loadKey(path string) (*ecdsa.PrivateKey, error) {
 	info, err := os.Stat(path)
 	if err != nil {

@@ -16,30 +16,8 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// Phase 3.4.1 — Idempotency assertions
-//
-// Cross-cutting test corpus for the v1 write surface. Each subtest exercises
-// the wire-level read-then-decide-to-write flow that the runX functions
-// follow. The shared invariant: when current state already matches desired
-// state, the second pass MUST produce ZERO PATCH/POST/DELETE requests.
-//
-// This is a stronger contract than per-command "assert no PATCH route was
-// hit" tests: those will pass even if a write happens to land at a route
-// the fixture server didn't register (the FIXTURE_NO_ROUTE 404 surfaces as
-// an error, but a quick test author can mistake it for an unrelated bug).
-// The counting server here records EVERY method so the assertion is
-// "second pass made zero mutating calls on any path".
-//
-// Per-command tests live in their respective *_test.go files; this file
-// holds the table-driven cross-cutting layer that catches drift across the
-// whole write surface in one pass.
-
-// ---------------------------------------------------------------------------
-// countingFixtureServer — wraps startFixtureServer's behaviour but counts
-// requests by METHOD+PATH so tests can assert on per-method totals across a
-// run. Snapshot() returns a copy at any instant; Reset() zeros the counters
-// (used between round 1 and round 2 of an idempotency check).
-// ---------------------------------------------------------------------------
+// Shared invariant: when current state already matches desired, the second
+// pass must produce zero PATCH/POST/DELETE requests on any path.
 
 type countingFixtureServer struct {
 	t      *testing.T
@@ -97,8 +75,6 @@ func (c *countingFixtureServer) handle(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(body)
 }
 
-// reset zeros all counters. Used to draw a clean line between round 1
-// (which may legitimately PATCH/POST) and round 2 (which must not).
 func (c *countingFixtureServer) reset() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -107,7 +83,6 @@ func (c *countingFixtureServer) reset() {
 	c.byKey = make(map[string]int64)
 }
 
-// mutatingCount returns the sum of PATCH+POST+DELETE+PUT calls.
 func (c *countingFixtureServer) mutatingCount() int64 {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -117,24 +92,17 @@ func (c *countingFixtureServer) mutatingCount() int64 {
 		c.byMethod[http.MethodPut]
 }
 
-// methodCount returns count for the given HTTP method.
 func (c *countingFixtureServer) methodCount(method string) int64 {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.byMethod[method]
 }
 
-// fixtureASCClientFor wires a production-shaped client to the counting
-// server's URL. Mirrors fixtureASCClient but takes the wrapper.
 func fixtureASCClientFor(t *testing.T, c *countingFixtureServer) *asc.Client {
 	t.Helper()
 	return fixtureASCClient(t, c.srv)
 }
 
-// assertNoMutatingCalls fails the test if the counting server saw any
-// mutating method since the last reset. The error message names every
-// mutating endpoint that fired — gives the author exactly the route to
-// investigate.
 func assertNoMutatingCalls(t *testing.T, c *countingFixtureServer) {
 	t.Helper()
 	if got := c.mutatingCount(); got != 0 {
@@ -151,11 +119,6 @@ func assertNoMutatingCalls(t *testing.T, c *countingFixtureServer) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// versions create — round 2: lookup HITS, no POST.
-// versions update — round 2: diff returns no changes, no PATCH.
-// ---------------------------------------------------------------------------
-
 func TestIdempotency_VersionsCreate_SecondPassNoPOST(t *testing.T) {
 	srv := startCountingFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
@@ -164,8 +127,6 @@ func TestIdempotency_VersionsCreate_SecondPassNoPOST(t *testing.T) {
 	c := fixtureASCClientFor(t, srv)
 	ctx := context.Background()
 
-	// Round 1: caller resolves app + sees existing version. The runVersionsCreate
-	// code path returns noop without POSTing when lookup hits.
 	appID, err := resolveAppID(ctx, c, "com.example.alpha")
 	if err != nil {
 		t.Fatalf("round1 resolveAppID: %v", err)
@@ -178,7 +139,6 @@ func TestIdempotency_VersionsCreate_SecondPassNoPOST(t *testing.T) {
 		t.Fatal("round1: expected existing version, got nil")
 	}
 
-	// Round 2: same flow. Counts must stay GET-only.
 	srv.reset()
 	if _, err := resolveAppID(ctx, c, "com.example.alpha"); err != nil {
 		t.Fatalf("round2 resolveAppID: %v", err)
@@ -206,21 +166,17 @@ func TestIdempotency_VersionsUpdate_SecondPassNoPATCH(t *testing.T) {
 		t.Fatalf("lookupVersion: %v", err)
 	}
 
-	// Cobra harness so Flag().Changed() works; supply --release-type matching
-	// the existing fixture's MANUAL value so the diff is empty.
+	// --release-type matches the fixture's MANUAL value so the diff is empty.
 	cmd := newDiffVersionCobra("MANUAL")
 	srv.reset()
 	out, changed := diffVersionAttrs(cmd, existing.Attributes, "", "MANUAL", "", "")
 	if changed {
 		t.Errorf("diffVersionAttrs: changed=true for matching release-type; want false. patch=%+v", out)
 	}
-	// The diff function is local and doesn't hit the wire, but the contract
-	// is "no PATCH after a no-change diff" — confirm by leaving the PATCH
-	// route unregistered.
+	// Leaving the PATCH route unregistered confirms no write fires after a no-change diff.
 	assertNoMutatingCalls(t, srv)
 }
 
-// newDiffVersionCobra builds the cobra harness diffVersionAttrs expects.
 func newDiffVersionCobra(releaseType string) *cobra.Command {
 	cmd := &cobra.Command{}
 	cmd.Flags().String("copyright", "", "")
@@ -232,11 +188,6 @@ func newDiffVersionCobra(releaseType string) *cobra.Command {
 	}
 	return cmd
 }
-
-// ---------------------------------------------------------------------------
-// builds attach — current linkage already points at requested build:
-// no PATCH on the second pass.
-// ---------------------------------------------------------------------------
 
 func TestIdempotency_BuildsAttach_SecondPassNoPATCH(t *testing.T) {
 	srv := startCountingFixtureServer(t, map[string]fixtureRoute{
@@ -270,19 +221,12 @@ func TestIdempotency_BuildsAttach_SecondPassNoPATCH(t *testing.T) {
 		if current == nil || current.ID != build.ID {
 			t.Fatalf("round%d: expected current attached build %s, got %+v", round, build.ID, current)
 		}
-		// idempotent branch — runBuildsAttach short-circuits without PATCH.
 		if round == 1 {
 			srv.reset()
 		}
 	}
 	assertNoMutatingCalls(t, srv)
 }
-
-// ---------------------------------------------------------------------------
-// metadata set — version+app-info localizations both already match: zero
-// PATCHes on the second pass. Cross-resource (two PATCH paths) so this is
-// the most fragile of the cmd-layer diffs.
-// ---------------------------------------------------------------------------
 
 func TestIdempotency_MetadataSet_SecondPassNoPATCH_VersionLoc(t *testing.T) {
 	srv := startCountingFixtureServer(t, map[string]fixtureRoute{
@@ -291,7 +235,6 @@ func TestIdempotency_MetadataSet_SecondPassNoPATCH_VersionLoc(t *testing.T) {
 	c := fixtureASCClientFor(t, srv)
 	ctx := context.Background()
 
-	// Round 1: GET the localization, diff against itself, no PATCH.
 	curID, curAttrs, err := getVersionLocalization(ctx, c, "8000000001", "en-US")
 	if err != nil {
 		t.Fatalf("getVersionLocalization: %v", err)
@@ -300,7 +243,6 @@ func TestIdempotency_MetadataSet_SecondPassNoPATCH_VersionLoc(t *testing.T) {
 		t.Fatal("getVersionLocalization: empty id")
 	}
 
-	// Build flag set with same values as existing — diff must be empty.
 	flags := metadataFlagSet{
 		description: true,
 		keywords:    true,
@@ -316,10 +258,6 @@ func TestIdempotency_MetadataSet_SecondPassNoPATCH_VersionLoc(t *testing.T) {
 	assertNoMutatingCalls(t, srv)
 }
 
-// ---------------------------------------------------------------------------
-// screenshots upload — same MD5 already at the slot: skip uploads.
-// ---------------------------------------------------------------------------
-
 func TestIdempotency_ScreenshotsUpload_SecondPassNoPOST_SameChecksum(t *testing.T) {
 	srv := startCountingFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/appScreenshotSets/SS000000001/appScreenshots": {File: "screenshots_list_with_checksum"},
@@ -327,7 +265,6 @@ func TestIdempotency_ScreenshotsUpload_SecondPassNoPOST_SameChecksum(t *testing.
 	c := fixtureASCClientFor(t, srv)
 	ctx := context.Background()
 
-	// Round 1: list, build the checksum -> assetID map.
 	existing, err := listScreenshotsByChecksum(ctx, c, "SS000000001")
 	if err != nil {
 		t.Fatalf("listScreenshotsByChecksum: %v", err)
@@ -336,10 +273,6 @@ func TestIdempotency_ScreenshotsUpload_SecondPassNoPOST_SameChecksum(t *testing.
 		t.Fatal("listScreenshotsByChecksum: empty map; fixture wrong?")
 	}
 
-	// Round 2 simulates re-running with files whose MD5s already match
-	// existing slots. uploadOrSkipFiles would skip — verify the lookup map
-	// still maps each known checksum to an entry, and assert we issued no
-	// mutating calls beyond the GET list.
 	srv.reset()
 	again, err := listScreenshotsByChecksum(ctx, c, "SS000000001")
 	if err != nil {
@@ -351,13 +284,6 @@ func TestIdempotency_ScreenshotsUpload_SecondPassNoPOST_SameChecksum(t *testing.
 	assertNoMutatingCalls(t, srv)
 }
 
-// ---------------------------------------------------------------------------
-// IAP create — productId already exists: short-circuit, no POST.
-// IAP update — fields already match: diff empty, no PATCH.
-// IAP localizations set — locale+name+description match: noop.
-// IAP review-screenshot upload — checksum already attached: noop.
-// ---------------------------------------------------------------------------
-
 func TestIdempotency_IAPCreate_SecondPassNoPOST(t *testing.T) {
 	srv := startCountingFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
@@ -366,8 +292,6 @@ func TestIdempotency_IAPCreate_SecondPassNoPOST(t *testing.T) {
 	c := fixtureASCClientFor(t, srv)
 	ctx := context.Background()
 
-	// findIAPByProductID hits both routes; round 2 with the same productId
-	// must hit only those reads.
 	srv.reset()
 	id, attrs, err := findIAPByProductID(ctx, c, "com.example.alpha", "com.example.testapp.lifetime")
 	if err != nil {
@@ -383,8 +307,6 @@ func TestIdempotency_IAPCreate_SecondPassNoPOST(t *testing.T) {
 }
 
 func TestIdempotency_IAPUpdate_SecondPassNoPATCH_AllFieldsMatch(t *testing.T) {
-	// IAP update inlines the diff in runIAPUpdate. We replicate the inline
-	// diff and assert: matching values produce no mutation.
 	srv := startCountingFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
 		"GET /v1/apps/1234567890/inAppPurchasesV2": {File: "iap_get"},
@@ -397,8 +319,7 @@ func TestIdempotency_IAPUpdate_SecondPassNoPATCH_AllFieldsMatch(t *testing.T) {
 		t.Fatalf("findIAPByProductID: %v", err)
 	}
 
-	// Mirror runIAPUpdate's inline diff: when each user-provided value equals
-	// current, the changed flag stays false.
+	// Mirrors runIAPUpdate's inline diff: matching values keep changed=false.
 	srv.reset()
 	desiredName := current.Name
 	desiredReviewNote := current.ReviewNote
@@ -437,7 +358,6 @@ func TestIdempotency_IAPLocalizationsSet_SecondPassNoPATCH(t *testing.T) {
 		t.Fatal("findLocalization: nil; fixture wrong?")
 	}
 
-	// Round 2: re-do the lookup with the same name/description; diff is empty.
 	srv.reset()
 	loc2, err := findLocalization(ctx, c, iapID, "en-US")
 	if err != nil {
@@ -446,7 +366,7 @@ func TestIdempotency_IAPLocalizationsSet_SecondPassNoPATCH(t *testing.T) {
 	if loc2 == nil || loc2.ID != loc.ID {
 		t.Fatalf("round2 lookup drifted: got %+v, want %s", loc2, loc.ID)
 	}
-	// Mirror runIAPLocalizationsSet's inline diff:
+	// Mirrors runIAPLocalizationsSet's inline diff.
 	desiredName := loc2.Attributes.Name
 	desiredDesc := loc2.Attributes.Description
 	changed := (desiredName != "" && desiredName != loc2.Attributes.Name) ||
@@ -457,12 +377,6 @@ func TestIdempotency_IAPLocalizationsSet_SecondPassNoPATCH(t *testing.T) {
 	assertNoMutatingCalls(t, srv)
 }
 
-// ---------------------------------------------------------------------------
-// IAP review-screenshot upload — when the local file's MD5 matches the
-// IAP's currently attached sourceFileChecksum, no upload (reserve POST,
-// chunk PUTs, commit PATCH) fires.
-// ---------------------------------------------------------------------------
-
 func TestIdempotency_IAPReviewScreenshotUpload_SecondPassNoOps_SameChecksum(t *testing.T) {
 	srv := startCountingFixtureServer(t, map[string]fixtureRoute{
 		"GET /v2/inAppPurchases/6500000001/appStoreReviewScreenshot": {File: "iap_review_screenshot"},
@@ -470,8 +384,6 @@ func TestIdempotency_IAPReviewScreenshotUpload_SecondPassNoOps_SameChecksum(t *t
 	c := fixtureASCClientFor(t, srv)
 	ctx := context.Background()
 
-	// Round 1: read the current screenshot. Round 2: same call, then verify
-	// the helper would skip the upload.
 	checksum, urlTpl, ok := currentIAPScreenshot(ctx, c, "6500000001")
 	if !ok {
 		t.Fatal("currentIAPScreenshot: !ok; fixture mismatch")
@@ -491,14 +403,9 @@ func TestIdempotency_IAPReviewScreenshotUpload_SecondPassNoOps_SameChecksum(t *t
 	if checksum2 != checksum {
 		t.Errorf("checksum drift: %q -> %q", checksum, checksum2)
 	}
-	// runIAPReviewScreenshotUpload short-circuits when localMD5 == checksum2;
-	// we model that condition holding by passing the same value through.
+	// runIAPReviewScreenshotUpload short-circuits when localMD5 == checksum2.
 	assertNoMutatingCalls(t, srv)
 }
-
-// ---------------------------------------------------------------------------
-// age-rating set — already-matching declaration: diff empty, no PATCH.
-// ---------------------------------------------------------------------------
 
 func TestIdempotency_AgeRatingSet_SecondPassNoPATCH(t *testing.T) {
 	srv := startCountingFixtureServer(t, map[string]fixtureRoute{
@@ -527,7 +434,6 @@ func TestIdempotency_AgeRatingSet_SecondPassNoPATCH(t *testing.T) {
 		t.Fatalf("fetchAgeRatingDeclaration: %v", err)
 	}
 
-	// Round 2: diff against the same set of supplied keys; expect no changes.
 	srv.reset()
 	supplied := map[string]struct{}{}
 	diff := diffAgeRating(current, current, supplied)
@@ -536,10 +442,6 @@ func TestIdempotency_AgeRatingSet_SecondPassNoPATCH(t *testing.T) {
 	}
 	assertNoMutatingCalls(t, srv)
 }
-
-// ---------------------------------------------------------------------------
-// export-compliance set — current matches desired: no PATCH on round 2.
-// ---------------------------------------------------------------------------
 
 func TestIdempotency_ExportComplianceSet_SecondPassNoPATCH(t *testing.T) {
 	srv := startCountingFixtureServer(t, map[string]fixtureRoute{
@@ -566,7 +468,6 @@ func TestIdempotency_ExportComplianceSet_SecondPassNoPATCH(t *testing.T) {
 		t.Skip("fixture has no attached build; skipping idempotency check")
 	}
 
-	// Round 2: when desired equals current, the runner does not PATCH.
 	srv.reset()
 	if current != nil {
 		desired := current
@@ -577,14 +478,8 @@ func TestIdempotency_ExportComplianceSet_SecondPassNoPATCH(t *testing.T) {
 	assertNoMutatingCalls(t, srv)
 }
 
-// ---------------------------------------------------------------------------
-// reviewer-demo set — special: password is one-shot. A re-run with NO
-// password flag (desired.DemoAccountPassword == nil) MUST NOT trigger
-// changed=true. We assert this contract explicitly because diffReviewerDetail
-// has a documented "always write through" branch when password IS provided —
-// so the absence-of-flag case is the idempotency guarantee.
-// ---------------------------------------------------------------------------
-
+// Password is one-shot: with no password flag, an otherwise-matching detail
+// must not set changed=true. The supplied-password case always writes through.
 func TestIdempotency_ReviewerDemoSet_SecondPassNoPATCH_NoPasswordFlag(t *testing.T) {
 	current := AppStoreReviewDetailAttributes{
 		ContactFirstName:    strPtr("Ada"),
@@ -595,7 +490,6 @@ func TestIdempotency_ReviewerDemoSet_SecondPassNoPATCH_NoPasswordFlag(t *testing
 		DemoAccountPassword: nil, // server never returns it
 		Notes:               strPtr("Tap login then play through tutorial."),
 	}
-	// Desired without password supplied — every other field matches current.
 	desired := AppStoreReviewDetailAttributes{
 		ContactFirstName:    current.ContactFirstName,
 		ContactLastName:     current.ContactLastName,
@@ -611,16 +505,11 @@ func TestIdempotency_ReviewerDemoSet_SecondPassNoPATCH_NoPasswordFlag(t *testing
 	}
 }
 
-// TestIdempotency_ReviewerDemoSet_PasswordSuppliedAlwaysChanged locks the
-// other half of the contract: when password IS supplied, we MUST issue a
-// PATCH (we cannot verify the server-side state). This is intentional —
-// the PRD calls this out under reviewer_demo.
+// Password supplied must always PATCH: server-side password can't be verified.
 func TestIdempotency_ReviewerDemoSet_PasswordSuppliedAlwaysChanged(t *testing.T) {
 	current := AppStoreReviewDetailAttributes{
 		ContactFirstName: strPtr("Ada"),
 	}
-	// User supplies a password. Even if the rest of the fields match, we
-	// MUST PATCH — the server might have a stale password.
 	desired := AppStoreReviewDetailAttributes{
 		ContactFirstName:    current.ContactFirstName,
 		DemoAccountPassword: strPtr("hunter2"),
@@ -633,10 +522,6 @@ func TestIdempotency_ReviewerDemoSet_PasswordSuppliedAlwaysChanged(t *testing.T)
 		t.Errorf("out.DemoAccountPassword = %v, want pointer to hunter2", out.DemoAccountPassword)
 	}
 }
-
-// ---------------------------------------------------------------------------
-// categories set — relationships already match: no PATCH on round 2.
-// ---------------------------------------------------------------------------
 
 func TestIdempotency_CategoriesSet_SecondPassNoPATCH(t *testing.T) {
 	srv := startCountingFixtureServer(t, map[string]fixtureRoute{
@@ -657,19 +542,11 @@ func TestIdempotency_CategoriesSet_SecondPassNoPATCH(t *testing.T) {
 		t.Fatalf("fetchAllCategoryRelationships: %v", err)
 	}
 	srv.reset()
-	// Round 2 — diffing current against itself yields zero changes.
 	if got := categoriesDiff(current, current); len(got) != 0 {
 		t.Errorf("categoriesDiff(self,self) = %d, want 0; got %v", len(got), got)
 	}
 	assertNoMutatingCalls(t, srv)
 }
-
-// ---------------------------------------------------------------------------
-// pricing set — current schedule equals desired: skip the create.
-// pricing's "set" path uses fetchCurrentBaseSchedule + tier comparison; when
-// the current base price-point equals desired and the territory matches,
-// runPricingSet returns noop without POSTing.
-// ---------------------------------------------------------------------------
 
 func TestIdempotency_PricingSet_SecondPassNoPOST_MatchingSchedule(t *testing.T) {
 	srv := startCountingFixtureServer(t, map[string]fixtureRoute{
@@ -695,13 +572,6 @@ func TestIdempotency_PricingSet_SecondPassNoPOST_MatchingSchedule(t *testing.T) 
 	assertNoMutatingCalls(t, srv)
 }
 
-// ---------------------------------------------------------------------------
-// testflight groups create — name already exists for app: no POST.
-// testflight testers add — already a member: no POST (covered by the
-//   group-scoped tester listing showing the email).
-// testflight testers remove — not a member: no DELETE.
-// ---------------------------------------------------------------------------
-
 func TestIdempotency_TestflightGroupsCreate_SecondPassNoPOST(t *testing.T) {
 	srv := startCountingFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps":                       {File: "apps_get_byBundleId"},
@@ -715,7 +585,6 @@ func TestIdempotency_TestflightGroupsCreate_SecondPassNoPOST(t *testing.T) {
 		t.Fatalf("resolveAppID: %v", err)
 	}
 
-	// Round 1 + 2 hit findBetaGroupByName; existing group → noop, no POST.
 	for round := 1; round <= 2; round++ {
 		got, err := findBetaGroupByName(ctx, c, appID, "Internal Team")
 		if err != nil {
@@ -730,11 +599,6 @@ func TestIdempotency_TestflightGroupsCreate_SecondPassNoPOST(t *testing.T) {
 	}
 	assertNoMutatingCalls(t, srv)
 }
-
-// ---------------------------------------------------------------------------
-// custom-product-pages — name already exists: no POST. Updating with same
-// values: no PATCH.
-// ---------------------------------------------------------------------------
 
 func TestIdempotency_CustomProductPagesCreate_SecondPassNoPOST(t *testing.T) {
 	srv := startCountingFixtureServer(t, map[string]fixtureRoute{
@@ -764,9 +628,6 @@ func TestIdempotency_CustomProductPagesCreate_SecondPassNoPOST(t *testing.T) {
 	assertNoMutatingCalls(t, srv)
 }
 
-// TestIdempotency_CustomProductPagesUpdate_SecondPassNoPATCH covers the
-// computeCustomProductPagePatchAttrs branch: matching name + matching
-// visible flag yields an empty patch map, no PATCH.
 func TestIdempotency_CustomProductPagesUpdate_SecondPassNoPATCH(t *testing.T) {
 	visible := true
 	cur := asc.AppCustomProductPageAttributes{
@@ -777,8 +638,7 @@ func TestIdempotency_CustomProductPagesUpdate_SecondPassNoPATCH(t *testing.T) {
 	cmd.Flags().String("name", "", "")
 	cmd.Flags().Bool("visible", false, "")
 
-	// Simulate user passing flags equal to current. Note: cmd.Flags().Changed
-	// only flips when Set was called explicitly.
+	// cmd.Flags().Changed only flips when Set is called explicitly.
 	if err := cmd.Flags().Set("name", "Holiday 2025"); err != nil {
 		t.Fatalf("set name flag: %v", err)
 	}
@@ -794,19 +654,12 @@ func TestIdempotency_CustomProductPagesUpdate_SecondPassNoPATCH(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// versions list-page — sanity check that the helper structures used by the
-// idempotency tests above don't drift in shape. Also documents the
-// counting server behaviour: GETs count, mutations count, no double-count.
-// ---------------------------------------------------------------------------
-
 func TestCountingFixtureServer_TracksMethodsSeparately(t *testing.T) {
 	srv := startCountingFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps":  {File: "apps_get_byBundleId"},
 		"POST /v1/apps": {File: "apps_get_byBundleId", Status: http.StatusCreated},
 	})
 
-	// Direct HTTP calls — don't need the asc client wrapper for this.
 	for _, m := range []string{http.MethodGet, http.MethodPost, http.MethodGet} {
 		req, err := http.NewRequestWithContext(context.Background(), m, srv.srv.URL+"/v1/apps", strings.NewReader("{}"))
 		if err != nil {
@@ -835,9 +688,6 @@ func TestCountingFixtureServer_TracksMethodsSeparately(t *testing.T) {
 	}
 }
 
-// TestCountingFixtureServer_FlagsUnregisteredRouteAs404 documents the
-// FIXTURE_NO_ROUTE response shape so the assertion-on-error tests in this
-// file can rely on it.
 func TestCountingFixtureServer_FlagsUnregisteredRouteAs404(t *testing.T) {
 	srv := startCountingFixtureServer(t, map[string]fixtureRoute{})
 	c := fixtureASCClientFor(t, srv)

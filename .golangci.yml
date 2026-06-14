@@ -9,22 +9,50 @@ linters:
   default: none
   enable:
     - bodyclose
+    - contextcheck
+    - copyloopvar
+    - durationcheck
     - errcheck
+    - errname
     - errorlint
+    - forcetypeassert
+    - gocognit
     - gocritic
     - gocyclo
     - gosec
     - govet
     - ineffassign
+    - intrange
+    - makezero
     - misspell
+    - nilerr
+    - noctx
+    - perfsprint
+    - prealloc
+    - predeclared
+    - reassign
     - revive
     - staticcheck
     - unconvert
     - unparam
     - unused
+    - usestdlibvars
+    - wastedassign
   settings:
     gocyclo:
       min-complexity: 15
+    gocognit:
+      min-complexity: 20
+    govet:
+      enable-all: true
+      disable:
+        # fieldalignment is a memory micro-optimization that fights readability
+        # and churns struct field order; not worth it for this codebase.
+        - fieldalignment
+        # shadow flags the idiomatic `if err := f(); err != nil` short-var form
+        # pervasively; suppressing it would mean inventing err2/err3 names that
+        # hurt readability. Off by deliberate choice, not oversight.
+        - shadow
     errorlint:
       errorf: true
       asserts: true

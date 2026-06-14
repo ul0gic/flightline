@@ -2,20 +2,13 @@ package lint
 
 import "sync"
 
-// rulesMu guards defaultRegistry. Rules typically self-register at init() so
-// the mutex usage is bounded; the lock matters mostly for tests that swap
-// rule sets under t.Parallel.
+// rulesMu guards defaultRegistry; the lock matters most for tests that swap rule sets under t.Parallel.
 var rulesMu sync.RWMutex
 
-// defaultRegistry is the package-level registry every rule file appends to
-// from its init(). lint.All() returns a stable copy.
+// defaultRegistry is the package-level registry every rule file appends to from its init().
 var defaultRegistry []Rule
 
-// Register adds a Rule to the package-level default registry. Each rule
-// file calls Register from its init(). Registration is idempotent on ID:
-// re-registering the same ID replaces the prior entry rather than
-// duplicating, so test code can override a rule without rewriting the
-// registry list. Production code should never re-register the same ID.
+// Register adds a Rule to the package-level default registry. Re-registering an ID replaces the prior entry (test override).
 func Register(rule Rule) {
 	if rule == nil {
 		return
@@ -32,8 +25,7 @@ func Register(rule Rule) {
 	defaultRegistry = append(defaultRegistry, rule)
 }
 
-// All returns a copy of the registry. The returned slice is safe to mutate
-// (sort, filter) without affecting future calls.
+// All returns a copy of the registry, safe to mutate without affecting future calls.
 func All() []Rule {
 	rulesMu.RLock()
 	defer rulesMu.RUnlock()
@@ -42,9 +34,7 @@ func All() []Rule {
 	return out
 }
 
-// Filter returns the subset of registered rules whose Mode bitmask intersects
-// with mode. Pass ModeOffline to get the rules `lint` runs; pass ModeLive to
-// get the rules `preflight` runs. Filter never mutates the registry.
+// Filter returns registered rules whose Mode bitmask intersects mode; never mutates the registry.
 func Filter(mode Mode) []Rule {
 	all := All()
 	out := make([]Rule, 0, len(all))

@@ -1,26 +1,27 @@
-.PHONY: build install test vet lint fmt gen verify clean help sync-schema
+.PHONY: build install test vet lint sec fmt gen verify clean help sync-schema
 
 GO ?= go
-BIN := ./bin/fline
+BIN := ./bin/flightline
 PKG := ./...
 
 help:
 	@echo "Flightline Makefile targets:"
 	@echo "  build    Build $(BIN)"
-	@echo "  install  go install ./cmd/fline"
+	@echo "  install  go install ."
 	@echo "  test     go test -race"
 	@echo "  vet      go vet"
 	@echo "  lint     golangci-lint run"
+	@echo "  sec      gosec security scan (standalone, all rules)"
 	@echo "  fmt      gofmt + goimports"
 	@echo "  gen      Reserved (codegen rejected — see .project/issues/closed/ISSUE-001)"
 	@echo "  verify   vet + test + lint (what the verify hook runs at gates)"
 	@echo "  clean    Remove build artifacts"
 
 build:
-	$(GO) build -o $(BIN) ./cmd/fline
+	$(GO) build -o $(BIN) .
 
 install:
-	$(GO) install ./cmd/fline
+	$(GO) install .
 
 test:
 	$(GO) test $(PKG) -count=1 -race
@@ -30,6 +31,9 @@ vet:
 
 lint:
 	golangci-lint run
+
+sec:
+	gosec -exclude-generated -severity low -confidence low ./...
 
 fmt:
 	gofmt -s -w .

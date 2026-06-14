@@ -12,9 +12,6 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// TestIAPWriteCommands_RegisteredOnRoot asserts the new write verbs land
-// under the iap subcommand tree at the expected paths. Locks the user-facing
-// surface against accidental rename.
 func TestIAPWriteCommands_RegisteredOnRoot(t *testing.T) {
 	var iap *cobra.Command
 	for _, c := range rootCmd.Commands() {
@@ -36,7 +33,6 @@ func TestIAPWriteCommands_RegisteredOnRoot(t *testing.T) {
 		}
 	}
 
-	// localizations should now have a `set` verb in addition to `list`.
 	loc := subs["localizations"]
 	if loc == nil {
 		t.Fatal("iap localizations subcommand missing")
@@ -51,7 +47,6 @@ func TestIAPWriteCommands_RegisteredOnRoot(t *testing.T) {
 		}
 	}
 
-	// review-screenshot has an upload verb.
 	shot := subs["review-screenshot"]
 	if shot == nil {
 		t.Fatal("iap review-screenshot subcommand missing")
@@ -65,9 +60,6 @@ func TestIAPWriteCommands_RegisteredOnRoot(t *testing.T) {
 	}
 }
 
-// TestIAPCreate_FlagsRequired checks the cobra surface marks --product-id,
-// --type, --name as required. Misconfigured flags would silently produce
-// useless API requests.
 func TestIAPCreate_FlagsRequired(t *testing.T) {
 	for _, name := range []string{"product-id", "type", "name"} {
 		f := iapCreateCmd.Flag(name)
@@ -75,7 +67,6 @@ func TestIAPCreate_FlagsRequired(t *testing.T) {
 			t.Fatalf("iap create: --%s flag missing", name)
 		}
 		if v, _ := iapCreateCmd.Flags().GetString(name); v != "" {
-			// Reset between tests.
 			_ = iapCreateCmd.Flags().Set(name, "")
 		}
 		req := f.Annotations[cobra.BashCompOneRequiredFlag]
@@ -85,9 +76,6 @@ func TestIAPCreate_FlagsRequired(t *testing.T) {
 	}
 }
 
-// TestIAPDelete_RefusesWithoutYes asserts the destructive guard fires when
-// --yes is missing. Idempotent or not, accidental delete is the user-pain
-// case we explicitly defend against.
 func TestIAPDelete_RefusesWithoutYes(t *testing.T) {
 	prevYes := iapDeleteYes
 	prevProduct := iapDeleteProduct
@@ -107,8 +95,6 @@ func TestIAPDelete_RefusesWithoutYes(t *testing.T) {
 	}
 }
 
-// TestIAPCreate_RejectsBadType asserts --type is gated against the documented
-// enum. Misspelled types will not silently propagate to Apple.
 func TestIAPCreate_RejectsBadType(t *testing.T) {
 	for _, raw := range []string{"", "consumable", "AUTO_RENEWABLE_SUBSCRIPTION", "garbage"} {
 		if isValidIAPType(raw) {
@@ -122,9 +108,7 @@ func TestIAPCreate_RejectsBadType(t *testing.T) {
 	}
 }
 
-// TestResolveTriBool covers the three observable states of a *bool flag:
-// unset (nil), explicit true, explicit false. Idempotency relies on this —
-// "leave alone" must round-trip through JSON as omitted, not false.
+// Idempotency relies on "leave alone" round-tripping as omitted, not false.
 func TestResolveTriBool(t *testing.T) {
 	cases := []struct {
 		raw      string
@@ -146,33 +130,36 @@ func TestResolveTriBool(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.raw, func(t *testing.T) {
 			got, err := resolveTriBool("flag", c.raw)
-			if c.wantErr {
-				if err == nil {
-					t.Fatal("want error, got nil")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("err = %v", err)
-			}
-			if c.wantNil {
-				if got != nil {
-					t.Errorf("got = %v, want nil", *got)
-				}
-				return
-			}
-			if got == nil {
-				t.Fatal("got = nil, want non-nil")
-			}
-			if *got != c.wantTrue {
-				t.Errorf("got = %v, want %v", *got, c.wantTrue)
-			}
+			assertTriBool(t, got, err, c.wantErr, c.wantNil, c.wantTrue)
 		})
 	}
 }
 
-// TestBoolPtrEq checks the *bool equality used in update-diff paths.
-// nil-vs-nil = equal, nil-vs-non-nil = not equal, value-equal = equal.
+func assertTriBool(t *testing.T, got *bool, err error, wantErr, wantNil, wantTrue bool) {
+	t.Helper()
+	if wantErr {
+		if err == nil {
+			t.Fatal("want error, got nil")
+		}
+		return
+	}
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if wantNil {
+		if got != nil {
+			t.Errorf("got = %v, want nil", *got)
+		}
+		return
+	}
+	if got == nil {
+		t.Fatal("got = nil, want non-nil")
+	}
+	if *got != wantTrue {
+		t.Errorf("got = %v, want %v", *got, wantTrue)
+	}
+}
+
 func TestBoolPtrEq(t *testing.T) {
 	tt := true
 	ff := false
@@ -194,9 +181,7 @@ func TestBoolPtrEq(t *testing.T) {
 	}
 }
 
-// TestIAPWriteResult_JSONShape locks the JSON contract for create/update/
-// delete output. Renames here are a breaking change for LLM consumers and
-// scripted callers parsing `noop` to drive their own retry logic.
+// Renames break LLM consumers and scripted callers parsing `noop`.
 func TestIAPWriteResult_JSONShape(t *testing.T) {
 	fs := true
 	r := IAPWriteResult{
@@ -233,9 +218,6 @@ func TestIAPWriteResult_JSONShape(t *testing.T) {
 	}
 }
 
-// TestIAPWriteResult_JSONShape_Noop locks the noop=true branch. When a
-// caller passes flags identical to the current state, we must surface the
-// existing record with noop=true so consumers can branch.
 func TestIAPWriteResult_JSONShape_Noop(t *testing.T) {
 	r := IAPWriteResult{
 		Action:    "update",
@@ -253,7 +235,6 @@ func TestIAPWriteResult_JSONShape_Noop(t *testing.T) {
 	}
 }
 
-// TestIAPLocalizationWriteResult_JSONShape locks the loc-set output contract.
 func TestIAPLocalizationWriteResult_JSONShape(t *testing.T) {
 	r := IAPLocalizationWriteResult{
 		Action: "create",
@@ -286,8 +267,6 @@ func TestIAPLocalizationWriteResult_JSONShape(t *testing.T) {
 	}
 }
 
-// TestIAPScreenshotUploadResult_JSONShape locks the shape returned from
-// `iap review-screenshot upload`.
 func TestIAPScreenshotUploadResult_JSONShape(t *testing.T) {
 	r := IAPScreenshotUploadResult{
 		Action:      "upload",
@@ -320,8 +299,6 @@ func TestIAPScreenshotUploadResult_JSONShape(t *testing.T) {
 	}
 }
 
-// TestIAPWriteResult_TableRows asserts the vertical table layout has all
-// expected fields. Headers are FIELD/VALUE; one row per attribute.
 func TestIAPWriteResult_TableRows(t *testing.T) {
 	r := &IAPWriteResult{Action: "create", ID: "1", Type: "inAppPurchases", ProductID: "p1"}
 	headers, rows := r.TableRows()
@@ -331,20 +308,16 @@ func TestIAPWriteResult_TableRows(t *testing.T) {
 	if len(rows) < 8 {
 		t.Errorf("rows = %d, want >= 8", len(rows))
 	}
-	// First row should be ACTION.
 	if rows[0][0] != "ACTION" || rows[0][1] != "create" {
 		t.Errorf("rows[0] = %v, want [ACTION create]", rows[0])
 	}
 }
 
-// TestFileMD5Hex_StableHashOfKnownInput verifies our cmd-layer MD5 helper
-// produces the same digest the asc.Upload helper sees. Apple compares
-// sourceFileChecksum byte-for-byte; a divergence here would silently break
-// idempotency.
+// Apple compares sourceFileChecksum byte-for-byte; a digest divergence
+// here would silently break idempotency.
 func TestFileMD5Hex_StableHashOfKnownInput(t *testing.T) {
 	dir := t.TempDir()
 	path := dir + "/sample.bin"
-	// "hello\n" — md5 = b1946ac92492d2347c6235b4d2611184
 	if err := writeTestFile(path, "hello\n"); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -358,8 +331,6 @@ func TestFileMD5Hex_StableHashOfKnownInput(t *testing.T) {
 	}
 }
 
-// TestBaseFileName_TrailingPathElement confirms the helper returns just the
-// trailing component (used in the upload-result FileName field).
 func TestBaseFileName_TrailingPathElement(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"/tmp/lifetime_review.png", "lifetime_review.png"},
@@ -373,8 +344,6 @@ func TestBaseFileName_TrailingPathElement(t *testing.T) {
 	}
 }
 
-// TestLookupIAP_FixtureReplay_Found exercises the idempotency-precheck path
-// used by `iap create` (when the productId already exists, return noop).
 func TestLookupIAP_FixtureReplay_Found(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps/1234567890/inAppPurchasesV2": {File: "iap_get"},
@@ -392,8 +361,6 @@ func TestLookupIAP_FixtureReplay_Found(t *testing.T) {
 	}
 }
 
-// TestLookupIAP_FixtureReplay_NotFound checks the not-found error message
-// names the productId so users see what's missing.
 func TestLookupIAP_FixtureReplay_NotFound(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps/1234567890/inAppPurchasesV2": {File: "iap_get_notFound"},
@@ -408,8 +375,6 @@ func TestLookupIAP_FixtureReplay_NotFound(t *testing.T) {
 	}
 }
 
-// TestFindLocalization_FixtureReplay_Match exercises the localization-set
-// "exists already" branch via the iap_localizations_list golden.
 func TestFindLocalization_FixtureReplay_Match(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v2/inAppPurchases/6500000001/inAppPurchaseLocalizations": {File: "iap_localizations_list"},
@@ -427,8 +392,6 @@ func TestFindLocalization_FixtureReplay_Match(t *testing.T) {
 	}
 }
 
-// TestFindLocalization_FixtureReplay_NoMatch returns nil with no error when
-// the requested locale isn't in the list. Drives the create branch upstream.
 func TestFindLocalization_FixtureReplay_NoMatch(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v2/inAppPurchases/6500000001/inAppPurchaseLocalizations": {File: "iap_localizations_list"},
@@ -443,8 +406,6 @@ func TestFindLocalization_FixtureReplay_NoMatch(t *testing.T) {
 	}
 }
 
-// TestCurrentIAPScreenshot_FixtureReplay returns the templated URL + checksum
-// when a screenshot is attached. Drives the upload idempotency check.
 func TestCurrentIAPScreenshot_FixtureReplay(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v2/inAppPurchases/6500000001/appStoreReviewScreenshot": {File: "iap_review_screenshot"},
@@ -462,7 +423,6 @@ func TestCurrentIAPScreenshot_FixtureReplay(t *testing.T) {
 	}
 }
 
-// writeTestFile writes content to path with mode 0600. Test helper.
 func writeTestFile(path, content string) error {
 	return os.WriteFile(path, []byte(content), 0o600)
 }

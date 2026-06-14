@@ -6,9 +6,7 @@ import (
 	"testing"
 )
 
-// readTestdata loads a golden TSV from internal/asc/testdata/golden/<class>/<name>.
-// Tests live in the same package, so the path is the working-dir-relative
-// fixture root rather than the cmd-package detour.
+// readTestdata loads a golden TSV from testdata/golden/<rel>.
 func readTestdata(t *testing.T, rel string) []byte {
 	t.Helper()
 	path := filepath.Join("testdata", "golden", rel)
@@ -50,7 +48,6 @@ func TestDecodeSalesTSV_DailyBasic(t *testing.T) {
 		t.Errorf("rows[0].AppleIdentifier = %q", r0.AppleIdentifier)
 	}
 
-	// Subscription row pulls the Subscription + Period columns.
 	r3 := rows[3]
 	if r3.ProductTypeIdentifier != "IAY" {
 		t.Errorf("rows[3].ProductTypeIdentifier = %q, want IAY", r3.ProductTypeIdentifier)
@@ -96,9 +93,7 @@ func TestDecodeSalesTSV_EmptyBytes(t *testing.T) {
 
 func TestDecodeSalesTSV_SubscriptionSummary(t *testing.T) {
 	t.Parallel()
-	// Apple's subscription summary file has 35 columns (vs the 28 in the
-	// SALES file). The decoder must drop the unknown columns rather than
-	// erroring — forward-compat invariant.
+	// Subscription summary has more columns than SALES; decoder must drop unknowns, not error.
 	b := readTestdata(t, "sales/subscription_summary.tsv")
 	rows, err := DecodeSalesTSV(b)
 	if err != nil {
@@ -116,8 +111,6 @@ func TestDecodeSalesTSV_SubscriptionSummary(t *testing.T) {
 	if rows[0].DeveloperProceeds != 419.40 {
 		t.Errorf("rows[0].DeveloperProceeds = %v, want 419.40", rows[0].DeveloperProceeds)
 	}
-	// Subscription column is non-empty (the period name) — confirms the
-	// IAY-row mapping holds even when the file has extra trailing columns.
 	if rows[0].Subscription != "1 Month" {
 		t.Errorf("rows[0].Subscription = %q, want 1 Month", rows[0].Subscription)
 	}

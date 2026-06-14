@@ -13,9 +13,6 @@ import (
 	"github.com/ul0gic/flightline/internal/lint"
 )
 
-// TestPreflightOutput_TopLevelKeysStable runs preflight against a
-// synthetic ASC where multiple rules can co-fire and asserts the
-// top-level JSON envelope has exactly the locked key set.
 func TestPreflightOutput_TopLevelKeysStable(t *testing.T) {
 	srv := multiRuleFireServer(t)
 	c := fixtureASCClient(t, srv)
@@ -30,10 +27,8 @@ func TestPreflightOutput_TopLevelKeysStable(t *testing.T) {
 		t.Fatalf("decode: %v", err)
 	}
 	got := keysOf(probe)
-	// Preflight uses the same LintResult envelope; sourcePath only
-	// surfaces when --state-file was given (omitempty), so the test
-	// path here may or may not include it. Assert the required keys
-	// are all present and no unexpected keys leaked in.
+	// sourcePath is omitempty (only set with --state-file), so it may be absent
+	// here; assert the required keys are present and no unexpected key leaked in.
 	required := []string{"bundleId", "diagnostics", "mode", "summary", "version"}
 	for _, k := range required {
 		if _, ok := probe[k]; !ok {
@@ -55,14 +50,13 @@ func TestPreflightOutput_TopLevelKeysStable(t *testing.T) {
 	}
 }
 
-// TestPreflightOutput_DiagnosticKeysStable: every diagnostic emitted by
-// a co-firing fixture must have only the locked per-diagnostic keys.
+// Every diagnostic must carry only the locked per-diagnostic keys.
 func TestPreflightOutput_DiagnosticKeysStable(t *testing.T) {
 	srv := multiRuleFireServer(t)
 	c := fixtureASCClient(t, srv)
 	res := preflightFor(t, c, "com.example.stable", "1.0.1")
 	if len(res.Diagnostics) == 0 {
-		t.Fatal("multi-rule fixture produced 0 diagnostics — fixture is broken")
+		t.Fatal("multi-rule fixture produced 0 diagnostics: fixture is broken")
 	}
 	b, err := json.Marshal(res.Diagnostics)
 	if err != nil {
@@ -72,50 +66,11 @@ func TestPreflightOutput_DiagnosticKeysStable(t *testing.T) {
 	if err := json.Unmarshal(b, &diags); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	union := map[string]struct{}{}
-	for _, d := range diags {
-		for k := range d {
-			union[k] = struct{}{}
-		}
-	}
-	got := make([]string, 0, len(union))
-	for k := range union {
-		got = append(got, k)
-	}
-	sort.Strings(got)
-	for _, k := range got {
-		known := false
-		for _, allowed := range stableDiagnosticKeys {
-			if k == allowed {
-				known = true
-				break
-			}
-		}
-		if !known {
-			t.Errorf("unexpected diagnostic key %q in preflight output (want subset of %v)",
-				k, stableDiagnosticKeys)
-		}
-	}
-	// At least these three must appear when any diagnostic fires.
-	for _, want := range []string{"ruleId", "severity", "message"} {
-		seen := false
-		for _, k := range got {
-			if k == want {
-				seen = true
-				break
-			}
-		}
-		if !seen {
-			t.Errorf("required key %q never appeared on preflight diagnostics: %v",
-				want, got)
-		}
-	}
+	assertDiagnosticKeysStable(t, diags, "preflight output")
 }
 
-// TestPreflightOutput_DiagnosticsAreOrderedStably runs preflight twice
-// against the same fixture and asserts the diagnostic stream is byte-
-// identical. Stable ordering across runs is a wire-contract requirement
-// — consumers that diff outputs between CI runs depend on it.
+// Diagnostic ordering must be stable across runs: consumers diff outputs
+// between CI runs, so the stream is a wire contract.
 func TestPreflightOutput_DiagnosticsAreOrderedStably(t *testing.T) {
 	srv := multiRuleFireServer(t)
 	c := fixtureASCClient(t, srv)
@@ -127,8 +82,7 @@ func TestPreflightOutput_DiagnosticsAreOrderedStably(t *testing.T) {
 	}
 }
 
-// TestPreflightOutput_SeverityIsLowercaseString asserts every diagnostic
-// in a co-firing scenario serializes severity as a lowercase token.
+// Severity must serialize as a lowercase token.
 func TestPreflightOutput_SeverityIsLowercaseString(t *testing.T) {
 	srv := multiRuleFireServer(t)
 	c := fixtureASCClient(t, srv)
@@ -160,11 +114,8 @@ func TestPreflightOutput_SeverityIsLowercaseString(t *testing.T) {
 	}
 }
 
-// TestPreflightOutput_AllRuleIDsAppearOnce asserts that when a rule
-// fires once per resource, each diagnostic carries a non-empty,
-// stable-form ruleId. We don't pin to an exact set (live state varies)
-// but we DO assert no ruleId is "" and that the only ruleId values we
-// see are either "schema" or one of the registered rule IDs.
+// Not pinned to an exact set (live state varies): every ruleId must be
+// non-empty and either "schema" or a registered rule ID.
 func TestPreflightOutput_RuleIDsBelongToRegistry(t *testing.T) {
 	srv := multiRuleFireServer(t)
 	c := fixtureASCClient(t, srv)
@@ -184,8 +135,6 @@ func TestPreflightOutput_RuleIDsBelongToRegistry(t *testing.T) {
 	}
 }
 
-// TestPreflightOutput_ModeIsPreflight verifies the envelope's `mode`
-// field discriminates between lint and preflight runs.
 func TestPreflightOutput_ModeIsPreflight(t *testing.T) {
 	srv := multiRuleFireServer(t)
 	c := fixtureASCClient(t, srv)
@@ -195,13 +144,8 @@ func TestPreflightOutput_ModeIsPreflight(t *testing.T) {
 	}
 }
 
-// multiRuleFireServer is a fixture that intentionally trips multiple
-// live rules at once: build is PROCESSING (build.attached-and-valid),
-// IAP is READY_TO_SUBMIT but submission has no items
-// (iap.attached-to-review-submission), age-rating live answers are
-// blank (version.age-rating-answered), screenshots fixture is missing
-// the 6.7" device set (screenshots.required-devices), and IAP review
-// screenshot is unset (iap.review-screenshot-exists).
+// Fixture engineered to trip multiple live rules at once; each branch below
+// is shaped to fail a specific rule (see the inline notes).
 func multiRuleFireServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -219,10 +163,10 @@ func multiRuleFireServer(t *testing.T) *httptest.Server {
 		case path == "/v1/reviewSubmissions":
 			_, _ = w.Write([]byte(`{"data":[{"id":"sub-1","type":"reviewSubmissions","attributes":{"state":"READY_FOR_REVIEW"}}]}`))
 		case strings.HasSuffix(path, "/items"):
-			// Item references something else — IAP not attached.
+			// Item references something else: IAP not attached.
 			_, _ = w.Write([]byte(`{"data":[{"id":"item-1","type":"reviewSubmissionItems","attributes":{"state":"READY_FOR_REVIEW"},"relationships":{"appStoreVersion":{"data":{"type":"appStoreVersions","id":"v-1"}}}}]}`))
 		case strings.HasSuffix(path, "/appStoreReviewScreenshot"):
-			// No screenshot — fileName + templateUrl both empty.
+			// No screenshot: fileName + templateUrl both empty.
 			_, _ = w.Write([]byte(`{"data":{"id":"rs-1","type":"reviewScreenshots","attributes":{}}}`))
 		case strings.HasSuffix(path, "/appInfos"):
 			_, _ = w.Write([]byte(`{"data":[{"id":"info-1","type":"appInfos","attributes":{"state":"PREPARE_FOR_SUBMISSION"}}]}`))
@@ -232,7 +176,7 @@ func multiRuleFireServer(t *testing.T) *httptest.Server {
 		case strings.HasSuffix(path, "/appStoreVersionLocalizations"):
 			_, _ = w.Write([]byte(`{"data":[{"id":"loc-1","type":"appStoreVersionLocalizations","attributes":{"locale":"en-US"}}]}`))
 		case strings.HasSuffix(path, "/appScreenshotSets"):
-			// Only 6.9 — 6.7 is missing.
+			// Only 6.9: 6.7 is missing.
 			_, _ = w.Write([]byte(`{"data":[{"id":"set-69","type":"appScreenshotSets","attributes":{"screenshotDisplayType":"APP_IPHONE_69"}}]}`))
 		case strings.HasSuffix(path, "/appScreenshots"):
 			_, _ = w.Write([]byte(`{"data":[]}`))
@@ -244,10 +188,8 @@ func multiRuleFireServer(t *testing.T) *httptest.Server {
 	return srv
 }
 
-// TestPreflightOutput_MultiRuleFire confirms the fixture above actually
-// trips at least three independent rules. Without this guard, future
-// regressions in the fixture (e.g. an endpoint flips to "data": null)
-// could silently neuter the stability tests above.
+// Guards the fixture: a regression that stops it tripping multiple rules
+// would silently neuter the stability tests above.
 func TestPreflightOutput_MultiRuleFire(t *testing.T) {
 	srv := multiRuleFireServer(t)
 	c := fixtureASCClient(t, srv)

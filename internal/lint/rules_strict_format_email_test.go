@@ -55,7 +55,7 @@ func TestStrictFormatEmail_NoOpOnValidEmails(t *testing.T) {
 }
 
 func TestStrictFormatEmail_SkipsEmptyEmail(t *testing.T) {
-	// Empty is the strict.required-nonzero rule's domain — don't double-report.
+	// Empty is the strict.required-nonzero rule's domain: don't double-report.
 	s := &config.State{Spec: config.StateSpec{
 		TestFlight: &config.TestFlightSpec{Groups: map[string]config.TestFlightGroup{
 			"internal": {Testers: []config.TestFlightTester{{Email: ""}}},

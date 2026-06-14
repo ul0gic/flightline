@@ -1,16 +1,3 @@
-// dispatchers.go — per-surface apply dispatchers.
-//
-// Each surface has one entry in apply.go's dispatch() switch and one
-// applyXField function here. The shared pattern:
-//
-//  1. Resolve appID / versionID / appInfoID from ApplyContext.
-//  2. GET the live resource by ID.
-//  3. PATCH (or POST/DELETE) the field, taking ch.To as the new value.
-//
-// Idempotency contract: every dispatcher PATCHes only the changed
-// field, never the full attribute set, so re-applying the same change
-// produces no wire diff.
-
 package state
 
 import (
@@ -27,11 +14,7 @@ import (
 	"github.com/ul0gic/flightline/internal/plan"
 )
 
-// --- /spec/build/number — attach a build to the version ---------------------
-
-// applyBuildAttach finds the build by version+number and PATCHes the
-// version's build relationship. Per-app build numbers are unique within
-// a marketing version, so version+number is the canonical lookup key.
+// applyBuildAttach looks up the build by version+number and PATCHes the version's build relationship.
 func applyBuildAttach(ctx context.Context, c *asc.Client, actx ApplyContext, ch plan.Change) error {
 	platform := actx.Platform
 	if platform == "" {
@@ -74,10 +57,7 @@ func applyBuildAttach(ctx context.Context, c *asc.Client, actx ApplyContext, ch 
 	return nil
 }
 
-// patchRelationship issues a PATCH to a JSON:API relationship endpoint.
-// Apple returns 204 No Content on success — no envelope to decode.
-// We use json.RawMessage as the type so asc.Patch's generic decoder
-// is happy with an empty body.
+// patchRelationship PATCHes a JSON:API relationship; json.RawMessage accepts Apple's empty 204 body.
 func patchRelationship(ctx context.Context, c *asc.Client, path string, body any) error {
 	if _, err := asc.Patch[json.RawMessage](ctx, c, path, nil, body); err != nil {
 		return err
@@ -85,18 +65,8 @@ func patchRelationship(ctx context.Context, c *asc.Client, path string, body any
 	return nil
 }
 
-// --- /spec/exportCompliance/declaration/* — full ECCN block ----------------
-
-// applyEncryptionDeclaration POSTs an appEncryptionDeclaration with the
-// per-build flag set. The schema declaration block is the rare full
-// classification path — the simple usesNonExemptEncryption flag is
-// handled by applyEncryptionFlag.
+// applyEncryptionDeclaration POSTs an appEncryptionDeclaration for the full ECCN path.
 func applyEncryptionDeclaration(ctx context.Context, c *asc.Client, actx ApplyContext, ch plan.Change) error {
-	// Apple's POST /v1/appEncryptionDeclarations creates a sticky
-	// declaration record. Fields map 1:1 with the schema's declaration
-	// sub-tree. We accumulate the entire sub-tree change set in one
-	// request: the diff engine emits one Change per leaf, so the
-	// dispatcher coalesces by path prefix.
 	wireKey := strings.TrimPrefix(ch.Path, "/spec/exportCompliance/declaration/")
 	if wireKey == "" || strings.Contains(wireKey, "/") {
 		return fmt.Errorf("apply exportCompliance.declaration: unexpected path %s", ch.Path)
@@ -126,10 +96,7 @@ func applyEncryptionDeclaration(ctx context.Context, c *asc.Client, actx ApplyCo
 	return nil
 }
 
-// --- /spec/categories/* — primary/secondary + subcategories ----------------
-
-// applyCategoriesField PATCHes one category relationship on the
-// editable appInfo. Subcategories are a slice; we replace wholesale.
+// applyCategoriesField PATCHes one category relationship on the editable appInfo.
 func applyCategoriesField(ctx context.Context, c *asc.Client, actx ApplyContext, ch plan.Change) error {
 	appID, err := resolveAppID(ctx, c, actx.BundleID)
 	if err != nil {
@@ -177,9 +144,7 @@ func patchAppInfoSubcategories(ctx context.Context, c *asc.Client, appInfoID, re
 	if err != nil {
 		return fmt.Errorf("apply categories: %w", err)
 	}
-	// Apple stores subcategories as two scalar relationships
-	// (subcategoryOne, subcategoryTwo); set both.
-	first := ""
+	first := "" // Apple stores subcategories as two scalar relationships; set both
 	second := ""
 	if len(subs) > 0 {
 		first = subs[0]
@@ -203,21 +168,14 @@ func patchAppInfoSubcategories(ctx context.Context, c *asc.Client, appInfoID, re
 	return nil
 }
 
-// --- /spec/pricing/* — base territory + price point ------------------------
-
-// applyPricingField creates an appPriceSchedule with the desired
-// (territory, pricePoint) pair. The Apple API requires both
-// fields together (the schedule is a single resource with relationships
-// for territory + price-point), so we coalesce: when only one of the
-// two paths arrives, we re-fetch the missing field from live state.
+// applyPricingField creates an appPriceSchedule. Apple requires territory+pricePoint together,
+// so a single-leaf change re-fetches the missing field from live state.
 func applyPricingField(ctx context.Context, c *asc.Client, actx ApplyContext, ch plan.Change) error {
 	appID, err := resolveAppID(ctx, c, actx.BundleID)
 	if err != nil {
 		return err
 	}
-	// Resolve current values so a single-leaf change doesn't blank
-	// the missing relationship.
-	curTerr, curPP := fetchPricingPair(ctx, c, appID)
+	curTerr, curPP := fetchPricingPair(ctx, c, appID) // re-fetch so a single-leaf change doesn't blank the other
 	leaf := strings.TrimPrefix(ch.Path, "/spec/pricing/")
 	switch leaf {
 	case "baseTerritory":
@@ -274,19 +232,13 @@ func applyPricingField(ctx context.Context, c *asc.Client, actx ApplyContext, ch
 	return nil
 }
 
-// --- /spec/reviewerDemo/* — review login + contact info --------------------
-
-// applyReviewerDemoField PATCHes one field on appStoreReviewDetail.
-// passwordRef / passwordFile resolve to a runtime password value
-// before the PATCH; the resolved password is what hits the wire.
+// applyReviewerDemoField PATCHes one field on appStoreReviewDetail;
+// passwordRef/passwordFile are resolved to a runtime value before any HTTP work.
 func applyReviewerDemoField(ctx context.Context, c *asc.Client, actx ApplyContext, ch plan.Change) error {
 	platform := actx.Platform
 	if platform == "" {
 		platform = "IOS"
 	}
-	// Resolve the wire-key + value (incl. password lookup) BEFORE any
-	// HTTP work so an unset env var fails fast with an actionable
-	// error instead of bottoming out in resolveAppID.
 	leaf := strings.TrimPrefix(ch.Path, "/spec/reviewerDemo/")
 	wire, val, err := reviewerDemoWireForLeaf(leaf, ch.To, actx.StateDir)
 	if err != nil {
@@ -321,8 +273,6 @@ func applyReviewerDemoField(ctx context.Context, c *asc.Client, actx ApplyContex
 	return nil
 }
 
-// reviewerDemoAttrs mirrors the subset of Apple's
-// AppStoreReviewDetail.attributes Flightline sets. Wire-name parity.
 type reviewerDemoAttrs struct {
 	ContactFirstName string `json:"contactFirstName,omitempty"`
 	ContactLastName  string `json:"contactLastName,omitempty"`
@@ -347,10 +297,7 @@ func reviewerDemoWireForLeaf(leaf string, to any, stateDir string) (wireKey stri
 	case "notes":
 		return "notes", to, nil
 	case "contactName":
-		// Apple stores first + last separately; we map the schema's
-		// single contactName to contactFirstName and leave contactLastName
-		// untouched. Users wanting both should split the schema field
-		// (deferred to a v1.x extension).
+		// Apple splits first/last; schema's contactName maps to contactFirstName only.
 		return "contactFirstName", to, nil
 	case "contactEmail":
 		return "contactEmail", to, nil
@@ -391,8 +338,7 @@ func resolvePassword(leaf string, to any, stateDir string) (string, error) {
 	return "", fmt.Errorf("reviewerDemo: unknown password leaf %q", leaf)
 }
 
-// fetchOrCreateReviewDetail returns the appStoreReviewDetail ID for a
-// given version, creating one if Apple hasn't auto-provisioned it yet.
+// fetchOrCreateReviewDetail returns the appStoreReviewDetail ID, creating one if not yet provisioned.
 func fetchOrCreateReviewDetail(ctx context.Context, c *asc.Client, versionID string) (string, error) {
 	resp, err := asc.Get[asc.Single[reviewerDemoAttrs]](
 		ctx, c, "/v1/appStoreVersions/"+versionID+"/appStoreReviewDetail", nil,
@@ -400,7 +346,6 @@ func fetchOrCreateReviewDetail(ctx context.Context, c *asc.Client, versionID str
 	if err == nil && resp.Data.ID != "" {
 		return resp.Data.ID, nil
 	}
-	// Create one.
 	body := map[string]any{
 		"data": map[string]any{
 			"type": "appStoreReviewDetails",
@@ -420,13 +365,7 @@ func fetchOrCreateReviewDetail(ctx context.Context, c *asc.Client, versionID str
 	return cresp.Data.ID, nil
 }
 
-// --- /spec/metadata/locales/<locale>/<field> — per-locale store metadata ---
-
-// applyMetadataField routes one localization field to its owning
-// resource. /spec/metadata/locales/<locale>/{description,keywords,
-// whatsNew,promotionalText,marketingUrl,supportUrl} live on
-// appStoreVersionLocalization; {name,subtitle,privacyPolicyUrl} live
-// on appInfoLocalization.
+// applyMetadataField routes one localization field to the version or appInfo localization that owns it.
 func applyMetadataField(ctx context.Context, c *asc.Client, actx ApplyContext, ch plan.Change) error {
 	platform := actx.Platform
 	if platform == "" {
@@ -486,26 +425,18 @@ func isAppInfoLocalizationField(f string) bool {
 	return false
 }
 
+// schemaToWireMetadata maps schema field names to Apple's wire keys; currently identity.
 func schemaToWireMetadata(f string) string {
-	// All metadata field names round-trip 1:1 with Apple's wire keys
-	// today. Kept as an explicit hop so future schema renames have a
-	// single place to add a translation.
 	return f
 }
 
-func patchSingleField(ctx context.Context, c *asc.Client, _, _, path, wireField string, val any) error {
+func patchSingleField(ctx context.Context, c *asc.Client, resType, resID, path, wireField string, val any) error {
 	body := map[string]any{
 		"data": map[string]any{
-			"type":       "_unused_filled_below",
-			"id":         "_unused_filled_below",
+			"type":       resType,
+			"id":         resID,
 			"attributes": map[string]any{wireField: val},
 		},
-	}
-	// Refill type/id from path: "/v1/appStoreVersionLocalizations/<id>"
-	segs := strings.Split(strings.Trim(path, "/"), "/")
-	if len(segs) == 3 {
-		body["data"].(map[string]any)["type"] = segs[1]
-		body["data"].(map[string]any)["id"] = segs[2]
 	}
 	if _, err := asc.Patch[asc.Single[map[string]any]](ctx, c, path, nil, body); err != nil {
 		return fmt.Errorf("patch %s.%s: %w", path, wireField, err)
@@ -575,14 +506,7 @@ func getOrCreateAppInfoLocalization(ctx context.Context, c *asc.Client, appInfoI
 	return resp.Data.ID, nil
 }
 
-// --- /spec/iap/products/<id> — non-subscription IAPs -----------------------
-
-// applyIAPField routes by sub-path under /spec/iap/products/<productId>.
-//   - "" (the product itself)        → POST or PATCH /v2/inAppPurchases
-//   - "type", "name", "familySharable", "contentHosting",
-//     "reviewNote"                    → PATCH /v2/inAppPurchases/{id}
-//   - "/localizations/<locale>/*"     → PATCH or POST /v1/inAppPurchaseLocalizations
-//   - "/reviewScreenshot"             → 3-step upload via internal/asc/upload.go
+// applyIAPField routes by sub-path: bare product → create, field → PATCH, localizations → onward.
 func applyIAPField(ctx context.Context, c *asc.Client, actx ApplyContext, ch plan.Change) error {
 	rest := strings.TrimPrefix(ch.Path, "/spec/iap/products/")
 	if rest == "" {
@@ -601,8 +525,6 @@ func applyIAPField(ctx context.Context, c *asc.Client, actx ApplyContext, ch pla
 	}
 
 	if subPath == "" {
-		// Whole-product create. ch.To is a config.IAPProduct value (any).
-		// Marshal/decode to extract the type wire-string.
 		buf, _ := json.Marshal(ch.To)
 		var prod struct {
 			Type           string `json:"type"`
@@ -638,8 +560,6 @@ func applyIAPField(ctx context.Context, c *asc.Client, actx ApplyContext, ch pla
 		return nil
 	}
 
-	// PATCH on an existing IAP. First resolve its ID via productId
-	// filter on the app's IAPs.
 	iapID, err := resolveIAPByProductID(ctx, c, appID, productID)
 	if err != nil {
 		return err
@@ -672,14 +592,9 @@ func applyIAPField(ctx context.Context, c *asc.Client, actx ApplyContext, ch pla
 	}
 
 	if subPath == "reviewScreenshot" {
-		// Defer to internal/asc/upload.go's 3-step dance. Tracked
-		// in QA-009; for v1alpha1 we surface a typed error so users
-		// know to use `fline iap update --review-screenshot upload`
-		// directly until the orchestrator integrates the upload helper.
-		return fmt.Errorf("apply iap.%s.reviewScreenshot: upload via L1 verb (`fline iap update --review-screenshot upload`) — tracked under QA-010", productID)
+		return fmt.Errorf("apply iap.%s.reviewScreenshot: upload via L1 verb (`flightline iap update --review-screenshot upload`): tracked under QA-010", productID)
 	}
 
-	// Per-field PATCH on the IAP itself.
 	wire := iapSchemaToWire(subPath)
 	body := map[string]any{
 		"data": map[string]any{
@@ -694,8 +609,7 @@ func applyIAPField(ctx context.Context, c *asc.Client, actx ApplyContext, ch pla
 	return nil
 }
 
-// iapSchemaToWire maps the schema's IAP field name to Apple's wire key.
-// "type" is the only renamed field — Apple calls it inAppPurchaseType.
+// iapSchemaToWire maps schema field names to Apple's wire keys; only "type" → "inAppPurchaseType" differs.
 func iapSchemaToWire(field string) string {
 	if field == "type" {
 		return "inAppPurchaseType"
@@ -751,31 +665,12 @@ func getOrCreateIAPLocalization(ctx context.Context, c *asc.Client, iapID, local
 	return resp.Data.ID, nil
 }
 
-// --- /spec/screenshots/locales/<locale>/<device> — slot-level uploads ------
-
-// applyScreenshotSet rebuilds one device-class slot for one locale.
-// The schema models a slot as an ordered array; replacing the whole
-// slot is the only sensible idempotent operation (re-uploading by
-// individual file would require addressing files by ID, which Apple's
-// API doesn't do).
-//
-// v1alpha1 surface: defers to `fline screenshots upload` for the
-// actual multipart 3-step. The orchestrator-side wiring of
-// internal/asc/upload.go is tracked under QA-010 — reading the file
-// from disk, addressing the screenshotSet by (locale, device class)
-// + checksum diff is well-trodden code we want to integrate properly,
-// not duplicate.
+// applyScreenshotSet defers to the L1 `flightline screenshots upload` verb (QA-010).
 func applyScreenshotSet(_ context.Context, _ *asc.Client, _ ApplyContext, ch plan.Change) error {
-	return fmt.Errorf("apply screenshots %s: upload via L1 verb (`fline screenshots upload`) — orchestrator integration tracked under QA-010", ch.Path)
+	return fmt.Errorf("apply screenshots %s: upload via L1 verb (`flightline screenshots upload`): orchestrator integration tracked under QA-010", ch.Path)
 }
 
-// --- /spec/testflight/groups/<name> — beta groups + tester rosters --------
-
-// applyTestFlightField routes by sub-path:
-//   - ""                        → POST a new BetaGroup
-//   - "/<field>" attribute       → PATCH the group
-//   - "/testers/<email>" with OpCreate → POST tester to the group
-//   - "/testers/<email>" with OpDelete → DELETE tester from the group
+// applyTestFlightField creates a beta group, PATCHes a field, or adds/removes a tester by sub-path.
 func applyTestFlightField(ctx context.Context, c *asc.Client, actx ApplyContext, ch plan.Change) error {
 	rest := strings.TrimPrefix(ch.Path, "/spec/testflight/groups/")
 	parts := strings.SplitN(rest, "/", 2)
@@ -791,7 +686,6 @@ func applyTestFlightField(ctx context.Context, c *asc.Client, actx ApplyContext,
 	}
 
 	if subPath == "" {
-		// Create the group. ch.To is a config.TestFlightGroup value.
 		buf, _ := json.Marshal(ch.To)
 		var g struct {
 			IsInternal      *bool `json:"isInternal,omitempty"`
@@ -867,7 +761,6 @@ func resolveBetaGroupByName(ctx context.Context, c *asc.Client, appID, name stri
 }
 
 func createTester(ctx context.Context, c *asc.Client, groupID, email string) error {
-	// 1. Look up or create the betaTester.
 	q := url.Values{"filter[email]": {email}, "limit": {"1"}}
 	page, err := asc.Get[asc.Collection[asc.BetaTesterAttributes]](ctx, c, "/v1/betaTesters", q)
 	if err != nil {
@@ -894,7 +787,6 @@ func createTester(ctx context.Context, c *asc.Client, groupID, email string) err
 		}
 		return relationshipNoOpIfPresent(ctx, c, "/v1/betaGroups/"+groupID+"/relationships/betaTesters", resp.Data.ID)
 	}
-	// 2. POST relationship onto the group.
 	return relationshipNoOpIfPresent(ctx, c, "/v1/betaGroups/"+groupID+"/relationships/betaTesters", testerID)
 }
 
@@ -916,10 +808,7 @@ func removeTester(ctx context.Context, c *asc.Client, groupID, email string) err
 	return nil
 }
 
-// relationshipNoOpIfPresent POSTs a relationship link, swallowing the
-// 409-style "already exists" Apple returns when the link is already in
-// place. Per JSON:API, POST to a to-many relationship is an "add"
-// (idempotent on duplicate links).
+// relationshipNoOpIfPresent POSTs a to-many relationship link; JSON:API treats duplicate adds as idempotent.
 func relationshipNoOpIfPresent(ctx context.Context, c *asc.Client, path, testerID string) error {
 	body := map[string]any{
 		"data": []any{map[string]any{"type": "betaTesters", "id": testerID}},
@@ -930,12 +819,7 @@ func relationshipNoOpIfPresent(ctx context.Context, c *asc.Client, path, testerI
 	return nil
 }
 
-// --- /spec/customProductPages/<name> — alt screenshots/descriptions --------
-
-// applyCustomProductPageField creates a page or PATCHes one of its
-// attributes. Localizations + screenshots are full-tree changes
-// emitted by the diff engine and dispatched here as either creates or
-// updates.
+// applyCustomProductPageField creates a page or PATCHes one attribute; localizations defer to L1 (QA-010).
 func applyCustomProductPageField(ctx context.Context, c *asc.Client, actx ApplyContext, ch plan.Change) error {
 	rest := strings.TrimPrefix(ch.Path, "/spec/customProductPages/")
 	parts := strings.SplitN(rest, "/", 2)
@@ -951,7 +835,6 @@ func applyCustomProductPageField(ctx context.Context, c *asc.Client, actx ApplyC
 	}
 
 	if subPath == "" {
-		// Whole-page create.
 		buf, _ := json.Marshal(ch.To)
 		var p struct {
 			Visible *bool `json:"visible,omitempty"`
@@ -977,9 +860,6 @@ func applyCustomProductPageField(ctx context.Context, c *asc.Client, actx ApplyC
 		return nil
 	}
 
-	// Sub-path operations (visible flag PATCH, localization edits,
-	// screenshot uploads). Localizations + screenshots defer to L1
-	// verbs for now (orchestrator integration tracked under QA-010).
 	if subPath == "visible" {
 		pageID, err := resolveCustomProductPage(ctx, c, appID, pageName)
 		if err != nil {
@@ -1001,10 +881,7 @@ func applyCustomProductPageField(ctx context.Context, c *asc.Client, actx ApplyC
 	}
 
 	if strings.HasPrefix(subPath, "localizations/") {
-		// Localizations + screenshots inside CPP versions live behind
-		// L1 `custom-product-pages` verbs. Surface a typed error so
-		// users know to use the L1 path until QA-010 lands.
-		return fmt.Errorf("apply customProductPages.%s.%s: edit via L1 verb (`fline custom-product-pages ...`) — tracked under QA-010", pageName, subPath)
+		return fmt.Errorf("apply customProductPages.%s.%s: edit via L1 verb (`flightline custom-product-pages ...`): tracked under QA-010", pageName, subPath)
 	}
 	return fmt.Errorf("apply customProductPages.%s.%s: unhandled sub-path", pageName, subPath)
 }
@@ -1023,11 +900,7 @@ func resolveCustomProductPage(ctx context.Context, c *asc.Client, appID, name st
 	return page.Data[0].ID, nil
 }
 
-// --- shared helpers --------------------------------------------------------
-
-// asStringSlice coerces an `any` slice from a Change.To into []string.
-// json round-tripping turns string arrays into []any of strings; both
-// shapes need to work.
+// asStringSlice coerces a Change.To into []string; handles both []string and []any (JSON round-trip).
 func asStringSlice(v any) ([]string, error) {
 	if v == nil {
 		return nil, nil
@@ -1049,19 +922,14 @@ func asStringSlice(v any) ([]string, error) {
 	return nil, fmt.Errorf("expected []string, got %T", v)
 }
 
-// fetchPricingPair returns the current (baseTerritory, pricePointId)
-// pair from the live appPriceSchedule, or empty strings when no
-// schedule exists yet.
+// fetchPricingPair returns (baseTerritory, pricePointId) from the live schedule, or empty strings when absent.
 func fetchPricingPair(ctx context.Context, c *asc.Client, appID string) (territory, pricePoint string) {
 	q := url.Values{"include": {"baseTerritory,manualPrices.appPricePoint"}, "limit": {"1"}}
 	resp, err := asc.Get[asc.Single[asc.AppPriceScheduleAttributes]](
 		ctx, c, "/v1/apps/"+appID+"/appPriceSchedule", q,
 	)
 	if err != nil {
-		// Missing schedule isn't a fatal error here; the caller will
-		// surface a more specific message at apply time when both
-		// fields are required together.
-		return "", ""
+		return "", "" // caller surfaces a specific error if both fields are required
 	}
 	terr := ""
 	pp := ""
@@ -1089,11 +957,7 @@ func fetchPricingPair(ctx context.Context, c *asc.Client, appID string) (territo
 	return terr, pp
 }
 
-// --- env/file lookups (test-overridable) ----------------------------------
-
-// lookupEnvFn / readFileFn are package-level stubs around os.LookupEnv /
-// os.ReadFile so tests can substitute deterministic values without
-// touching real env vars or disk. Default to the os impl.
+// lookupEnvFn and readFileFn are package-level stubs so tests can inject deterministic values.
 var (
 	lookupEnvFn = os.LookupEnv
 	readFileFn  = os.ReadFile

@@ -122,7 +122,6 @@ func TestDiagnosticsCommand_RegisteredOnRoot(t *testing.T) {
 	}
 }
 
-// TestDiagnostics_JSONOutputStability_List locks the list shape.
 func TestDiagnostics_JSONOutputStability_List(t *testing.T) {
 	list := DiagnosticSignatureList{
 		BundleID:   "com.example.alpha",
@@ -139,13 +138,11 @@ func TestDiagnostics_JSONOutputStability_List(t *testing.T) {
 	}
 	for _, key := range []string{"bundleId", "buildId", "signatures"} {
 		if _, ok := decoded[key]; !ok {
-			t.Errorf("missing top-level key %q — JSON contract drift", key)
+			t.Errorf("missing top-level key %q: JSON contract drift", key)
 		}
 	}
 }
 
-// TestDiagnostics_FixtureReplay_List exercises the build lookup +
-// diagnosticSignatures list path.
 func TestDiagnostics_FixtureReplay_List(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps":                                 {File: "apps_get_byBundleId"},
@@ -181,7 +178,6 @@ func TestDiagnostics_FixtureReplay_List(t *testing.T) {
 	}
 }
 
-// TestDiagnostics_FixtureReplay_Get exercises the /logs endpoint.
 func TestDiagnostics_FixtureReplay_Get(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/diagnosticSignatures/DIAG-SIG-001/logs": {File: "diagnostics_get"},
@@ -213,8 +209,6 @@ func TestDiagnostics_FixtureReplay_Get(t *testing.T) {
 	}
 }
 
-// TestDiagnostics_BuildRequiredErrorMessage confirms --build absence is
-// reported clearly to the user.
 func TestDiagnostics_BuildRequiredErrorMessage(t *testing.T) {
 	prev := diagnosticsListBuild
 	t.Cleanup(func() { diagnosticsListBuild = prev })

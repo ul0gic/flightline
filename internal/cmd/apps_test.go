@@ -119,12 +119,8 @@ func TestDefaultAppCap(t *testing.T) {
 	}
 }
 
-// TestApps_JSONOutputStability_List asserts the AppList JSON shape. The
-// top-level "apps" key plus every per-row attribute is a contract.
-//
-// Adding fields is safe; renaming or removing a field is a breaking change
-// for shell pipelines (`jq '.apps[].bundleId'`) and LLM consumers parsing
-// the structured output.
+// The "apps" key plus every per-row attribute is a contract; renaming or
+// removing breaks `jq` pipelines and LLM consumers.
 func TestApps_JSONOutputStability_List(t *testing.T) {
 	list := AppList{
 		Apps: []AppView{
@@ -161,7 +157,7 @@ func TestApps_JSONOutputStability_List(t *testing.T) {
 	row := decoded.Apps[0]
 	for _, key := range wantTopLevel {
 		if _, ok := row[key]; !ok {
-			t.Errorf("missing per-row key %q — JSON output is a contract; "+
+			t.Errorf("missing per-row key %q: JSON output is a contract; "+
 				"adding fields is safe but removing/renaming breaks consumers. "+
 				"Got keys: %v", key, mapKeys(row))
 		}
@@ -174,16 +170,13 @@ func TestApps_JSONOutputStability_List(t *testing.T) {
 	wantAttrs := []string{"name", "bundleId", "sku", "primaryLocale", "contentRightsDeclaration"}
 	for _, key := range wantAttrs {
 		if _, ok := attrs[key]; !ok {
-			t.Errorf("missing attribute key %q — JSON output is a contract; "+
+			t.Errorf("missing attribute key %q: JSON output is a contract; "+
 				"adding fields is safe but removing/renaming breaks consumers. "+
 				"Got attribute keys: %v", key, mapKeys(attrs))
 		}
 	}
 }
 
-// TestApps_JSONOutputStability_Get asserts the single-app AppView JSON
-// shape — same contract test as List but for the get-by-bundleId flow,
-// which renders a *AppView (pointer) rather than the slice wrapper.
 func TestApps_JSONOutputStability_Get(t *testing.T) {
 	view := &AppView{
 		ID:   "1234567890",
@@ -207,13 +200,12 @@ func TestApps_JSONOutputStability_Get(t *testing.T) {
 	}
 	for _, key := range []string{"id", "type", "attributes"} {
 		if _, ok := decoded[key]; !ok {
-			t.Errorf("missing top-level key %q — JSON output is a contract. Got: %v", key, mapKeys(decoded))
+			t.Errorf("missing top-level key %q: JSON output is a contract. Got: %v", key, mapKeys(decoded))
 		}
 	}
 }
 
-// TestApps_AppViewType_StaysApps locks the resource type literal. A
-// regression to "App" or "application" would surprise downstream filters.
+// A regression to "App" or "application" would surprise downstream filters.
 func TestApps_AppViewType_StaysApps(t *testing.T) {
 	view := AppView{ID: "1", Type: "apps"}
 	b, err := json.Marshal(view)
@@ -225,20 +217,10 @@ func TestApps_AppViewType_StaysApps(t *testing.T) {
 	}
 }
 
-// TestApps_NotFoundErrorMessageShape locks the user-facing error string
-// `apps get` returns when the bundleId filter yields zero results. The
-// message MUST contain the literal bundleId so users know which one was
-// missing — this is the entire actionable signal.
-//
-// Phase 1.4 cannot run runAppsGet end-to-end against a fixture (the asc
-// Client baseURL is hardcoded; see QA-001). This test asserts the format
-// string used in the production code via a small replay of the formatting
-// statement. If the format string in apps.go diverges, this test fails
-// and the discrepancy is the actionable diff.
+// The message MUST contain the literal bundleId: the entire actionable
+// signal. Mirrors runAppsGet's format string; drift fails this test.
 func TestApps_NotFoundErrorMessageShape(t *testing.T) {
 	bundleID := "com.unknown.app"
-	// Mirror the format in runAppsGet exactly. If runAppsGet changes its
-	// format string, this assertion catches the drift.
 	got := fmt.Sprintf("apps: no app found with bundleId %q", bundleID)
 	for _, want := range []string{"apps:", "no app found", `"com.unknown.app"`} {
 		if !strings.Contains(got, want) {

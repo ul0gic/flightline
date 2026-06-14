@@ -5,14 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// ExportComplianceWriteResult is the JSON-stable view returned by
-// `export-compliance set`. noop=true means current state already matched.
+// noop=true means current state already matched.
 type ExportComplianceWriteResult struct {
 	Action                  string `json:"action"`
 	BundleID                string `json:"bundleId"`
@@ -23,7 +23,6 @@ type ExportComplianceWriteResult struct {
 	NoOp                    bool   `json:"noop"`
 }
 
-// TableRows for ExportComplianceWriteResult.
 func (r *ExportComplianceWriteResult) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
 	rows = [][]string{
@@ -33,13 +32,12 @@ func (r *ExportComplianceWriteResult) TableRows() (headers []string, rows [][]st
 		{"BUILD_ID", r.BuildID},
 		{"BUILD_VERSION", r.BuildVersion},
 		{"USES_NON_EXEMPT_ENCRYPTION", encryptionBoolStr(r.UsesNonExemptEncryption)},
-		{"NOOP", fmt.Sprintf("%t", r.NoOp)},
+		{"NOOP", strconv.FormatBool(r.NoOp)},
 	}
 	return headers, rows
 }
 
-// buildPatchRequest is the wire body for PATCH /v1/builds/{id}.
-// Mirrors components.schemas.BuildUpdateRequest.
+// Wire body for PATCH /v1/builds/{id} (BuildUpdateRequest).
 type buildPatchRequest struct {
 	Data buildPatchData `json:"data"`
 }
@@ -54,9 +52,8 @@ type buildPatchAttrs struct {
 	UsesNonExemptEncryption *bool `json:"usesNonExemptEncryption,omitempty"`
 }
 
-// ErrExportComplianceFutureFlag is returned when the caller passes flags that
-// require an AppEncryptionDeclaration — a separate POST surface not yet wired
-// in L1. Keeps v1 narrow without silently dropping the user's intent.
+// ErrExportComplianceFutureFlag is returned for flags needing an
+// AppEncryptionDeclaration, a POST surface not yet wired in L1.
 var ErrExportComplianceFutureFlag = errors.New(
 	"export-compliance set: --exempt and --documentation-url require AppEncryptionDeclaration support, " +
 		"which lands in a follow-up; for the boolean answer use --uses-encryption {true,false} alone",
@@ -73,16 +70,16 @@ boolean Apple requires before review.
 
 Apple's two-tier model:
 
-  1. Per-build boolean — ` + "`usesNonExemptEncryption`" + ` on the Build attached to
+  1. Per-build boolean: ` + "`usesNonExemptEncryption`" + ` on the Build attached to
      the version. This verb writes that field.
-  2. Per-app AppEncryptionDeclaration — for full ECCN classification. The
+  2. Per-app AppEncryptionDeclaration: for full ECCN classification. The
      ` + "`--exempt`" + ` and ` + "`--documentation-url`" + ` flags target this surface and are
      reserved for a follow-up command; they currently return a typed error.
 
 Idempotent: reads the build's current answer; PATCH only when the requested
 value differs.`,
-	Example: `  fline export-compliance set com.example.myapp --version 1.0.1 --uses-encryption false
-  fline export-compliance set com.example.myapp --version 1.0.1 --uses-encryption true --output json`,
+	Example: `  flightline export-compliance set com.example.myapp --version 1.0.1 --uses-encryption false
+  flightline export-compliance set com.example.myapp --version 1.0.1 --uses-encryption true --output json`,
 }
 
 var (
@@ -96,9 +93,9 @@ var (
 func init() {
 	exportComplianceSetCmd.Flags().StringVar(&exportComplianceSetVersion, "version", "", "version string to look up (e.g. 1.0.1)")
 	exportComplianceSetCmd.Flags().StringVar(&exportComplianceSetPlatform, "platform", "IOS", "platform (IOS|MAC_OS|TV_OS|VISION_OS)")
-	exportComplianceSetCmd.Flags().StringVar(&exportComplianceSetUsesEncryption, "uses-encryption", "", "true | false — whether the build uses non-exempt encryption")
-	exportComplianceSetCmd.Flags().BoolVar(&exportComplianceSetExempt, "exempt", false, "(reserved) AppEncryptionDeclaration exemption — see follow-up")
-	exportComplianceSetCmd.Flags().StringVar(&exportComplianceSetDocumentationURL, "documentation-url", "", "(reserved) AppEncryptionDeclaration documentation URL — see follow-up")
+	exportComplianceSetCmd.Flags().StringVar(&exportComplianceSetUsesEncryption, "uses-encryption", "", "true | false: whether the build uses non-exempt encryption")
+	exportComplianceSetCmd.Flags().BoolVar(&exportComplianceSetExempt, "exempt", false, "(reserved) AppEncryptionDeclaration exemption: see follow-up")
+	exportComplianceSetCmd.Flags().StringVar(&exportComplianceSetDocumentationURL, "documentation-url", "", "(reserved) AppEncryptionDeclaration documentation URL: see follow-up")
 	_ = exportComplianceSetCmd.MarkFlagRequired("version")
 	_ = exportComplianceSetCmd.MarkFlagRequired("uses-encryption")
 
@@ -111,8 +108,6 @@ func runExportComplianceSet(cmd *cobra.Command, args []string) error {
 	platform := strings.TrimSpace(exportComplianceSetPlatform)
 	usesEncRaw := strings.TrimSpace(exportComplianceSetUsesEncryption)
 
-	// Reserved flags surface as typed errors so users see why their command
-	// didn't fire.
 	if exportComplianceSetExempt || strings.TrimSpace(exportComplianceSetDocumentationURL) != "" {
 		return ErrExportComplianceFutureFlag
 	}
@@ -145,7 +140,7 @@ func runExportComplianceSet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if buildID == "" {
-		return fmt.Errorf("export-compliance set: version %q has no build attached yet (use `fline builds attach` first)", versionStr)
+		return fmt.Errorf("export-compliance set: version %q has no build attached yet (use `flightline builds attach` first)", versionStr)
 	}
 
 	if boolPtrEq(current, desired) {
@@ -182,10 +177,8 @@ func runExportComplianceSet(cmd *cobra.Command, args []string) error {
 	}, outputMode())
 }
 
-// lookupVersionIDForCompliance resolves bundle+version+platform to the
-// AppStoreVersion ID. Same shape as lookupVersionState but returns the ID
-// rather than the lifecycle state — set needs the version-relationship hop
-// to find the attached build.
+// Returns the version ID (not the lifecycle state) so set can hop the
+// version relationship to find the attached build.
 func lookupVersionIDForCompliance(ctx context.Context, c *asc.Client, appID, versionStr, platform string) (string, error) {
 	q := url.Values{
 		"filter[versionString]": {versionStr},
@@ -206,9 +199,8 @@ func lookupVersionIDForCompliance(ctx context.Context, c *asc.Client, appID, ver
 	return page.Data[0].ID, nil
 }
 
-// fetchVersionBuildEncryptionForSet returns the attached build's ID, version
-// string, and current usesNonExemptEncryption answer. (zero, "", nil, nil)
-// when no build is attached — caller treats as "must attach first".
+// Returns ("", "", nil, nil) when no build is attached: caller treats
+// that as "must attach first".
 func fetchVersionBuildEncryptionForSet(ctx context.Context, c *asc.Client, versionID string) (buildID, buildVersion string, current *bool, err error) {
 	resp, err := asc.Get[asc.Single[asc.BuildAttributes]](
 		ctx, c, "/v1/appStoreVersions/"+versionID+"/build", nil,

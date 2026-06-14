@@ -9,12 +9,7 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// AppAttributes is the subset of Apple's App.attributes Flightline reads.
-//
-// Field names match Apple's wire casing exactly (`bundleId`, not `bundle_id`).
-// JSON output is a stable contract — adding fields is OK; renaming is a break.
-//
-// Source: jq '.components.schemas.App.properties.attributes.properties' openapi.oas.json
+// AppAttributes mirrors Apple's App.attributes; JSON tags are the wire contract.
 type AppAttributes struct {
 	Name                     string `json:"name,omitempty"`
 	BundleID                 string `json:"bundleId,omitempty"`
@@ -24,23 +19,17 @@ type AppAttributes struct {
 	IsOrEverWasMadeForKids   bool   `json:"isOrEverWasMadeForKids,omitempty"`
 }
 
-// AppView is one row of the apps list/get output. Embeds the wire-shape
-// attributes plus ID so JSON consumers don't have to reach into a nested
-// envelope.
+// AppView is one row of the apps list/get output.
 type AppView struct {
 	ID         string        `json:"id"`
 	Type       string        `json:"type"`
 	Attributes AppAttributes `json:"attributes"`
 }
 
-// AppList is the table-aware view for `apps list`. The TableRows method
-// flattens to a tidy 4-column layout; the JSON output preserves the typed
-// envelope per the stability contract.
 type AppList struct {
 	Apps []AppView `json:"apps"`
 }
 
-// TableRows implements TableRenderable for the apps list view.
 func (l AppList) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"BUNDLE_ID", "NAME", "SKU", "ID"}
 	rows = make([][]string, 0, len(l.Apps))
@@ -50,7 +39,6 @@ func (l AppList) TableRows() (headers []string, rows [][]string) {
 	return headers, rows
 }
 
-// TableRows for a single app. Vertical layout reads better for one record.
 func (a *AppView) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
 	rows = [][]string{
@@ -77,9 +65,9 @@ var appsListCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.NoArgs,
 	RunE:         runAppsList,
-	Example: `  fline apps list
-  fline apps list --output json | jq -r '.apps[].bundleId'
-  fline apps list --limit 50`,
+	Example: `  flightline apps list
+  flightline apps list --output json | jq -r '.apps[].bundleId'
+  flightline apps list --limit 50`,
 }
 
 var appsGetCmd = &cobra.Command{
@@ -88,13 +76,11 @@ var appsGetCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runAppsGet,
-	Example: `  fline apps get com.example.myapp
-  fline apps get com.example.myapp --output json | jq .attributes.name`,
+	Example: `  flightline apps get com.example.myapp
+  flightline apps get com.example.myapp --output json | jq .attributes.name`,
 }
 
-// listLimit caps how many apps are emitted in `apps list`. 0 means no cap
-// (paging continues until Apple says stop). For the personal-account scale
-// where Flightline lives this is fine; we'll add cursor support later if needed.
+// listLimit caps emitted apps; 0 = no cap (page until Apple stops).
 var listLimit int
 
 func init() {
@@ -111,8 +97,7 @@ func runAppsList(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	// 200 is Apple's max page size for /v1/apps. Pages keeps following next
-	// until exhausted; --limit caps the emitted count after that.
+	// 200 is Apple's max page size for /v1/apps.
 	q := url.Values{"limit": {"200"}}
 	apps, err := collectApps(cmd.Context(), c, "/v1/apps", q, listLimit)
 	if err != nil {
@@ -129,8 +114,7 @@ func runAppsGet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// /v1/apps?filter[bundleId]=<id>&limit=1 — Apple guarantees bundle IDs
-	// are unique within an account, so a single-result filter is sufficient.
+	// Bundle IDs are unique within an account, so limit=1 is sufficient.
 	q := url.Values{
 		"filter[bundleId]": {bundleID},
 		"limit":            {"1"},
@@ -151,8 +135,7 @@ func runAppsGet(cmd *cobra.Command, args []string) error {
 	return Render(view, outputMode())
 }
 
-// collectApps walks the paging iterator and returns flattened AppView rows.
-// limit 0 means "no cap" — return everything Apple paginates through.
+// collectApps walks the paging iterator; limit 0 means no cap.
 func collectApps(ctx context.Context, c *asc.Client, path string, query url.Values, limit int) ([]AppView, error) {
 	out := make([]AppView, 0, defaultAppCap(limit))
 	for page, err := range asc.Pages[AppAttributes](ctx, c, path, query) {

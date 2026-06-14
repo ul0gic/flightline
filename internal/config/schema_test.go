@@ -8,10 +8,7 @@ import (
 	"testing"
 )
 
-// TestValidate_Example proves the canonical example.state.yaml passes
-// schema validation (i.e. the embedded schema is in sync with the
-// authored YAML and our Go types JSON-marshal into the schema's
-// expected shape).
+// TestValidate_Example proves the embedded schema stays in sync with the canonical example.state.yaml.
 func TestValidate_Example(t *testing.T) {
 	repoRoot, err := filepath.Abs("../..")
 	if err != nil {
@@ -30,9 +27,7 @@ func TestValidate_Example(t *testing.T) {
 	}
 }
 
-// TestValidate_BadEnum — an enum field receives an out-of-range value.
-// The validator must surface a Diagnostic with a JSON-Pointer Path
-// that names the offending field.
+// TestValidate_BadEnum: an out-of-range enum must surface a Diagnostic whose Path names the field.
 func TestValidate_BadEnum(t *testing.T) {
 	rt := "BOGUS_RELEASE"
 	s := &State{
@@ -58,7 +53,7 @@ func TestValidate_BadEnum(t *testing.T) {
 	}
 }
 
-// TestValidate_MissingRequired — apiVersion + kind + metadata are
+// TestValidate_MissingRequired: apiVersion + kind + metadata are
 // required at the top level. Empty State must produce diagnostics.
 func TestValidate_MissingRequired(t *testing.T) {
 	s := &State{}
@@ -68,7 +63,7 @@ func TestValidate_MissingRequired(t *testing.T) {
 	}
 }
 
-// TestValidate_Pattern — bundleId pattern rejects spaces.
+// TestValidate_Pattern: bundleId pattern rejects spaces.
 func TestValidate_Pattern(t *testing.T) {
 	s := &State{
 		APIVersion: "flightline.dev/v1alpha1",
@@ -90,7 +85,7 @@ func TestValidate_Pattern(t *testing.T) {
 	}
 }
 
-// TestValidate_NilState — defensive guard.
+// TestValidate_NilState: defensive guard.
 func TestValidate_NilState(t *testing.T) {
 	diags := Validate("test.yaml", nil)
 	if len(diags) != 1 {
@@ -101,7 +96,7 @@ func TestValidate_NilState(t *testing.T) {
 	}
 }
 
-// TestSchemaURL — guard against accidental URL drift; the constant is
+// TestSchemaURL: guard against accidental URL drift; the constant is
 // part of the YAML header in fetched files.
 func TestSchemaURL(t *testing.T) {
 	if SchemaURL != "https://flightline.dev/schemas/v1alpha1/state.schema.json" {
@@ -109,9 +104,7 @@ func TestSchemaURL(t *testing.T) {
 	}
 }
 
-// TestEmbeddedSchemaInSync — the embedded copy at internal/config/schema.json
-// must match the canonical schemas/flightline.schema.json byte-for-byte.
-// Run `make sync-schema` to refresh.
+// TestEmbeddedSchemaInSync: the embedded schema.json must match the canonical schema byte-for-byte (`make sync-schema`).
 func TestEmbeddedSchemaInSync(t *testing.T) {
 	repoRoot, err := filepath.Abs("../..")
 	if err != nil {
@@ -122,6 +115,6 @@ func TestEmbeddedSchemaInSync(t *testing.T) {
 		t.Fatalf("read canonical schema: %v", err)
 	}
 	if !bytes.Equal(canonical, embeddedSchemaJSON) {
-		t.Fatal("internal/config/schema.json drifted from schemas/flightline.schema.json — run `make sync-schema`")
+		t.Fatal("internal/config/schema.json drifted from schemas/flightline.schema.json: run `make sync-schema`")
 	}
 }

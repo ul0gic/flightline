@@ -2,21 +2,15 @@ package lint
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// iapAttachedToReviewSubmissionRule fires when an IAP product is in
-// READY_TO_SUBMIT state but is NOT included in the latest review submission's
-// items. This is the #1 IAP rejection cause: developers mark the IAP ready,
-// assume "ready" means "submitted", and then their app goes through review
-// without the IAP attached. Apple either rejects ("IAP referenced but not in
-// review") or approves the app with the IAP marked SCHEDULED-but-not-live.
-//
-// Live-only rule: the check requires reading the IAP list AND the
-// reviewSubmissions/items endpoint, which only exist on the wire.
+// iapAttachedToReviewSubmissionRule fires when a READY_TO_SUBMIT IAP is missing from the active review submission.
+// The #1 IAP rejection: "ready" is not "submitted": Apple rejects or approves without the IAP live. Live-only.
 type iapAttachedToReviewSubmissionRule struct{}
 
 func init() { Register(iapAttachedToReviewSubmissionRule{}) }
@@ -36,10 +30,7 @@ func (r iapAttachedToReviewSubmissionRule) Check(ctx CheckContext) []Diagnostic 
 			"verify the bundle id and that the API key has access to it.")}
 	}
 
-	// READY_TO_SUBMIT IAPs are the candidates. Other states either aren't
-	// submittable (MISSING_METADATA, WAITING_FOR_UPLOAD) or are already
-	// in-flight (WAITING_FOR_REVIEW, IN_REVIEW). Approved IAPs don't need to
-	// be re-attached.
+	// Only READY_TO_SUBMIT IAPs need attachment; other states are pre-submission or already in-flight.
 	ready, err := r.readyToSubmitIAPs(ctx, appID)
 	if err != nil {
 		return []Diagnostic{r.fetchErr("list IAPs for "+ctx.BundleID, err,
@@ -49,9 +40,7 @@ func (r iapAttachedToReviewSubmissionRule) Check(ctx CheckContext) []Diagnostic 
 		return nil
 	}
 
-	// Latest review submission and its items. We pick the most recently
-	// submitted (or in-flight) submission rather than every historical one;
-	// historical submissions can't pull a new IAP into review.
+	// Pick the most recent in-flight submission; historical ones can't pull a new IAP into review.
 	subID, err := iapLatestSubmissionID(ctx, appID)
 	if err != nil {
 		return []Diagnostic{r.fetchErr("list review submissions for "+ctx.BundleID, err,
@@ -69,8 +58,7 @@ func (r iapAttachedToReviewSubmissionRule) Check(ctx CheckContext) []Diagnostic 
 	return r.unattachedDiagnostics(ctx.BundleID, subID, ready, itemRefs)
 }
 
-// readyToSubmitIAPs returns the READY_TO_SUBMIT IAPs for the app — the only
-// candidates for the attachment check.
+// readyToSubmitIAPs returns only READY_TO_SUBMIT IAPs for the app.
 func (iapAttachedToReviewSubmissionRule) readyToSubmitIAPs(ctx CheckContext, appID string) ([]asc.Resource[asc.IAPAttributes], error) {
 	iaps, err := iapListForApp(ctx, appID)
 	if err != nil {
@@ -85,8 +73,7 @@ func (iapAttachedToReviewSubmissionRule) readyToSubmitIAPs(ctx CheckContext, app
 	return out, nil
 }
 
-// unattachedDiagnostics emits one diagnostic per READY_TO_SUBMIT IAP whose ID
-// does NOT appear in the submission's item-reference set.
+// unattachedDiagnostics emits one diagnostic per READY_TO_SUBMIT IAP absent from the submission's item-reference set.
 func (r iapAttachedToReviewSubmissionRule) unattachedDiagnostics(bundleID, subID string, ready []asc.Resource[asc.IAPAttributes], itemRefs []submissionItemRef) []Diagnostic {
 	attached := make(map[string]bool, len(itemRefs))
 	for _, ref := range itemRefs {
@@ -108,10 +95,10 @@ func (r iapAttachedToReviewSubmissionRule) unattachedDiagnostics(bundleID, subID
 			),
 			Path: "/spec/iap/products/" + iap.Attributes.ProductID,
 			FixHint: fmt.Sprintf(
-				"add the IAP to the submission: `fline review-submissions items %s --submission %s` to inspect, then attach via App Store Connect or the submissions write surface.",
+				"add the IAP to the submission: `flightline review-submissions items %s --submission %s` to inspect, then attach via App Store Connect or the submissions write surface.",
 				bundleID, subID,
 			),
-			Reference: "PRD §L3 — IAP attached-to-review-submission",
+			Reference: "PRD §L3: IAP attached-to-review-submission",
 		})
 	}
 	return out
@@ -126,8 +113,7 @@ func (r iapAttachedToReviewSubmissionRule) fetchErr(what string, err error, fix 
 	}
 }
 
-// iapResolveAppID is a thin wrapper around the apps filter. We don't reach
-// into internal/cmd or internal/state — the lint package is a peer.
+// iapResolveAppID wraps the apps filter. Lint is a peer package: no imports from cmd or state.
 func iapResolveAppID(ctx CheckContext, bundleID string) (string, error) {
 	type appAttrs struct {
 		BundleID string `json:"bundleId,omitempty"`
@@ -141,7 +127,7 @@ func iapResolveAppID(ctx CheckContext, bundleID string) (string, error) {
 		return "", err
 	}
 	if len(page.Data) == 0 {
-		return "", fmt.Errorf("no app found")
+		return "", errors.New("no app found")
 	}
 	return page.Data[0].ID, nil
 }
@@ -158,10 +144,8 @@ func iapListForApp(ctx CheckContext, appID string) ([]asc.Resource[asc.IAPAttrib
 	return out, nil
 }
 
-// iapLatestSubmissionID picks the most relevant submission for the IAP-
-// attachment check. Preference order: in-flight states (WAITING_FOR_REVIEW,
-// IN_REVIEW, READY_FOR_REVIEW, COMPLETING) over completed/canceled ones.
-// Returns "" when there are zero submissions at all.
+// iapLatestSubmissionID picks the highest-priority in-flight submission (prefers WAITING/IN_REVIEW over completed).
+// Returns "" when there are no submissions.
 func iapLatestSubmissionID(ctx CheckContext, appID string) (string, error) {
 	q := url.Values{
 		"filter[app]": {appID},
@@ -193,10 +177,7 @@ func iapLatestSubmissionID(ctx CheckContext, appID string) (string, error) {
 	return bestID, nil
 }
 
-// iapSubmissionItemReferences walks /v1/reviewSubmissions/{id}/items and
-// extracts the (type, id) pair from each item's relationships block. Items
-// with no resolvable reference are dropped (the data block is null between
-// states).
+// iapSubmissionItemReferences returns (type, id) pairs from submission items; items with null data are dropped.
 func iapSubmissionItemReferences(ctx CheckContext, subID string) ([]submissionItemRef, error) {
 	q := url.Values{"limit": {"200"}}
 	out := make([]submissionItemRef, 0, 16)
@@ -249,8 +230,8 @@ func iapUnattachedDiagnostics(ruleID string, ready []asc.Resource[asc.IAPAttribu
 			),
 			Path: "/spec/iap/products/" + iap.Attributes.ProductID,
 			FixHint: "create or open a review submission for the app and attach the IAP product. " +
-				"`fline review-submissions list <bundleId>` shows current submissions.",
-			Reference: "PRD §L3 — IAP attached-to-review-submission",
+				"`flightline review-submissions list <bundleId>` shows current submissions.",
+			Reference: "PRD §L3: IAP attached-to-review-submission",
 		})
 	}
 	return out

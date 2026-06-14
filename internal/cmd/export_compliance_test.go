@@ -87,7 +87,6 @@ func TestExportComplianceView_TableRows_DeclarationsExpand(t *testing.T) {
 	if len(rows) < 10 {
 		t.Errorf("rows = %d, want >= 10 (build summary + per-declaration block)", len(rows))
 	}
-	// Build summary should include the boolean value as "false".
 	foundUses := false
 	for _, r := range rows {
 		if r[0] == "USES_NON_EXEMPT_ENCRYPTION" && r[1] == "false" {
@@ -139,7 +138,6 @@ func TestExportComplianceCommands_RegisteredOnRoot(t *testing.T) {
 	}
 }
 
-// TestExportCompliance_JSONOutputStability locks the top-level JSON keys.
 func TestExportCompliance_JSONOutputStability(t *testing.T) {
 	uses := false
 	v := &ExportComplianceView{
@@ -161,7 +159,7 @@ func TestExportCompliance_JSONOutputStability(t *testing.T) {
 	}
 	for _, key := range []string{"bundleId", "versionString", "build"} {
 		if _, ok := decoded[key]; !ok {
-			t.Errorf("missing top-level key %q — JSON contract drift. Got: %v", key, mapKeys(decoded))
+			t.Errorf("missing top-level key %q: JSON contract drift. Got: %v", key, mapKeys(decoded))
 		}
 	}
 	build, ok := decoded["build"].(map[string]any)
@@ -170,7 +168,7 @@ func TestExportCompliance_JSONOutputStability(t *testing.T) {
 	}
 	for _, key := range []string{"buildId", "buildVersion", "usesNonExemptEncryption"} {
 		if _, ok := build[key]; !ok {
-			t.Errorf("missing build key %q — JSON contract drift. Got: %v", key, mapKeys(build))
+			t.Errorf("missing build key %q: JSON contract drift. Got: %v", key, mapKeys(build))
 		}
 	}
 }

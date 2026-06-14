@@ -1,27 +1,12 @@
 package cmd
 
 import (
-	"fmt"
+	"strconv"
 
 	"github.com/spf13/cobra"
 )
 
-// PrivacyLabelsView is the read-side view for `privacy-labels get`.
-//
-// Apple's App Store Connect API v4.3 does NOT expose an appPrivacyDetails
-// resource — privacy nutrition labels are authored exclusively in App
-// Store Connect's web UI. Until Apple ships an API surface, this command
-// returns a typed "not supported" diagnostic so callers and L3 preflight
-// see a stable, honest signal rather than silently succeeding against a
-// non-existent endpoint.
-//
-// JSON shape is stable so consumers can detect the diagnostic case
-// programmatically: `.supported == false` and `.reason` carries the
-// explanation. When Apple ships the endpoint, switch to a typed view
-// embedding the new attributes; consumers checking .supported continue
-// to work.
-//
-// Tracked in ISSUE-002.
+// ASC API v4.3 has no appPrivacyDetails resource (web-UI only). See ISSUE-002.
 type PrivacyLabelsView struct {
 	BundleID  string `json:"bundleId"`
 	Supported bool   `json:"supported"`
@@ -29,13 +14,11 @@ type PrivacyLabelsView struct {
 	Reference string `json:"reference,omitempty"`
 }
 
-// TableRows for the privacy-labels get view. Surfaces the diagnostic on
-// stdout (data, not stderr — the user piped this for a reason).
 func (v *PrivacyLabelsView) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
 	rows = [][]string{
 		{"BUNDLE_ID", v.BundleID},
-		{"SUPPORTED", fmt.Sprintf("%t", v.Supported)},
+		{"SUPPORTED", strconv.FormatBool(v.Supported)},
 		{"REASON", v.Reason},
 		{"REFERENCE", v.Reference},
 	}
@@ -47,7 +30,7 @@ var privacyLabelsCmd = &cobra.Command{
 	Short: "Inspect privacy nutrition labels",
 	Long: `privacy-labels would read Apple's App Privacy Details
 (nutrition labels) for an app. Apple's App Store Connect API v4.3 does
-not expose this surface — labels are authored exclusively in App Store
+not expose this surface: labels are authored exclusively in App Store
 Connect's web UI.
 
 This command returns a typed diagnostic so callers can detect the
@@ -63,14 +46,12 @@ var privacyLabelsGetCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runPrivacyLabelsGet,
-	Example: `  fline privacy-labels get com.example.myapp
-  fline privacy-labels get com.example.myapp --output json | jq .supported`,
+	Example: `  flightline privacy-labels get com.example.myapp
+  flightline privacy-labels get com.example.myapp --output json | jq .supported`,
 }
 
-// privacyLabelsSetCmd is the write-side companion of privacy-labels get.
-// Apple's ASC API v4.3 has no appPrivacyDetails surface, so set returns
-// the same typed diagnostic as get rather than fabricating an endpoint.
-// See ISSUE-002.
+// No appPrivacyDetails surface in v4.3; set returns the same typed
+// diagnostic as get rather than fabricating an endpoint. See ISSUE-002.
 var privacyLabelsSetCmd = &cobra.Command{
 	Use:          "set <bundleId>",
 	Short:        "Set privacy nutrition labels (currently unsupported by ASC API)",
@@ -78,7 +59,7 @@ var privacyLabelsSetCmd = &cobra.Command{
 	Args:         cobra.ExactArgs(1),
 	RunE:         runPrivacyLabelsSet,
 	Long: `set would PATCH an app's privacy nutrition labels. Apple's App Store Connect
-API v4.3 does not expose this surface — labels are authored exclusively in
+API v4.3 does not expose this surface: labels are authored exclusively in
 App Store Connect's web UI.
 
 This command returns a typed diagnostic so callers can detect the
@@ -86,25 +67,23 @@ unsupported state programmatically (` + "`.supported == false`" + `). When Apple
 ships an API endpoint, set will be wired without changing the JSON contract.
 
 See ISSUE-002 in .project/issues/.`,
-	Example: `  fline privacy-labels set com.example.myapp --from labels.yaml
-  fline privacy-labels set com.example.myapp --output json | jq .supported`,
+	Example: `  flightline privacy-labels set com.example.myapp --from labels.yaml
+  flightline privacy-labels set com.example.myapp --output json | jq .supported`,
 }
 
-// privacyLabelsSetFrom is accepted but unused — kept on the surface so the
-// flag exists when Apple eventually ships the endpoint and the JSON
-// contract stays forward-compatible.
+// Accepted but unused: reserved so the flag exists when Apple ships the
+// endpoint, keeping the contract forward-compatible.
 var privacyLabelsSetFrom string
 
 func init() {
-	privacyLabelsSetCmd.Flags().StringVar(&privacyLabelsSetFrom, "from", "", "(reserved) path to YAML/JSON describing the labels — see ISSUE-002")
+	privacyLabelsSetCmd.Flags().StringVar(&privacyLabelsSetFrom, "from", "", "(reserved) path to YAML/JSON describing the labels: see ISSUE-002")
 
 	privacyLabelsCmd.AddCommand(privacyLabelsGetCmd)
 	privacyLabelsCmd.AddCommand(privacyLabelsSetCmd)
 	rootCmd.AddCommand(privacyLabelsCmd)
 }
 
-// privacyLabelsDiagnostic is the canonical "unsupported" view returned by
-// both get and set. Centralizing it keeps the JSON contract identical.
+// Shared by get and set so the JSON contract is identical.
 func privacyLabelsDiagnostic(bundleID string) *PrivacyLabelsView {
 	return &PrivacyLabelsView{
 		BundleID:  bundleID,

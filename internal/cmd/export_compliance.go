@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -12,11 +13,6 @@ import (
 )
 
 // ExportComplianceView is the read-side view for `export-compliance get`.
-// Apple splits export-compliance state across two layers — a per-build
-// boolean answer (`usesNonExemptEncryption` on the Build attached to the
-// version) AND optional per-app encryption-declaration resources for full
-// ECCN classification. Flightline surfaces both so callers (and L3 preflight)
-// see whichever answer matters for the version.
 type ExportComplianceView struct {
 	BundleID      string                      `json:"bundleId"`
 	VersionString string                      `json:"versionString"`
@@ -31,20 +27,19 @@ type EncryptionDeclarationView struct {
 	Attributes asc.AppEncryptionDeclarationAttributes `json:"attributes"`
 }
 
-// TableRows for the export-compliance get view. Per-build answer renders
-// first (most-common case is the simple boolean), declarations follow as
-// extra rows. Empty/nil values render as "(unanswered)" so the L3
-// preflight signal surfaces visually.
+// TableRows renders nil values as "(unanswered)" so the missing-answer
+// preflight signal surfaces visually rather than as a blank cell.
 func (v *ExportComplianceView) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
-	rows = [][]string{
-		{"BUNDLE_ID", v.BundleID},
-		{"VERSION", v.VersionString},
-		{"BUILD_ID", v.Build.BuildID},
-		{"BUILD_VERSION", v.Build.BuildVersion},
-		{"USES_NON_EXEMPT_ENCRYPTION", encryptionBoolStr(v.Build.UsesNonExemptEncryption)},
-		{"DECLARATION_COUNT", fmt.Sprintf("%d", len(v.Declarations))},
-	}
+	rows = make([][]string, 0, 6+9*len(v.Declarations))
+	rows = append(rows,
+		[]string{"BUNDLE_ID", v.BundleID},
+		[]string{"VERSION", v.VersionString},
+		[]string{"BUILD_ID", v.Build.BuildID},
+		[]string{"BUILD_VERSION", v.Build.BuildVersion},
+		[]string{"USES_NON_EXEMPT_ENCRYPTION", encryptionBoolStr(v.Build.UsesNonExemptEncryption)},
+		[]string{"DECLARATION_COUNT", strconv.Itoa(len(v.Declarations))},
+	)
 	for i := range v.Declarations {
 		d := &v.Declarations[i]
 		prefix := fmt.Sprintf("DECL[%d]", i)
@@ -63,10 +58,8 @@ func (v *ExportComplianceView) TableRows() (headers []string, rows [][]string) {
 	return headers, rows
 }
 
-// encryptionBoolStr renders a *bool with explicit "(unanswered)" for nil.
-// Different from boolPtrStr in builds.go: that one renders "" for nil; here
-// the L3 preflight signal is "answered yes/no/not-yet", so we surface nil
-// loudly.
+// encryptionBoolStr renders a *bool with "(unanswered)" for nil, unlike
+// boolPtrStr: a missing export-compliance answer must surface loudly.
 func encryptionBoolStr(b *bool) string {
 	if b == nil {
 		return "(unanswered)"
@@ -97,8 +90,8 @@ var exportComplianceGetCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runExportComplianceGet,
-	Example: `  fline export-compliance get com.example.myapp --version 1.0.1
-  fline export-compliance get com.example.myapp --version 1.0.1 --output json | jq .build`,
+	Example: `  flightline export-compliance get com.example.myapp --version 1.0.1
+  flightline export-compliance get com.example.myapp --version 1.0.1 --output json | jq .build`,
 }
 
 var (
@@ -120,7 +113,7 @@ func runExportComplianceGet(cmd *cobra.Command, args []string) error {
 	versionStr := strings.TrimSpace(exportComplianceGetVersion)
 	platform := strings.TrimSpace(exportComplianceGetPlatform)
 	if versionStr == "" {
-		return fmt.Errorf("export-compliance: --version is required")
+		return errors.New("export-compliance: --version is required")
 	}
 
 	c, err := newClient()
@@ -133,7 +126,6 @@ func runExportComplianceGet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Resolve the version row to find the attached build.
 	vQuery := url.Values{
 		"filter[versionString]": {versionStr},
 		"limit":                 {"1"},
@@ -171,19 +163,14 @@ func runExportComplianceGet(cmd *cobra.Command, args []string) error {
 	return Render(view, outputMode())
 }
 
-// fetchVersionBuildEncryption resolves the build attached to a version and
-// returns its UsesNonExemptEncryption value. If the version has no attached
-// build (rare; pre-upload state), returns a zero BuildEncryptionView (all
-// nil) and no error — callers see "(unanswered)" in table mode and a nil
-// in JSON, both of which encode "no answer yet".
+// fetchVersionBuildEncryption returns the attached build's encryption view.
+// No attached build (pre-upload) returns a zero view and nil error: "no answer yet".
 func fetchVersionBuildEncryption(ctx context.Context, c *asc.Client, versionID string) (asc.BuildEncryptionView, error) {
 	resp, err := asc.Get[asc.Single[asc.BuildAttributes]](
 		ctx, c, "/v1/appStoreVersions/"+versionID+"/build", nil,
 	)
 	if err != nil {
-		// 404 / no build attached is a legitimate state — the version simply
-		// has no build yet. errors.As walks the wrap chain so we catch the
-		// typed APIError whether or not it was wrapped by an upstream caller.
+		// 404 / no build attached is a legitimate pre-upload state, not an error.
 		var apiErr *asc.APIError
 		if errors.As(err, &apiErr) && apiErr.HTTPStatus == 404 {
 			return asc.BuildEncryptionView{}, nil
@@ -197,10 +184,8 @@ func fetchVersionBuildEncryption(ctx context.Context, c *asc.Client, versionID s
 	}, nil
 }
 
-// collectAppEncryptionDeclarations walks the paging iterator over an app's
-// encryption-declaration resources. Most apps have none (boolean answer
-// suffices); some have one approved + one expired. Limit is bounded by
-// Apple's natural cap.
+// collectAppEncryptionDeclarations walks the app's encryption-declaration
+// resources. Most apps have none; the per-build boolean usually suffices.
 func collectAppEncryptionDeclarations(ctx context.Context, c *asc.Client, appID string) ([]EncryptionDeclarationView, error) {
 	out := make([]EncryptionDeclarationView, 0, 4)
 	q := url.Values{"limit": {"50"}}

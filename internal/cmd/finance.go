@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -13,7 +14,7 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// FinanceReport is the cmd-layer JSON contract for `finance ...`.
+// FinanceReport is the JSON contract for `finance`.
 type FinanceReport struct {
 	BundleID     string                 `json:"bundleId"`
 	VendorNumber string                 `json:"vendorNumber"`
@@ -26,9 +27,8 @@ type FinanceReport struct {
 	Summary      []FinanceRegionSummary `json:"summary,omitempty"`
 }
 
-// FinanceRegionSummary collapses per-row finance data by (CountryOfSale,
-// PartnerShareCurrency) — the most useful breakdown for a finance report
-// since Apple settles per-region in a single currency.
+// FinanceRegionSummary collapses rows by (CountryOfSale, PartnerShareCurrency),
+// the unit Apple settles in a single currency.
 type FinanceRegionSummary struct {
 	CountryOfSale        string  `json:"countryOfSale"`
 	Currency             string  `json:"currency"`
@@ -37,7 +37,6 @@ type FinanceRegionSummary struct {
 	ExtendedPartnerShare float64 `json:"extendedPartnerShare"`
 }
 
-// TableRows for FinanceReport renders the regional summary.
 func (r FinanceReport) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"COUNTRY", "CURRENCY", "QTY", "PARTNER_SHARE", "EXT_PARTNER_SHARE"}
 	if len(r.Summary) == 0 {
@@ -62,7 +61,7 @@ var financeCmd = &cobra.Command{
 	Long: `finance pulls finance/settlement reports from /v1/financeReports.
 
 Finance reports are MONTHLY or YEARLY (Apple does not produce daily/weekly
-finance reports — daily granularity belongs to ` + "`fline sales`" + `).
+finance reports: daily granularity belongs to ` + "`flightline sales`" + `).
 Each call is scoped to a region code: "US", "GB", "Z1" (worldwide), etc.
 Use --region to override the default ("Z1").
 
@@ -74,11 +73,11 @@ Vendor number is read from APP_STORE_CONNECT_VENDOR_NUMBER.`,
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runFinance,
-	Example: `  fline finance com.example.myapp --month 2026-04
-  fline finance com.example.myapp --year 2026
-  fline finance com.example.myapp --month 2026-04 --region US
-  fline finance com.example.myapp --month 2026-04 --output json | jq '.summary'
-  fline finance com.example.myapp --month 2026-04 --output tsv > finance.tsv`,
+	Example: `  flightline finance com.example.myapp --month 2026-04
+  flightline finance com.example.myapp --year 2026
+  flightline finance com.example.myapp --month 2026-04 --region US
+  flightline finance com.example.myapp --month 2026-04 --output json | jq '.summary'
+  flightline finance com.example.myapp --month 2026-04 --output tsv > finance.tsv`,
 }
 
 var (
@@ -110,7 +109,7 @@ func runFinance(cmd *cobra.Command, args []string) error {
 	}
 	region := strings.TrimSpace(financeRegion)
 	if region == "" {
-		return fmt.Errorf("finance: --region is required (use Z1 for worldwide)")
+		return errors.New("finance: --region is required (use Z1 for worldwide)")
 	}
 
 	c, err := newClient()
@@ -155,7 +154,6 @@ func runFinance(cmd *cobra.Command, args []string) error {
 	return Render(report, mode)
 }
 
-// financeFetchOpts collects the params for one fetchFinanceReport call.
 type financeFetchOpts struct {
 	vendor      string
 	reportType  asc.FinanceReportType
@@ -166,8 +164,8 @@ type financeFetchOpts struct {
 	captureRows bool
 }
 
-// fetchFinanceReport hits /v1/financeReports once and returns either typed
-// rows (filtered by VendorIdentifier prefix) or raw TSV bytes.
+// fetchFinanceReport returns either typed rows (filtered by VendorIdentifier
+// prefix) or raw TSV bytes, per the capture flags.
 func fetchFinanceReport(ctx context.Context, c *asc.Client, opts financeFetchOpts) ([]asc.FinanceReportRow, []byte, error) {
 	body, err := c.FetchFinanceReport(ctx, asc.FinanceReportParams{
 		VendorNumber: opts.vendor,
@@ -197,9 +195,8 @@ func fetchFinanceReport(ctx context.Context, c *asc.Client, opts financeFetchOpt
 	return rows, nil, nil
 }
 
-// financeRowMatchesBundle filters a row against the bundleId argument.
-// Apple's "Vendor Identifier" column is the SKU/bundle in finance reports.
-// Empty bundleId matches everything.
+// financeRowMatchesBundle matches against the Vendor Identifier column (the
+// SKU/bundle in finance reports). Empty bundleId matches everything.
 func financeRowMatchesBundle(r *asc.FinanceReportRow, bundleID string) bool {
 	if bundleID == "" {
 		return true
@@ -213,8 +210,8 @@ func financeRowMatchesBundle(r *asc.FinanceReportRow, bundleID string) bool {
 	return false
 }
 
-// summarizeFinanceByRegion folds rows by (CountryOfSale, PartnerShareCurrency).
-// Sorted by country/currency for stable output across runs.
+// summarizeFinanceByRegion folds rows by (CountryOfSale, PartnerShareCurrency),
+// sorted for stable output.
 func summarizeFinanceByRegion(rows []asc.FinanceReportRow) []FinanceRegionSummary {
 	type key struct{ country, ccy string }
 	agg := make(map[key]*FinanceRegionSummary)
@@ -243,14 +240,13 @@ func summarizeFinanceByRegion(rows []asc.FinanceReportRow) []FinanceRegionSummar
 	return out
 }
 
-// buildFinanceDate validates and returns the reportDate + frequency from
-// --month / --year. Exactly one of the two must be set.
+// buildFinanceDate returns reportDate + frequency; exactly one of --month / --year must be set.
 func buildFinanceDate() (reportDate, frequency string, err error) {
 	month := strings.TrimSpace(financeMonth)
 	year := strings.TrimSpace(financeYear)
 	switch {
 	case month != "" && year != "":
-		return "", "", fmt.Errorf("finance: --month and --year are mutually exclusive")
+		return "", "", errors.New("finance: --month and --year are mutually exclusive")
 	case month != "":
 		if _, err := time.Parse("2006-01", month); err != nil {
 			return "", "", fmt.Errorf("finance: --month must be YYYY-MM, got %q", financeMonth)
@@ -262,6 +258,6 @@ func buildFinanceDate() (reportDate, frequency string, err error) {
 		}
 		return year, "YEARLY", nil
 	default:
-		return "", "", fmt.Errorf("finance: one of --month YYYY-MM or --year YYYY is required")
+		return "", "", errors.New("finance: one of --month YYYY-MM or --year YYYY is required")
 	}
 }

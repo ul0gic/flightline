@@ -21,10 +21,6 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// ---------------------------------------------------------------------------
-// Programmable analytics fixture (cmd-level twin of internal/asc/async_test.go)
-// ---------------------------------------------------------------------------
-
 type analyticsCmdFixture struct {
 	srv *httptest.Server
 
@@ -265,10 +261,8 @@ func gzipBytesCmd(in []byte) []byte {
 	return buf.Bytes()
 }
 
-// analyticsCmdClient builds an asc.Client wired to the fixture, matching the
-// shape used by the production newClient() path. Returns the client; tests
-// drive the cmd helpers directly (RunE bodies aren't invoked through cobra
-// because most production flag wiring is global).
+// Tests drive the cmd helpers directly; RunE bodies aren't invoked through
+// cobra because most production flag wiring is global.
 func analyticsCmdClient(t *testing.T, f *analyticsCmdFixture) *asc.Client {
 	t.Helper()
 	keyPath := writeEphemeralKey(t)
@@ -289,13 +283,10 @@ func analyticsCmdClient(t *testing.T, f *analyticsCmdFixture) *asc.Client {
 func withCmdStateRoot(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	t.Setenv("FLINE_STATE_HOME", dir)
+	t.Setenv("FLIGHTLINE_STATE_HOME", dir)
 	return dir
 }
 
-// withFastPoll swaps the package-level analyticsPollOpts with a fast-cadence
-// variant for the test's lifetime. Restores the production defaults on
-// cleanup so subsequent tests see the same world the binary does.
 func withFastPoll(t *testing.T) {
 	t.Helper()
 	prev := analyticsPollOpts
@@ -307,10 +298,6 @@ func withFastPoll(t *testing.T) {
 	}
 	t.Cleanup(func() { analyticsPollOpts = prev })
 }
-
-// ---------------------------------------------------------------------------
-// Cobra registration
-// ---------------------------------------------------------------------------
 
 func TestAnalytics_RegisteredOnRoot(t *testing.T) {
 	var found *cobra.Command
@@ -334,10 +321,6 @@ func TestAnalytics_RegisteredOnRoot(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// submitAndPersist + pollAndAppend (the request flow)
-// ---------------------------------------------------------------------------
-
 func TestAnalytics_RequestPersistsState(t *testing.T) {
 	root := withCmdStateRoot(t)
 	f := newAnalyticsCmdFixture(t)
@@ -354,7 +337,6 @@ func TestAnalytics_RequestPersistsState(t *testing.T) {
 		t.Errorf("Status = %q, want queued", view.Status)
 	}
 
-	// State file landed where the loader will look.
 	statePath := filepath.Join(root, "com.example.alpha", "analytics.json")
 	if _, err := os.Stat(statePath); err != nil {
 		t.Fatalf("state file missing: %v", err)
@@ -403,7 +385,7 @@ func TestAnalytics_RequestWaitOngoingTimesOut(t *testing.T) {
 	f := newAnalyticsCmdFixture(t)
 	f.accessType = asc.AccessTypeOngoing
 	c := analyticsCmdClient(t, f)
-	// No reports — ONGOING never auto-terminates, so context timeout drives it.
+	// No reports: ONGOING never auto-terminates, so context timeout drives it.
 
 	view, err := submitAndPersist(t.Context(), c, "com.example.alpha", "1234567890", asc.AccessTypeOngoing)
 	if err != nil {
@@ -438,10 +420,6 @@ func TestAnalytics_RequestWaitONGOINGStopped(t *testing.T) {
 		t.Errorf("Status = %q, want stopped", view.Status)
 	}
 }
-
-// ---------------------------------------------------------------------------
-// validateWaitFlags / parseAccessType
-// ---------------------------------------------------------------------------
 
 func TestParseAccessType(t *testing.T) {
 	t.Parallel()
@@ -503,16 +481,11 @@ func TestValidateWaitFlags(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// list-instances
-// ---------------------------------------------------------------------------
-
 func TestAnalytics_ListInstances_FiltersAndExpands(t *testing.T) {
 	withCmdStateRoot(t)
 	f := newAnalyticsCmdFixture(t)
 	c := analyticsCmdClient(t, f)
 
-	// Seed a state file as if `analytics request --wait` had completed.
 	if err := asc.PersistAsyncState(asc.AsyncState{
 		BundleID:    "com.example.alpha",
 		ReportClass: asc.ReportClassAnalytics,
@@ -539,31 +512,26 @@ func TestAnalytics_ListInstances_FiltersAndExpands(t *testing.T) {
 		t.Fatalf("loadAnalyticsState: %v", err)
 	}
 
-	// no filter → both reports
 	all := filterReportsForList(state.Reports, "", "", "")
 	if len(all) != 2 {
 		t.Errorf("filter=none → %d, want 2", len(all))
 	}
 
-	// by report-id → exactly one
 	one := filterReportsForList(state.Reports, "RPT-B", "", "")
 	if len(one) != 1 || one[0].ID != "RPT-B" {
 		t.Errorf("filter by report-id failed: %+v", one)
 	}
 
-	// by category
 	usage := filterReportsForList(state.Reports, "", "APP_USAGE", "")
 	if len(usage) != 1 || usage[0].ID != "RPT-A" {
 		t.Errorf("filter by category failed: %+v", usage)
 	}
 
-	// by name-contains case-insensitive
 	commerce := filterReportsForList(state.Reports, "", "", "comm")
 	if len(commerce) != 1 || commerce[0].ID != "RPT-B" {
 		t.Errorf("filter by name failed: %+v", commerce)
 	}
 
-	// And the live expansion against the fixture works for every report.
 	for _, r := range state.Reports {
 		insts, lerr := c.ListAnalyticsInstances(t.Context(), r.ID)
 		if lerr != nil {
@@ -587,7 +555,7 @@ func TestAnalytics_ListInstances_MissingState(t *testing.T) {
 	if !strings.Contains(err.Error(), "no active analytics request") {
 		t.Errorf("unhelpful error: %v", err)
 	}
-	if !strings.Contains(err.Error(), "fline analytics request") {
+	if !strings.Contains(err.Error(), "flightline analytics request") {
 		t.Errorf("error missing remediation hint: %v", err)
 	}
 }
@@ -602,10 +570,6 @@ func TestAnalytics_ListInstances_ReportIDNotFound(t *testing.T) {
 		t.Errorf("got %+v, want nil for missing id", got)
 	}
 }
-
-// ---------------------------------------------------------------------------
-// download
-// ---------------------------------------------------------------------------
 
 func TestAnalytics_Download_NoAuthHeaderOnSignedURL(t *testing.T) {
 	withCmdStateRoot(t)
@@ -628,8 +592,6 @@ func TestAnalytics_Download_NoAuthHeaderOnSignedURL(t *testing.T) {
 	}
 	f.customSegmentContent = []byte("date,impressions\n2026-05-01,100\n")
 
-	// Drive the production helpers directly: list segments, download each,
-	// write the file, build the view.
 	segs, err := c.ListAnalyticsSegments(t.Context(), "INST-1")
 	if err != nil {
 		t.Fatalf("ListAnalyticsSegments: %v", err)
@@ -662,7 +624,7 @@ func TestAnalytics_Download_NoAuthHeaderOnSignedURL(t *testing.T) {
 		t.Errorf("signedRequestCount = %d, want 2", f.signedRequestCount.Load())
 	}
 	if f.signedAuthCount.Load() != 0 {
-		t.Fatalf("signed URL got Authorization header on %d requests — Apple's CDN rejects bearer tokens", f.signedAuthCount.Load())
+		t.Fatalf("signed URL got Authorization header on %d requests: Apple's CDN rejects bearer tokens", f.signedAuthCount.Load())
 	}
 }
 
@@ -702,10 +664,6 @@ func TestAnalytics_WriteSegmentFile_CreatesOutDir(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// status
-// ---------------------------------------------------------------------------
-
 func TestAnalytics_Status_ReadsState(t *testing.T) {
 	withCmdStateRoot(t)
 	if err := asc.PersistAsyncState(asc.AsyncState{
@@ -741,16 +699,12 @@ func TestAnalytics_Status_MissingFileHelpfulError(t *testing.T) {
 	if err == nil {
 		t.Fatal("want error")
 	}
-	for _, want := range []string{"no active analytics request", "fline analytics request"} {
+	for _, want := range []string{"no active analytics request", "flightline analytics request"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q missing substring %q", err.Error(), want)
 		}
 	}
 }
-
-// ---------------------------------------------------------------------------
-// JSON shape contracts
-// ---------------------------------------------------------------------------
 
 func TestAnalytics_JSONShape_RequestView(t *testing.T) {
 	t.Parallel()
@@ -848,10 +802,6 @@ func TestAnalytics_JSONShape_StatusView(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Table renderers — assert the column shape stays stable.
-// ---------------------------------------------------------------------------
-
 func TestAnalytics_TableRows_RequestView(t *testing.T) {
 	t.Parallel()
 	v := AnalyticsRequestView{
@@ -902,10 +852,6 @@ func TestAnalytics_TableRows_InstancesView(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Resume scenario — verify the saved DownloadedSegments survive a reload.
-// ---------------------------------------------------------------------------
-
 func TestAnalytics_StateRoundtripsAcrossLoad(t *testing.T) {
 	withCmdStateRoot(t)
 	original := asc.AsyncState{
@@ -932,8 +878,6 @@ func TestAnalytics_StateRoundtripsAcrossLoad(t *testing.T) {
 	}
 }
 
-// finishPoll covers a defensive default branch — exercise it via a generic
-// errors.New so the path is locked.
 func TestAnalytics_FinishPoll_GenericErrorMarksFailed(t *testing.T) {
 	withCmdStateRoot(t)
 	view := AnalyticsRequestView{
@@ -951,9 +895,7 @@ func TestAnalytics_FinishPoll_GenericErrorMarksFailed(t *testing.T) {
 	}
 }
 
-// Also verify the request-flow URL encoding for the parent-request ID
-// containing characters that must be escaped — defensive against future
-// Apple-side IDs with slashes or spaces.
+// Guards request IDs against future Apple-side slashes or spaces.
 func TestAnalytics_PathEscape(t *testing.T) {
 	t.Parallel()
 	id := asc.RequestID("REQ/with space")
@@ -975,9 +917,8 @@ func TestAnalytics_PollContextCancel(t *testing.T) {
 
 	view, err := submitAndPersist(ctx, c, "com.example.alpha", "1234567890", asc.AccessTypeOngoing)
 	if err != nil {
-		// submit happens against an already-cancelled context — that's fine,
-		// the cancellation may surface here. The relevant assertion is that
-		// pollAndAppend doesn't hang. If submit failed, the test is moot.
+		// Cancellation may surface at submit; the assertion that matters is that
+		// pollAndAppend doesn't hang, so a failed submit makes the test moot.
 		return
 	}
 	view, err = pollAndAppend(ctx, c, view, time.Second)

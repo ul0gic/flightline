@@ -1,41 +1,7 @@
 package asc
 
-// Beta feedback read surface. Apple ships TestFlight feedback in two
-// resource families that share most attributes:
-//
-//   - BetaFeedbackCrashSubmission: a tester's crash report (auto-collected
-//     when an app traps; tester optionally adds an email and comment).
-//   - BetaFeedbackScreenshotSubmission: a tester's manual screenshot +
-//     comment captured via the TestFlight share-sheet.
-//
-// Both share the device-environment quad (deviceModel, osVersion, locale,
-// timeZone, architecture, connectionType, pairedAppleWatch) plus disk /
-// battery / screen telemetry. Screenshot submissions additionally carry a
-// `screenshots[]` array of pre-signed image URLs.
-//
-// Source:
-//
-//	jq '.components.schemas.BetaFeedbackCrashSubmission.properties.attributes.properties' openapi.oas.json
-//	jq '.components.schemas.BetaFeedbackScreenshotSubmission.properties.attributes.properties' openapi.oas.json
-//	jq '.components.schemas.BetaCrashLog.properties.attributes.properties' openapi.oas.json
-//
-// Endpoints:
-//
-//	GET /v1/apps/{id}/betaFeedbackCrashSubmissions       — list crashes
-//	GET /v1/apps/{id}/betaFeedbackScreenshotSubmissions  — list screenshots
-//	GET /v1/betaFeedbackCrashSubmissions/{id}            — single crash
-//	GET /v1/betaFeedbackScreenshotSubmissions/{id}       — single screenshot
-//	GET /v1/betaFeedbackCrashSubmissions/{id}/crashLog   — log text
-//
-// Reused by Phase 3 download verbs (no Apple writes here — feedback is
-// tester-authored). Adding fields conservatively.
-
-// BetaFeedbackBaseAttributes is the shared envelope across crash and
-// screenshot submissions. Pulled out so both resource types embed the same
-// shape and JSON consumers see consistent field names.
-//
-// Apple's wire field names are preserved exactly: `appUptimeInMilliseconds`
-// (not `appUptimeMillis`), `screenWidthInPoints` (not `screenWidthInPx`).
+// BetaFeedbackBaseAttributes is the shared envelope across crash and screenshot submissions.
+// Apple's wire field names are preserved exactly: `appUptimeInMilliseconds`, `screenWidthInPoints`.
 type BetaFeedbackBaseAttributes struct {
 	CreatedDate             string `json:"createdDate,omitempty"`
 	Comment                 string `json:"comment,omitempty"`
@@ -59,18 +25,13 @@ type BetaFeedbackBaseAttributes struct {
 	BuildBundleID           string `json:"buildBundleId,omitempty"`
 }
 
-// BetaFeedbackCrashSubmissionAttributes is the subset of Apple's
-// BetaFeedbackCrashSubmission.attributes Flightline reads. The actual crash
-// log text lives at the relationship endpoint
-// /v1/betaFeedbackCrashSubmissions/{id}/crashLog and is fetched separately
-// when the user runs `beta-feedback download`.
+// BetaFeedbackCrashSubmissionAttributes holds the attributes for a crash submission.
+// The crash log text lives at /v1/betaFeedbackCrashSubmissions/{id}/crashLog, fetched separately.
 type BetaFeedbackCrashSubmissionAttributes struct {
 	BetaFeedbackBaseAttributes
 }
 
-// BetaFeedbackScreenshotImage describes one screenshot attachment with a
-// pre-signed download URL. ExpirationDate is the URL's expiry, after which
-// it must be re-fetched via the parent submission.
+// BetaFeedbackScreenshotImage describes one screenshot attachment with a pre-signed download URL.
 type BetaFeedbackScreenshotImage struct {
 	URL            string `json:"url,omitempty"`
 	Width          int    `json:"width,omitempty"`
@@ -78,18 +39,14 @@ type BetaFeedbackScreenshotImage struct {
 	ExpirationDate string `json:"expirationDate,omitempty"`
 }
 
-// BetaFeedbackScreenshotSubmissionAttributes is the subset of Apple's
-// BetaFeedbackScreenshotSubmission.attributes Flightline reads. Screenshots
-// holds the pre-signed image URLs inline — there's no separate
-// relationships endpoint for screenshot bytes.
+// BetaFeedbackScreenshotSubmissionAttributes holds the screenshot submission attributes.
+// Screenshots are inline pre-signed URLs; there is no separate relationship endpoint for the bytes.
 type BetaFeedbackScreenshotSubmissionAttributes struct {
 	BetaFeedbackBaseAttributes
 	Screenshots []BetaFeedbackScreenshotImage `json:"screenshots,omitempty"`
 }
 
-// BetaCrashLogAttributes is the subset of Apple's BetaCrashLog.attributes
-// Flightline reads. LogText is the symbolicated crash log body; Apple returns
-// it as a single string, not a structured object.
+// BetaCrashLogAttributes holds the crash log text. Apple returns it as a single string.
 type BetaCrashLogAttributes struct {
 	LogText string `json:"logText,omitempty"`
 }

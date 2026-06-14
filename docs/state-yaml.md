@@ -1,10 +1,10 @@
-# Flightline AppState — YAML Reference
+# Flightline AppState: YAML Reference
 
 ## TL;DR
 
-A Flightline state file is a YAML document that declares the desired configuration for one app across every App Store Connect surface Flightline manages. You run `fline fetch <bundleId>` once to capture live state, edit the YAML, then use `fline plan` and `fline apply` to preview and write the diff. The schema is embedded in the binary; your editor autocompletes via the `yaml-language-server` directive at the top of every fetched file.
+A Flightline state file is a YAML document that declares the desired configuration for one app across every App Store Connect surface Flightline manages. You run `flightline fetch <bundleId>` once to capture live state, edit the YAML, then use `flightline plan` and `flightline apply` to preview and write the diff. The schema is embedded in the binary; your editor autocompletes via the `yaml-language-server` directive at the top of every fetched file.
 
-Every top-level child of `spec` is optional. Omitting a section tells Flightline "leave this surface alone." You don't have to manage everything — start with `spec.metadata` and `spec.version`, add sections when you need them.
+Every top-level child of `spec` is optional. Omitting a section tells Flightline "leave this surface alone." You don't have to manage everything, start with `spec.metadata` and `spec.version`, add sections when you need them.
 
 The schema URL is `https://flightline.dev/schemas/v1alpha1/state.schema.json`. Fields not listed in this document are not part of the v1alpha1 contract; unrecognized keys cause a `LoadState` error.
 
@@ -39,10 +39,10 @@ The four top-level keys are required: `apiVersion`, `kind`, `metadata`, `spec`.
 |-----|------|----------|-------|
 | `apiVersion` | string const | yes | Must be exactly `flightline.dev/v1alpha1` |
 | `kind` | string const | yes | Must be exactly `AppState` |
-| `metadata` | object | yes | Bundle identity — see [metadata](#metadata) |
-| `spec` | object | yes | Desired state — all children optional |
+| `metadata` | object | yes | Bundle identity, see [metadata](#metadata) |
+| `spec` | object | yes | Desired state, all children optional |
 
-**Editor setup.** The `# yaml-language-server: $schema=...` directive at the top of every `fline fetch` output activates autocomplete and inline validation in VS Code, Neovim (with yaml-language-server), and any editor that supports the LSP YAML extension. The schema is hosted at `https://flightline.dev/schemas/v1alpha1/state.schema.json` and also embedded in the `fline` binary.
+**Editor setup.** The `# yaml-language-server: $schema=...` directive at the top of every `flightline fetch` output activates autocomplete and inline validation in VS Code, Neovim (with yaml-language-server), and any editor that supports the LSP YAML extension. The schema is hosted at `https://flightline.dev/schemas/v1alpha1/state.schema.json` and also embedded in the `flightline` binary.
 
 ---
 
@@ -59,8 +59,8 @@ metadata:
 
 | Field | Type | Required | Default | Constraint | Gotcha |
 |-------|------|----------|---------|------------|--------|
-| `bundleId` | string | yes | — | `^[a-zA-Z0-9._-]+$`, min 3 chars | Must already exist in ASC. Flightline does not create apps. |
-| `version` | string | yes | — | `^[0-9]+(\.[0-9]+)*$` | Marketing version (CFBundleShortVersionString). Leading zeros rejected — `01.0` fails schema. Quote it: `"1.0"`. |
+| `bundleId` | string | yes |, | `^[a-zA-Z0-9._-]+$`, min 3 chars | Must already exist in ASC. Flightline does not create apps. |
+| `version` | string | yes |, | `^[0-9]+(\.[0-9]+)*$` | Marketing version (CFBundleShortVersionString). Leading zeros rejected, `01.0` fails schema. Quote it: `"1.0"`. |
 | `platform` | enum | no | `IOS` | `IOS`, `MAC_OS`, `TV_OS`, `VISION_OS` | Defaults to `IOS` when absent. Must match the platform your build targets. |
 
 **PRD lifecycle step:** `metadata.bundleId` + `metadata.version` are the identity keys Flightline uses at every step of the [authoring loop](../.project/prd.md#lifecycle) (fetch → lint → plan → apply → preflight → submit).
@@ -80,10 +80,10 @@ spec:
 
 | Field | Type | Required | Default | Constraint | Gotcha |
 |-------|------|----------|---------|------------|--------|
-| `releaseType` | enum | no | — | `MANUAL`, `AFTER_APPROVAL`, `SCHEDULED` | If absent, Flightline leaves the current ASC setting unchanged. `SCHEDULED` requires `earliestReleaseDate`. |
-| `earliestReleaseDate` | string | no | — | ISO 8601 datetime | Required when `releaseType=SCHEDULED`. Apple rejects times in the past. |
-| `copyright` | string | no | — | maxLength 100 | Displayed on the App Store listing. Apple shows this under the app name. |
-| `downloadable` | boolean | no | — | — | Rarely needed; controls whether the build is downloadable from TestFlight or the App Store. |
+| `releaseType` | enum | no |, | `MANUAL`, `AFTER_APPROVAL`, `SCHEDULED` | If absent, Flightline leaves the current ASC setting unchanged. `SCHEDULED` requires `earliestReleaseDate`. |
+| `earliestReleaseDate` | string | no |, | ISO 8601 datetime | Required when `releaseType=SCHEDULED`. Apple rejects times in the past. |
+| `copyright` | string | no |, | maxLength 100 | Displayed on the App Store listing. Apple shows this under the app name. |
+| `downloadable` | boolean | no |, |, | Rarely needed; controls whether the build is downloadable from TestFlight or the App Store. |
 
 **PRD lifecycle step:** Version release type is set before you submit. `MANUAL` gives you a hold button after approval; `AFTER_APPROVAL` releases automatically; `SCHEDULED` releases at the specified time.
 
@@ -101,15 +101,15 @@ spec:
 
 | Field | Type | Required | Default | Constraint | Gotcha |
 |-------|------|----------|---------|------------|--------|
-| `number` | string | no | — | — | CFBundleVersion. Quote it: `"42"` not `42`. Bare integers are YAML numbers, not strings, and Flightline's strict loader rejects the type mismatch. |
+| `number` | string | no |, |, | CFBundleVersion. Quote it: `"42"` not `42`. Bare integers are YAML numbers, not strings, and Flightline's strict loader rejects the type mismatch. |
 
-Builds must reach `VALID` state in ASC before Flightline can attach them. Upload is done by Xcode, `altool`, or `xcrun notarytool` — not by Flightline. If the build isn't processed yet, `fline apply` will surface a typed error.
+Builds must reach `VALID` state in ASC before Flightline can attach them. Upload is done by Xcode, `altool`, or `xcrun notarytool`, not by Flightline. If the build isn't processed yet, `flightline apply` will surface a typed error.
 
 ---
 
 ## spec.metadata
 
-Per-locale store listing content. Keys under `spec.metadata.locales` are Apple locale codes (`en-US`, `es-MX`, `fr-FR`, `ja`, etc.). You can manage any subset of locales — locales not listed here are left alone.
+Per-locale store listing content. Keys under `spec.metadata.locales` are Apple locale codes (`en-US`, `es-MX`, `fr-FR`, `ja`, etc.). You can manage any subset of locales, locales not listed here are left alone.
 
 ```yaml
 spec:
@@ -121,7 +121,7 @@ spec:
         description: |
           California DMV practice tests with the latest official questions.
         keywords: "DMV,driver,test,license,California,permit,practice"
-        whatsNew: "v1.0.1 — bug fixes, faster question loading."
+        whatsNew: "v1.0.1, bug fixes, faster question loading."
         promotionalText: "Free updates as the DMV question bank evolves."
         marketingUrl: "https://under5.com/passdmv"
         supportUrl: "https://under5.com/passdmv/support"
@@ -133,7 +133,7 @@ spec:
 
 ### Locale key format
 
-Locale codes follow the pattern `^[a-z]{2}(-[A-Z]{2})?$` — two-letter language code, optionally followed by a dash and two-letter region code. Examples: `en-US`, `fr-FR`, `ja`, `zh-Hans`, `pt-BR`.
+Locale codes follow the pattern `^[a-z]{2}(-[A-Z]{2})?$`, two-letter language code, optionally followed by a dash and two-letter region code. Examples: `en-US`, `fr-FR`, `ja`, `zh-Hans`, `pt-BR`.
 
 ### Per-locale fields
 
@@ -144,12 +144,12 @@ Locale codes follow the pattern `^[a-z]{2}(-[A-Z]{2})?$` — two-letter language
 | `description` | string | no | 4000 | Long body text on the listing page. Applies to `appStoreVersionLocalization`. |
 | `keywords` | string | no | 100 | Comma-separated, no spaces around commas. Goes to `appStoreVersionLocalization`. Not shown to users but affects search indexing. |
 | `whatsNew` | string | no | 4000 | "What's New in this Version" text. Version-scoped: this is for the current `metadata.version`. |
-| `promotionalText` | string | no | 170 | Promotional text block. **Can be updated without resubmission** — the only metadata field you can change on a live, approved version. Use it for time-sensitive copy. |
-| `marketingUrl` | URI | no | — | Full URL. |
-| `supportUrl` | URI | no | — | Full URL. |
-| `privacyPolicyUrl` | URI | no | — | Full URL. |
+| `promotionalText` | string | no | 170 | Promotional text block. **Can be updated without resubmission**, the only metadata field you can change on a live, approved version. Use it for time-sensitive copy. |
+| `marketingUrl` | URI | no |, | Full URL. |
+| `supportUrl` | URI | no |, | Full URL. |
+| `privacyPolicyUrl` | URI | no |, | Full URL. |
 
-**Cross-resource routing.** `name` and `subtitle` live on `appInfoLocalization`; everything else lives on `appStoreVersionLocalization`. Flightline handles the routing — you author a single locale map and Flightline dispatches to the correct ASC resource per field.
+**Cross-resource routing.** `name` and `subtitle` live on `appInfoLocalization`; everything else lives on `appStoreVersionLocalization`. Flightline handles the routing, you author a single locale map and Flightline dispatches to the correct ASC resource per field.
 
 **Per-locale completeness.** Every locale you declare must be complete enough for Apple to accept. Apple will reject a submission if a declared locale has a `description` but no `supportUrl`. Flightline's L3 preflight rule `localizations.completeness` (Phase 5) will catch this offline; until then, check the [Apple documentation](https://developer.apple.com/help/app-store-connect/manage-app-information/add-app-localizations/) for required fields per locale.
 
@@ -157,7 +157,7 @@ Locale codes follow the pattern `^[a-z]{2}(-[A-Z]{2})?$` — two-letter language
 
 ## spec.screenshots
 
-Per-locale, per-device-class screenshot sets. Flightline computes an MD5 of each local file and skips slots whose `sourceFileChecksum` already matches — making repeated applies no-ops when screenshots haven't changed.
+Per-locale, per-device-class screenshot sets. Flightline computes an MD5 of each local file and skips slots whose `sourceFileChecksum` already matches, making repeated applies no-ops when screenshots haven't changed.
 
 ```yaml
 spec:
@@ -197,13 +197,13 @@ Each device slot accepts 1–10 screenshots (`minItems: 1`, `maxItems: 10`).
 
 **Required devices for new submissions.** Apple requires at least 6.9" and 6.7" screenshots for new iOS app submissions. The L3 preflight rule `screenshots.requiredDevices` (Phase 5) catches this offline.
 
-**Current limitation.** `fline apply` cannot yet drive the multipart binary upload for screenshots. The diff engine and fetch projection are correct — apply will surface a typed error pointing you to the L1 verb (`fline screenshots upload`). This is tracked in [QA-010](../.project/issues/open/QA-010-orchestrator-upload-integration.md). Use `fline screenshots upload` directly for now; the state file's screenshot section is still useful for tracking what should be there.
+**Current limitation.** `flightline apply` cannot yet drive the multipart binary upload for screenshots. The diff engine and fetch projection are correct, apply will surface a typed error pointing you to the L1 verb (`flightline screenshots upload`). This is tracked in [QA-010](../.project/issues/open/QA-010-orchestrator-upload-integration.md). Use `flightline screenshots upload` directly for now; the state file's screenshot section is still useful for tracking what should be there.
 
 ---
 
 ## spec.iap
 
-In-app purchases keyed by `productId`. This section covers consumable, non-consumable, and non-renewing IAPs. Auto-renewable subscriptions live under `spec.testflight` (the subscription group surface) — they are not represented here.
+In-app purchases keyed by `productId`. This section covers consumable, non-consumable, and non-renewing IAPs. Auto-renewable subscriptions live under `spec.testflight` (the subscription group surface), they are not represented here.
 
 ```yaml
 spec:
@@ -228,13 +228,13 @@ spec:
 
 | Field | Type | Required | Constraint | Gotcha |
 |-------|------|----------|------------|--------|
-| `type` | enum | yes | `CONSUMABLE`, `NON_CONSUMABLE`, `NON_RENEWING_SUBSCRIPTION` | `AUTO_RENEWABLE_SUBSCRIPTION` is not valid here — auto-renewing subs live in ASC's subscription group surface. |
-| `name` | string | no | — | Apple-facing reference name in ASC. Not shown to customers. |
-| `familySharable` | boolean | no | — | Whether Family Sharing is enabled for this IAP. |
+| `type` | enum | yes | `CONSUMABLE`, `NON_CONSUMABLE`, `NON_RENEWING_SUBSCRIPTION` | `AUTO_RENEWABLE_SUBSCRIPTION` is not valid here, auto-renewing subs live in ASC's subscription group surface. |
+| `name` | string | no |, | Apple-facing reference name in ASC. Not shown to customers. |
+| `familySharable` | boolean | no |, | Whether Family Sharing is enabled for this IAP. |
 | `contentHosting` | enum | no | `HOSTED`, `NON_HOSTED` | Hosted: Apple hosts the downloadable content. Most IAPs are `NON_HOSTED`. |
 | `reviewNote` | string | no | maxLength 4000 | Instructions for the App Review team to exercise this IAP. Important for IAPs with non-obvious unlock paths. |
-| `reviewScreenshot` | object | no | — | Path to a screenshot showing the IAP unlock screen. See note below. |
-| `localizations` | map | no | — | Locale-keyed `{name, description}` pairs. See below. |
+| `reviewScreenshot` | object | no |, | Path to a screenshot showing the IAP unlock screen. See note below. |
+| `localizations` | map | no |, | Locale-keyed `{name, description}` pairs. See below. |
 
 ### reviewScreenshot
 
@@ -247,20 +247,20 @@ reviewScreenshot:
 |-------|------|----------|--------|
 | `path` | string | yes | Relative to state file directory. The L3 preflight rule `iap.reviewScreenshot.exists` (Phase 5) checks this is populated. Missing review screenshots are a common rejection cause. |
 
-**Current limitation.** Like app screenshots, the `reviewScreenshot` binary upload is not yet driven by `fline apply`. Use `fline iap update --review-screenshot upload` until [QA-010](../.project/issues/open/QA-010-orchestrator-upload-integration.md) lands.
+**Current limitation.** Like app screenshots, the `reviewScreenshot` binary upload is not yet driven by `flightline apply`. Use `flightline iap update --review-screenshot upload` until [QA-010](../.project/issues/open/QA-010-orchestrator-upload-integration.md) lands.
 
 ### iapLocalization fields
 
 | Field | Type | Required | maxLength | Gotcha |
 |-------|------|----------|-----------|--------|
 | `name` | string | no | 30 | Customer-visible IAP name. |
-| `description` | string | no | 45 | Customer-visible IAP description. Note the 45-char ceiling — much shorter than app metadata. |
+| `description` | string | no | 45 | Customer-visible IAP description. Note the 45-char ceiling, much shorter than app metadata. |
 
 ---
 
 ## spec.ageRating
 
-Apple's age-rating questionnaire. Each field answers one content-category question. All fields are optional individually — answering only the categories relevant to your app is fine. However, Apple requires the questionnaire to be complete before you can submit; the L3 preflight rule `version.ageRating.answered` (Phase 5) verifies this.
+Apple's age-rating questionnaire. Each field answers one content-category question. All fields are optional individually, answering only the categories relevant to your app is fine. However, Apple requires the questionnaire to be complete before you can submit; the L3 preflight rule `version.ageRating.answered` (Phase 5) verifies this.
 
 ```yaml
 spec:
@@ -301,10 +301,10 @@ These fields accept `NONE`, `INFREQUENT_OR_MILD`, or `FREQUENT_OR_INTENSE`:
 | Field | Type | Gotcha |
 |-------|------|--------|
 | `prolongedGraphicSadisticRealisticViolence` | boolean | Apple's API uses a frequency enum for this field; Flightline maps any non-`NONE` value fetched from Apple to `true`. Set `true` for apps with prolonged, graphic, sadistic violence. |
-| `gambling` | boolean | Gambling features (not just references — actual gambling mechanics). |
+| `gambling` | boolean | Gambling features (not just references, actual gambling mechanics). |
 | `unrestrictedWebAccess` | boolean | App provides unrestricted internet access (e.g., a web browser). |
 | `kidsAgeBand` | enum or null | `FIVE_AND_UNDER`, `SIX_TO_EIGHT`, `NINE_TO_ELEVEN`, or `null`. Set only for Kids category apps. |
-| `seventeenPlus` | boolean | **Read-only.** Apple derives the 17+ rating from your answers — you cannot set this field directly. `fline apply` returns a typed error if you include this in a change set. You may include it in the file for documentation, but it has no write effect. |
+| `seventeenPlus` | boolean | **Read-only.** Apple derives the 17+ rating from your answers, you cannot set this field directly. `flightline apply` returns a typed error if you include this in a change set. You may include it in the file for documentation, but it has no write effect. |
 
 ---
 
@@ -359,13 +359,13 @@ spec:
 
 | Field | Type | Required | Constraint | Gotcha |
 |-------|------|----------|------------|--------|
-| `username` | string | no | — | Demo account username. |
-| `passwordRef` | string | no | `^env:[A-Z_][A-Z0-9_]*$` | Env var reference, e.g. `env:DEMO_PASSWORD`. Flightline resolves the variable at apply time. Never put the password directly in the YAML file — it will end up in git. |
-| `passwordFile` | string | no | — | Path to a file containing the password. Trailing newline is trimmed. Alternative to `passwordRef`. |
+| `username` | string | no |, | Demo account username. |
+| `passwordRef` | string | no | `^env:[A-Z_][A-Z0-9_]*$` | Env var reference, e.g. `env:DEMO_PASSWORD`. Flightline resolves the variable at apply time. Never put the password directly in the YAML file, it will end up in git. |
+| `passwordFile` | string | no |, | Path to a file containing the password. Trailing newline is trimmed. Alternative to `passwordRef`. |
 | `notes` | string | no | maxLength 4000 | Instructions for the reviewer. Include where to find any non-obvious flows (IAP, restricted features, login-wall bypass). |
-| `contactName` | string | no | — | Your name or the developer's name. |
+| `contactName` | string | no |, | Your name or the developer's name. |
 | `contactEmail` | string | no | email format | Contact for Review team questions. |
-| `contactPhone` | string | no | — | International format recommended. |
+| `contactPhone` | string | no |, | International format recommended. |
 
 **Password field constraint.** Exactly one of `passwordRef` or `passwordFile` may be present, or neither. Both together is a schema validation error (`oneOf`). If neither is provided, Flightline applies the other reviewer-demo fields without a password update.
 
@@ -373,7 +373,7 @@ spec:
 
 ## spec.categories
 
-App Store category assignment. Category IDs correspond to Apple's category taxonomy — use `fline categories list` to enumerate valid IDs.
+App Store category assignment. Category IDs correspond to Apple's category taxonomy, use `flightline categories list` to enumerate valid IDs.
 
 ```yaml
 spec:
@@ -386,8 +386,8 @@ spec:
 
 | Field | Type | Required | Constraint | Gotcha |
 |-------|------|----------|------------|--------|
-| `primary` | string | no | — | Primary category ID (e.g. `BUSINESS`, `GAMES`, `EDUCATION`). See `/v1/appCategories` in the ASC API. |
-| `secondary` | string | no | — | Secondary category ID. |
+| `primary` | string | no |, | Primary category ID (e.g. `BUSINESS`, `GAMES`, `EDUCATION`). See `/v1/appCategories` in the ASC API. |
+| `secondary` | string | no |, | Secondary category ID. |
 | `primarySubcategories` | array of string | no | maxItems 2 | Subcategory IDs under `primary`. Only valid for categories that have subcategories (notably `GAMES`). |
 | `secondarySubcategories` | array of string | no | maxItems 2 | Subcategory IDs under `secondary`. |
 
@@ -407,7 +407,7 @@ spec:
 | Field | Type | Required | Gotcha |
 |-------|------|----------|--------|
 | `baseTerritory` | string | no | ISO 3166-1 alpha-3 territory code (e.g. `USA`, `GBR`, `JPN`, `AUS`). Not alpha-2. |
-| `appPricePointId` | string | no | Apple's `appPricePoint` resource ID. Use `fline price-points list` to enumerate. `"FREE"` is the free tier. Quote the value — bare `FREE` is not a YAML string. |
+| `appPricePointId` | string | no | Apple's `appPricePoint` resource ID. Use `flightline price-points list` to enumerate. `"FREE"` is the free tier. Quote the value, bare `FREE` is not a YAML string. |
 
 ---
 
@@ -432,16 +432,16 @@ spec:
 
 ### Group key format
 
-Group keys match `^[A-Za-z0-9 _-]+$`. They are the human-readable names you assign — Flightline resolves the ASC resource ID by matching the name against the live group list.
+Group keys match `^[A-Za-z0-9 _-]+$`. They are the human-readable names you assign, Flightline resolves the ASC resource ID by matching the name against the live group list.
 
 ### testflightGroup fields
 
 | Field | Type | Required | Constraint | Gotcha |
 |-------|------|----------|------------|--------|
-| `isInternal` | boolean | no | — | Internal groups are your App Store Connect team members. External groups are outside testers. |
-| `publicLink` | boolean | no | — | Enables Apple's public invite link for this group. Valid only for external groups. |
+| `isInternal` | boolean | no |, | Internal groups are your App Store Connect team members. External groups are outside testers. |
+| `publicLink` | boolean | no |, | Enables Apple's public invite link for this group. Valid only for external groups. |
 | `publicLinkLimit` | integer | no | 1–10000 | Maximum testers via the public link. Requires `publicLink: true`. |
-| `testers` | array | no | — | Explicit tester list. Each entry requires at least `email`. |
+| `testers` | array | no |, | Explicit tester list. Each entry requires at least `email`. |
 
 ### testflightTester fields
 
@@ -455,7 +455,7 @@ Group keys match `^[A-Za-z0-9 _-]+$`. They are the human-readable names you assi
 
 ## spec.customProductPages
 
-Custom Product Pages (CPPs) — alternate store listings with different screenshots and promotional text, used for ad-driven traffic. Keys are page identifiers (slugs).
+Custom Product Pages (CPPs), alternate store listings with different screenshots and promotional text, used for ad-driven traffic. Keys are page identifiers (slugs).
 
 ```yaml
 spec:
@@ -482,11 +482,11 @@ spec:
 | Field | Type | Required | maxLength | Gotcha |
 |-------|------|----------|-----------|--------|
 | `promotionalText` | string | no | 170 | CPP-specific promotional text, overriding the main listing. |
-| `screenshots` | map | no | — | Device-class screenshot sets, same format as `spec.screenshots`. |
+| `screenshots` | map | no |, | Device-class screenshot sets, same format as `spec.screenshots`. |
 
 **Device classes for CPPs.** CPPs support a subset of device classes: `APP_IPHONE_67`, `APP_IPHONE_69`, `APP_IPHONE_65`, `APP_IPHONE_61`, `APP_IPHONE_55`, `APP_IPAD_PRO_3GEN_129`, `APP_IPAD_PRO_3GEN_11`. TV, Watch, and Vision Pro device classes are not supported on CPPs.
 
-**Current limitation.** CPP screenshot binary uploads are not yet driven by `fline apply`, same as main screenshots. See [QA-010](../.project/issues/open/QA-010-orchestrator-upload-integration.md).
+**Current limitation.** CPP screenshot binary uploads are not yet driven by `flightline apply`, same as main screenshots. See [QA-010](../.project/issues/open/QA-010-orchestrator-upload-integration.md).
 
 ---
 
@@ -494,19 +494,19 @@ spec:
 
 ### Privacy nutrition labels
 
-`spec.privacyLabels` does not exist in the v1alpha1 schema and is not planned for v1. Apple's App Store Connect API v4.3 does not expose the `appPrivacyDetails` resource — there are no read or write endpoints for privacy nutrition labels in the public API.
+`spec.privacyLabels` does not exist in the v1alpha1 schema and is not planned for v1. Apple's App Store Connect API v4.3 does not expose the `appPrivacyDetails` resource, there are no read or write endpoints for privacy nutrition labels in the public API.
 
-Flightline ships a `fline privacy-labels get <bundleId>` stub that returns a typed diagnostic explaining the gap. The JSON contract has `supported: false` and a pointer to the portal.
+Flightline ships a `flightline privacy-labels get <bundleId>` stub that returns a typed diagnostic explaining the gap. The JSON contract has `supported: false` and a pointer to the portal.
 
 Manage privacy labels in the App Store Connect web UI. See [ISSUE-002](../.project/issues/closed/ISSUE-002-privacy-labels-not-in-asc-api.md) for full context.
 
 ### Asset upload paths (screenshots, IAP review screenshots, CPP screenshots)
 
-The `fline apply` orchestrator does not yet drive multipart binary uploads. The sections for `spec.screenshots`, `spec.iap.products[*].reviewScreenshot`, and `spec.customProductPages.<name>.localizations.<locale>.screenshots` are fully supported in `fline fetch` and `fline plan` (the diff engine compares checksums), but `fline apply` returns a typed error for these change paths and directs you to the L1 upload verbs:
+The `flightline apply` orchestrator does not yet drive multipart binary uploads. The sections for `spec.screenshots`, `spec.iap.products[*].reviewScreenshot`, and `spec.customProductPages.<name>.localizations.<locale>.screenshots` are fully supported in `flightline fetch` and `flightline plan` (the diff engine compares checksums), but `flightline apply` returns a typed error for these change paths and directs you to the L1 upload verbs:
 
 ```
-fline screenshots upload <bundleId> --version <v> --locale <l> --device <d> <path>
-fline iap update <productId> --review-screenshot <path>
+flightline screenshots upload <bundleId> --version <v> --locale <l> --device <d> <path>
+flightline iap update <productId> --review-screenshot <path>
 ```
 
 This is tracked in [QA-010](../.project/issues/open/QA-010-orchestrator-upload-integration.md). The full apply orchestration (including checksum-skip and resume) lands when that issue closes.
@@ -536,11 +536,11 @@ Every locale you declare in `spec.metadata.locales` is managed. If you declare `
 
 ### Cross-resource field routing
 
-`name` and `subtitle` live on `appInfoLocalization` in the ASC API; `description`, `keywords`, `whatsNew`, `promotionalText`, `marketingUrl`, `supportUrl`, and `privacyPolicyUrl` live on `appStoreVersionLocalization`. Flightline handles the dispatch — you do not need to know which resource owns which field. But if you see a diff that looks like a no-op update, check whether you have the same locale in two separate ASC resource states.
+`name` and `subtitle` live on `appInfoLocalization` in the ASC API; `description`, `keywords`, `whatsNew`, `promotionalText`, `marketingUrl`, `supportUrl`, and `privacyPolicyUrl` live on `appStoreVersionLocalization`. Flightline handles the dispatch, you do not need to know which resource owns which field. But if you see a diff that looks like a no-op update, check whether you have the same locale in two separate ASC resource states.
 
 ### seventeenPlus is read-only
 
-The `seventeenPlus` boolean in `spec.ageRating` reflects Apple's computed rating from your questionnaire answers. You cannot set it directly — Flightline returns a typed error if this field appears in a change set. You may include it in the YAML as documentation of the current state (as written by `fline fetch`), but changes to it are ignored with an error, not silently applied.
+The `seventeenPlus` boolean in `spec.ageRating` reflects Apple's computed rating from your questionnaire answers. You cannot set it directly, Flightline returns a typed error if this field appears in a change set. You may include it in the YAML as documentation of the current state (as written by `flightline fetch`), but changes to it are ignored with an error, not silently applied.
 
 ### contestsAndGambling maps to Apple's "contests" field
 
@@ -548,17 +548,17 @@ The schema uses `contestsAndGambling` for the frequency question about contests 
 
 ### Omitted spec sections are not managed
 
-If you omit `spec.screenshots` entirely, Flightline will not touch your screenshots — not delete them, not diff them, nothing. This is intentional: partial state files let you manage only the surfaces you care about. If you want Flightline to own a surface, fetch the full state first (`fline fetch`), then edit.
+If you omit `spec.screenshots` entirely, Flightline will not touch your screenshots, not delete them, not diff them, nothing. This is intentional: partial state files let you manage only the surfaces you care about. If you want Flightline to own a surface, fetch the full state first (`flightline fetch`), then edit.
 
 ### Version must be in editable state
 
-`fline plan` and `fline apply` require the version identified by `metadata.version` to be in an editable state in ASC (e.g., `PREPARE_FOR_SUBMISSION`, `DEVELOPER_REJECTED`). If the version is `READY_FOR_SALE` or under review, writes will fail with a 422 from Apple's API.
+`flightline plan` and `flightline apply` require the version identified by `metadata.version` to be in an editable state in ASC (e.g., `PREPARE_FOR_SUBMISSION`, `DEVELOPER_REJECTED`). If the version is `READY_FOR_SALE` or under review, writes will fail with a 422 from Apple's API.
 
 ---
 
 ## See also
 
-- [Quickstart](./state-yaml-quickstart.md) — 5-minute fetch → edit → plan → apply walkthrough
-- [Schema source](../schemas/flightline.schema.json) — the JSON Schema 2020-12 contract
-- [PRD Lifecycle](../.project/prd.md#lifecycle) — the full authoring loop (lint → plan → apply → preflight → submit)
-- `fline --help`, `fline fetch --help`, `fline plan --help`, `fline apply --help`
+- [Quickstart](./state-yaml-quickstart.md), 5-minute fetch → edit → plan → apply walkthrough
+- [Schema source](../schemas/flightline.schema.json), the JSON Schema 2020-12 contract
+- [PRD Lifecycle](../.project/prd.md#lifecycle), the full authoring loop (lint → plan → apply → preflight → submit)
+- `flightline --help`, `flightline fetch --help`, `flightline plan --help`, `flightline apply --help`

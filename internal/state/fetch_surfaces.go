@@ -1,11 +1,3 @@
-// fetch_surfaces.go — per-spec-surface live-state projectors.
-//
-// Each fetchX function in this file pulls one schema surface from
-// ASC and returns the typed *config.* value for it. Errors are
-// returned (callers in fetch.go decide whether to surface them or
-// treat them as "not managed" — most surfaces are best-effort because
-// a fresh app has empty rosters/locales/etc.).
-
 package state
 
 import (
@@ -20,8 +12,6 @@ import (
 	"github.com/ul0gic/flightline/internal/config"
 )
 
-// --- build number ----------------------------------------------------------
-
 func fetchBuildNumber(ctx context.Context, c *asc.Client, buildID string) (string, error) {
 	resp, err := asc.Get[asc.Single[asc.BuildAttributes]](ctx, c, "/v1/builds/"+buildID, nil)
 	if err != nil {
@@ -29,8 +19,6 @@ func fetchBuildNumber(ctx context.Context, c *asc.Client, buildID string) (strin
 	}
 	return resp.Data.Attributes.Version, nil
 }
-
-// --- metadata locales ------------------------------------------------------
 
 func fetchMetadataLocales(ctx context.Context, c *asc.Client, versionID, appInfoID string) (*config.MetadataSpec, error) {
 	out := &config.MetadataSpec{Locales: map[string]config.MetadataLocale{}}
@@ -149,8 +137,6 @@ func copyAppInfoLocAttrsToSchema(ml *config.MetadataLocale, a appInfoLocAttrs) {
 	}
 }
 
-// --- categories ------------------------------------------------------------
-
 type categoryRelationshipsResp struct {
 	Data *struct {
 		ID string `json:"id"`
@@ -184,9 +170,8 @@ func fetchCategories(ctx context.Context, c *asc.Client, appInfoID string) *conf
 	return out
 }
 
-// getCategoryRelationship returns the linked category id, or "" when
-// no link is set / Apple 404s the relationship endpoint. Errors are
-// swallowed because empty is the canonical "unset" signal.
+// getCategoryRelationship returns the linked category ID, or "" when unset or 404.
+// Errors are swallowed; empty is the canonical "unset" signal.
 func getCategoryRelationship(ctx context.Context, c *asc.Client, appInfoID, rel string) string {
 	resp, err := asc.Get[categoryRelationshipsResp](
 		ctx, c, "/v1/appInfos/"+appInfoID+"/relationships/"+rel, nil,
@@ -196,8 +181,6 @@ func getCategoryRelationship(ctx context.Context, c *asc.Client, appInfoID, rel 
 	}
 	return resp.Data.ID
 }
-
-// --- pricing ---------------------------------------------------------------
 
 func fetchPricing(ctx context.Context, c *asc.Client, appID string) *config.PricingSpec {
 	terr, pp := fetchPricingPair(ctx, c, appID)
@@ -214,16 +197,12 @@ func fetchPricing(ctx context.Context, c *asc.Client, appID string) *config.Pric
 	return out
 }
 
-// --- reviewer demo ---------------------------------------------------------
-
 func fetchReviewerDemo(ctx context.Context, c *asc.Client, versionID string) *config.ReviewerDemoSpec {
 	resp, err := asc.Get[asc.Single[reviewerDemoAttrs]](
 		ctx, c, "/v1/appStoreVersions/"+versionID+"/appStoreReviewDetail", nil,
 	)
 	if err != nil {
-		// Many versions don't have a detail row provisioned yet —
-		// surface as "not managed".
-		return nil
+		return nil // versions without a detail row are not managed
 	}
 	a := resp.Data.Attributes
 	if a.DemoAccountName == "" && a.ContactEmail == "" && a.ContactPhone == "" &&
@@ -239,9 +218,7 @@ func fetchReviewerDemo(ctx context.Context, c *asc.Client, versionID string) *co
 		s := a.Notes
 		out.Notes = &s
 	}
-	// Apple stores first + last separately; the schema's contactName
-	// is rendered as "First Last" on the way out. Round-trip from the
-	// schema split is documented in the apply dispatcher.
+	// Apple stores first+last separately; schema's contactName is "First Last" on the way out.
 	if a.ContactFirstName != "" || a.ContactLastName != "" {
 		full := strings.TrimSpace(a.ContactFirstName + " " + a.ContactLastName)
 		out.ContactName = &full
@@ -254,12 +231,8 @@ func fetchReviewerDemo(ctx context.Context, c *asc.Client, versionID string) *co
 		s := a.ContactPhone
 		out.ContactPhone = &s
 	}
-	// Password is intentionally never round-tripped — see apply
-	// dispatcher's resolvePassword.
-	return out
+	return out // password is never round-tripped; apply's resolvePassword re-reads it
 }
-
-// --- IAPs ------------------------------------------------------------------
 
 func fetchIAPs(ctx context.Context, c *asc.Client, appID string) (*config.IAPSpec, error) {
 	q := url.Values{"limit": {"100"}}
@@ -284,8 +257,7 @@ func fetchIAPs(ctx context.Context, c *asc.Client, appID string) (*config.IAPSpe
 			prod.FamilySharable = &v
 		}
 		if r.Attributes.ContentHosting != nil {
-			// Apple reports a *bool; schema models it as enum
-			// "HOSTED"/"NON_HOSTED". Translate.
+			// Apple *bool → schema enum "HOSTED"/"NON_HOSTED".
 			s := "NON_HOSTED"
 			if *r.Attributes.ContentHosting {
 				s = "HOSTED"
@@ -296,13 +268,9 @@ func fetchIAPs(ctx context.Context, c *asc.Client, appID string) (*config.IAPSpe
 			s := r.Attributes.ReviewNote
 			prod.ReviewNote = &s
 		}
-		// localizations
 		if locs, lerr := fetchIAPLocalizations(ctx, c, r.ID); lerr == nil && len(locs) > 0 {
 			prod.Localizations = locs
 		}
-		// reviewScreenshot — surface metadata only (URL via asc.IAPReviewScreenshotAttributes).
-		// Round-trip: we record an empty Path "" sentinel so apply doesn't try to re-upload
-		// when re-fetched data matches the YAML's path.
 		out.Products[r.Attributes.ProductID] = prod
 	}
 	return out, nil
@@ -334,8 +302,6 @@ func fetchIAPLocalizations(ctx context.Context, c *asc.Client, iapID string) (ma
 	}
 	return out, nil
 }
-
-// --- TestFlight ------------------------------------------------------------
 
 func fetchTestFlightGroups(ctx context.Context, c *asc.Client, appID string) (*config.TestFlightSpec, error) {
 	q := url.Values{"limit": {"100"}}
@@ -395,14 +361,8 @@ func fetchGroupTesters(ctx context.Context, c *asc.Client, groupID string) ([]co
 	return out, nil
 }
 
-// --- screenshots -----------------------------------------------------------
-
-// fetchScreenshots walks every screenshot set on every version
-// localization and projects to the schema's locale → device → []file
-// shape. The Path field is left blank — Apple stores rendered URLs,
-// not source paths — so the diff engine's full-tree comparison
-// correctly flags any local-vs-live mismatch when the user edits
-// state.yaml.
+// fetchScreenshots projects locale → device → []file. Path is left blank: Apple
+// stores rendered URLs, not source paths: so the diff engine flags local-vs-live mismatches.
 func fetchScreenshots(ctx context.Context, c *asc.Client, versionID string) (*config.ScreenshotsSpec, error) {
 	verLocsResp, err := asc.Get[asc.Collection[versionLocAttrs]](
 		ctx, c, "/v1/appStoreVersions/"+versionID+"/appStoreVersionLocalizations",
@@ -477,8 +437,6 @@ func fetchScreenshotsInSet(ctx context.Context, c *asc.Client, setID string) ([]
 	return out, nil
 }
 
-// --- custom product pages --------------------------------------------------
-
 func fetchCustomProductPages(ctx context.Context, c *asc.Client, appID string) (config.CustomProductPagesSpec, error) {
 	q := url.Values{"limit": {"100"}}
 	page, err := asc.Get[asc.Collection[asc.AppCustomProductPageAttributes]](
@@ -505,9 +463,8 @@ func fetchCustomProductPages(ctx context.Context, c *asc.Client, appID string) (
 	return out, nil
 }
 
-// fetchCPPLocalizations walks page → version → localizations. Empty
-// or missing intermediate steps return an empty map (CPPs may not
-// have any version yet on first creation).
+// fetchCPPLocalizations walks page → version → localizations; returns nil when
+// no version exists yet (CPPs may not have a version on first creation).
 func fetchCPPLocalizations(ctx context.Context, c *asc.Client, pageID string) map[string]config.CustomProductPageLocale {
 	versResp, err := asc.Get[asc.Collection[asc.AppCustomProductPageVersionAttributes]](
 		ctx, c, "/v1/customProductPages/"+pageID+"/customProductPageVersions",
@@ -536,8 +493,6 @@ func fetchCPPLocalizations(ctx context.Context, c *asc.Client, pageID string) ma
 	return out
 }
 
-// silence the import sweep of std libs we use only when JSON-decoding
-// arbitrary Apple shapes.
 var (
 	_ = json.Marshal
 	_ = errors.New

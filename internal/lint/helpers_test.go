@@ -14,12 +14,8 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// newTestClient builds an asc.Client wired to srv via Options.BaseURL.
-//
-// Mirrors internal/cmd/helpers_test.go's fixtureASCClient — separate copy
-// rather than a shared internal package because lint must not import cmd.
-// An ephemeral P-256 PKCS8 key is written at mode 0600 to t.TempDir() so the
-// JWT minter runs unmodified; never use a real .p8.
+// newTestClient wires an asc.Client to srv. Separate from internal/cmd/helpers_test.go because lint must not import cmd.
+// Uses an ephemeral P-256 key at 0600 so the JWT minter runs unmodified.
 func newTestClient(t *testing.T, srv *httptest.Server) *asc.Client {
 	t.Helper()
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

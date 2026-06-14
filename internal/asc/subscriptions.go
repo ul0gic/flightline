@@ -1,34 +1,6 @@
 package asc
 
-// Subscriptions read surface. Apple structures auto-renewable subscriptions
-// as a tree:
-//
-//   - SubscriptionGroup: a competing-tier group (e.g. "Pro Tiers").
-//     One app can have multiple groups; users can be in only one
-//     subscription per group at a time.
-//   - Subscription: one product within a group (e.g. "Pro Monthly").
-//     Carries productId, name, period, group level, family-shareability.
-//   - SubscriptionLocalization: per-locale name/description for one
-//     Subscription.
-//   - SubscriptionGroupLocalization: per-locale name for the group.
-//   - SubscriptionPrice / SubscriptionIntroductoryOffer: price ladder and
-//     intro offers.
-//
-// v1 read surface is intentionally narrow — full CRUD lands in Phase 3.
-//
-// Source:
-//
-//	jq '.components.schemas.SubscriptionGroup.properties.attributes.properties' openapi.oas.json
-//	jq '.components.schemas.Subscription.properties.attributes.properties' openapi.oas.json
-//	jq '.components.schemas.SubscriptionLocalization.properties.attributes.properties' openapi.oas.json
-//	jq '.components.schemas.SubscriptionGroupLocalization.properties.attributes.properties' openapi.oas.json
-//	jq '.components.schemas.SubscriptionPrice.properties.attributes.properties' openapi.oas.json
-//	jq '.components.schemas.SubscriptionIntroductoryOffer.properties.attributes.properties' openapi.oas.json
-//
-// Reused by Phase 3 write verbs (`subscriptions update`, `subscriptions
-// localize`); the wire shape stays the same on POST/PATCH.
-
-// Apple-defined enums surfaced as named constants.
+// Users can hold only one subscription per group at a time.
 const (
 	SubscriptionStateMissingMetadata          = "MISSING_METADATA"
 	SubscriptionStateReadyToSubmit            = "READY_TO_SUBMIT"
@@ -54,17 +26,14 @@ const (
 	SubscriptionGroupLocalizationStateRejected         = "REJECTED"
 )
 
-// SubscriptionGroupAttributes is the subset of Apple's
-// SubscriptionGroup.attributes Flightline reads. ReferenceName is the
-// developer-facing label (not user-visible); user-visible names live on
-// SubscriptionGroupLocalization.
+// SubscriptionGroupAttributes is the subset of Apple's SubscriptionGroup.attributes Flightline reads.
+// ReferenceName is developer-facing only; user-visible names live on SubscriptionGroupLocalization.
 type SubscriptionGroupAttributes struct {
 	ReferenceName string `json:"referenceName,omitempty"`
 }
 
-// SubscriptionAttributes is the subset of Apple's Subscription.attributes
-// Flightline reads. GroupLevel is the rank within the group (1 = lowest tier);
-// users in higher tiers cannot downgrade through normal flow.
+// SubscriptionAttributes is the subset of Apple's Subscription.attributes Flightline reads.
+// GroupLevel is the tier rank (1 = lowest); users cannot downgrade to a lower tier through normal flow.
 type SubscriptionAttributes struct {
 	Name               string `json:"name,omitempty"`
 	ProductID          string `json:"productId,omitempty"`
@@ -75,9 +44,7 @@ type SubscriptionAttributes struct {
 	GroupLevel         int    `json:"groupLevel,omitempty"`
 }
 
-// SubscriptionLocalizationAttributes is the subset of Apple's
-// SubscriptionLocalization.attributes Flightline reads. Apple stores the
-// user-visible name and description per locale.
+// SubscriptionLocalizationAttributes is the subset of Apple's SubscriptionLocalization.attributes Flightline reads.
 type SubscriptionLocalizationAttributes struct {
 	Name        string `json:"name,omitempty"`
 	Locale      string `json:"locale,omitempty"`
@@ -94,10 +61,8 @@ type SubscriptionGroupLocalizationAttributes struct {
 	State         string `json:"state,omitempty"`
 }
 
-// SubscriptionPriceAttributes is the subset of Apple's
-// SubscriptionPrice.attributes Flightline reads. Apple's price ladder is
-// expressed via prices linked to price-points (territory-priced); this
-// struct is the price-record, not the price-point.
+// SubscriptionPriceAttributes is the subset of Apple's SubscriptionPrice.attributes Flightline reads.
+// This is the price-record (a window linked to a price-point), not the price-point itself.
 type SubscriptionPriceAttributes struct {
 	StartDate string `json:"startDate,omitempty"`
 	Preserved *bool  `json:"preserved,omitempty"`

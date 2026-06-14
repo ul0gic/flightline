@@ -11,9 +11,8 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// CategoryView is one row of the categories list output. Apple's id on a
-// category resource is the stable category key (GAMES, PRODUCTIVITY, …) —
-// surfaced via Resource.ID, not nested under attributes.
+// CategoryView is one row of the categories list output. Apple's resource ID is
+// the stable category key (GAMES, PRODUCTIVITY, …), not a nested attribute.
 type CategoryView struct {
 	ID         string                    `json:"id"`
 	Type       string                    `json:"type"`
@@ -36,17 +35,8 @@ func (l CategoryList) TableRows() (headers []string, rows [][]string) {
 	return headers, rows
 }
 
-// CategoryAssignmentView is the read-side view for `categories get` — the
-// categories currently set on an app's editable appInfo. Empty fields mean
-// the slot is unassigned (which is a frequent submission-rejection cause).
-//
-// Apple models category selection as 6 separate to-one relationships on the
-// appInfo resource:
-//   - primaryCategory + primarySubcategoryOne + primarySubcategoryTwo
-//   - secondaryCategory + secondarySubcategoryOne + secondarySubcategoryTwo
-//
-// The empty slots surface as "(unassigned)" in table mode so visual scans
-// catch missing assignments.
+// CategoryAssignmentView is the read-side view for `categories get`. An empty
+// slot means unassigned, a frequent submission-rejection cause.
 type CategoryAssignmentView struct {
 	BundleID                string `json:"bundleId"`
 	AppInfoID               string `json:"appInfoId"`
@@ -77,10 +67,7 @@ func (v *CategoryAssignmentView) TableRows() (headers []string, rows [][]string)
 	return headers, rows
 }
 
-// categoryCell formats an unassigned category slot as "(unassigned)" for
-// table mode. JSON mode keeps the empty string (omitempty drops it
-// entirely) so machine consumers see a missing field rather than a
-// human-readable label.
+// categoryCell renders an empty slot as "(unassigned)" for table mode; JSON keeps the empty string.
 func categoryCell(v string) string {
 	if v == "" {
 		return "(unassigned)"
@@ -98,7 +85,7 @@ by --platform; defaults to IOS to match Flightline's default platform.
 
 categories get <bundleId> shows the category assignments on the app's
 editable appInfo (primary + secondary plus their subcategories).
-Unassigned slots are a frequent rejection cause — surface them visibly.`,
+Unassigned slots are a frequent rejection cause: surface them visibly.`,
 }
 
 var categoriesListCmd = &cobra.Command{
@@ -107,9 +94,9 @@ var categoriesListCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.NoArgs,
 	RunE:         runCategoriesList,
-	Example: `  fline categories list
-  fline categories list --platform MAC_OS
-  fline categories list --output json | jq -r '.categories[].id'`,
+	Example: `  flightline categories list
+  flightline categories list --platform MAC_OS
+  flightline categories list --output json | jq -r '.categories[].id'`,
 }
 
 var categoriesGetCmd = &cobra.Command{
@@ -118,14 +105,12 @@ var categoriesGetCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runCategoriesGet,
-	Example: `  fline categories get com.example.myapp
-  fline categories get com.example.myapp --output json | jq .primaryCategory`,
+	Example: `  flightline categories get com.example.myapp
+  flightline categories get com.example.myapp --output json | jq .primaryCategory`,
 }
 
-// categoriesSetCmd is the write verb for the categories group. It PATCHes
-// /v1/appInfos/{id} with a relationships block keyed off the editable
-// appInfo. Idempotent: read current assignments, diff, only PATCH if any
-// requested slot differs from the current value.
+// categoriesSetCmd PATCHes /v1/appInfos/{id} on the editable appInfo.
+// Idempotent: reads current assignments and only PATCHes a slot that differs.
 var categoriesSetCmd = &cobra.Command{
 	Use:          "set <bundleId>",
 	Short:        "Assign categories to an app's editable appInfo (idempotent)",
@@ -137,7 +122,7 @@ var categoriesSetCmd = &cobra.Command{
 Apple stores the assignments on the app's editable appInfo as 6 to-one
 relationships (primaryCategory, primarySubcategoryOne, primarySubcategoryTwo,
 secondaryCategory, secondarySubcategoryOne, secondarySubcategoryTwo).
-The categories must come from /v1/appCategories — see ` + "`fline categories list`" + `.
+The categories must come from /v1/appCategories: see ` + "`flightline categories list`" + `.
 
 Only flags that are explicitly passed are written; omitted flags are left
 untouched. To clear a slot pass --clear-secondary or one of its
@@ -145,10 +130,10 @@ sub-equivalents.
 
 Idempotent: the command first reads the current assignments and only
 PATCHes when at least one requested value differs from current.`,
-	Example: `  fline categories set com.example.myapp --primary PRODUCTIVITY --primary-subcat BUSINESS
-  fline categories set com.example.myapp --secondary UTILITIES
-  fline categories set com.example.myapp --clear-secondary
-  fline categories set com.example.myapp --primary GAMES --output json`,
+	Example: `  flightline categories set com.example.myapp --primary PRODUCTIVITY --primary-subcat BUSINESS
+  flightline categories set com.example.myapp --secondary UTILITIES
+  flightline categories set com.example.myapp --clear-secondary
+  flightline categories set com.example.myapp --primary GAMES --output json`,
 }
 
 var (
@@ -192,7 +177,7 @@ func runCategoriesList(cmd *cobra.Command, _ []string) error {
 
 	q := url.Values{
 		"limit":          {"200"},
-		"exists[parent]": {"false"}, // top-level only — subcategories follow via /relationships/subcategories
+		"exists[parent]": {"false"}, // top-level only: subcategories follow via /relationships/subcategories
 	}
 	if p := strings.TrimSpace(categoriesListPlatform); p != "" {
 		q.Set("filter[platforms]", p)
@@ -222,7 +207,7 @@ func runCategoriesGet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Pick the editable appInfo — that's where the next-submission category
+	// Pick the editable appInfo: that's where the next-submission category
 	// assignments live. The live appInfo's categories are read-only history.
 	appInfoID, state, err := pickEditableAppInfo(cmd.Context(), c, appID)
 	if err != nil {
@@ -235,9 +220,7 @@ func runCategoriesGet(cmd *cobra.Command, args []string) error {
 		AppInfoState: state,
 	}
 
-	// Six independent to-one relationship hops. Apple returns 200 with a null
-	// `data` block for unassigned slots — fetchCategoryRelationship handles
-	// that as the empty-string return value, never an error.
+	// Apple returns 200 with null `data` for unassigned slots; fetchCategoryRelationship maps that to "".
 	for _, rel := range []struct {
 		name string
 		dest *string
@@ -259,11 +242,8 @@ func runCategoriesGet(cmd *cobra.Command, args []string) error {
 	return Render(view, outputMode())
 }
 
-// pickEditableAppInfo lists an app's appInfos and returns the editable one
-// (i.e. NOT in the live READY_FOR_DISTRIBUTION bucket). Falls back to the
-// first appInfo if none is unambiguously editable. Mirrors the live/editable
-// bucketing in age_rating.go's pickAppInfoForVersion but always biases to the
-// editable side because category writes only land on editable appInfos.
+// pickEditableAppInfo returns the non-live appInfo (category writes only land there).
+// Falls back to the first appInfo when all are live.
 func pickEditableAppInfo(ctx context.Context, c *asc.Client, appID string) (appInfoID, state string, err error) {
 	q := url.Values{"limit": {"50"}}
 	page, err := asc.Get[asc.Collection[asc.AppInfoAttributes]](
@@ -281,23 +261,14 @@ func pickEditableAppInfo(ctx context.Context, c *asc.Client, appID string) (appI
 			return info.ID, info.Attributes.State, nil
 		}
 	}
-	// Fallback: first appInfo (rare; happens when all appInfos are live, which
-	// in practice means the app is shipping and a new editable appInfo hasn't
-	// been spun yet). Surface its state so the caller sees the bucket.
 	return page.Data[0].ID, page.Data[0].Attributes.State, nil
 }
 
-// isLiveAppInfoState mirrors isLiveVersionState in age_rating.go but lives
-// here because file ownership keeps that function in age_rating.go's
-// resource. Same logic; renaming would breach the boundary.
 func isLiveAppInfoState(state string) bool {
 	return state == "READY_FOR_DISTRIBUTION" || state == "READY_FOR_SALE"
 }
 
-// categoryRelationshipResp matches Apple's /relationships/<name> shape: a
-// JSON:API to-one relationship envelope where Data is either an object
-// {type, id} or null. We model it as a pointer so json.Unmarshal can
-// distinguish "absent" (nil) from "present-but-empty".
+// categoryRelationshipResp is the JSON:API to-one envelope; Data is a pointer to tell null from empty.
 type categoryRelationshipResp struct {
 	Data *struct {
 		Type string `json:"type"`
@@ -305,10 +276,8 @@ type categoryRelationshipResp struct {
 	} `json:"data"`
 }
 
-// CategoriesSetResult is the structured outcome of `categories set`. It
-// surfaces what was diffed and whether a PATCH was issued, so machine
-// consumers (Flightline plan/apply later) can detect idempotent no-ops without
-// having to compare before/after themselves.
+// CategoriesSetResult is the structured outcome of `categories set`. Changed
+// reports whether a PATCH was issued so consumers can detect idempotent no-ops.
 type CategoriesSetResult struct {
 	BundleID     string                  `json:"bundleId"`
 	AppInfoID    string                  `json:"appInfoId"`
@@ -319,17 +288,13 @@ type CategoriesSetResult struct {
 }
 
 // CategoriesFieldChange names one slot that moved during a `categories set`.
-// "Field" is one of the six relationship names. "From" is the previous id
-// (empty for unassigned); "To" is the requested id (empty when clearing).
+// From/To hold the previous/requested id; empty means unassigned or cleared.
 type CategoriesFieldChange struct {
 	Field string `json:"field"`
 	From  string `json:"from,omitempty"`
 	To    string `json:"to,omitempty"`
 }
 
-// TableRows for a categories set result. Reads as: which slots moved, plus
-// the post-PATCH assignments. When idempotent (Changed=false) the changes
-// table renders one row that says "(no change)".
 func (r *CategoriesSetResult) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
 	rows = [][]string{
@@ -348,14 +313,6 @@ func (r *CategoriesSetResult) TableRows() (headers []string, rows [][]string) {
 	return headers, rows
 }
 
-// runCategoriesSet implements the `categories set` write. Pattern:
-//  1. resolve app + editable appInfo
-//  2. fetch current 6 relationships
-//  3. compute desired-state per slot from flags (only flags actually passed
-//     contribute; clear flags zero out the matching slots)
-//  4. diff vs current; if no slot moves, return idempotent no-op
-//  5. PATCH /v1/appInfos/{id} with a single relationships block
-//  6. return CategoriesSetResult including the post-PATCH view
 func runCategoriesSet(cmd *cobra.Command, args []string) error {
 	bundleID := args[0]
 	c, err := newClient()
@@ -391,8 +348,6 @@ func runCategoriesSet(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(changes) == 0 {
-		// Idempotent no-op. Return the current view as the result so JSON
-		// consumers always have a coherent post-state to compare against.
 		result.Changed = false
 		result.Result = currentToAssignmentView(bundleID, appInfoID, state, current)
 		return Render(result, outputMode())
@@ -422,11 +377,7 @@ type categoryRelationships struct {
 	secondarySub2 string
 }
 
-// fetchAllCategoryRelationships pulls every category-slot relationship for
-// an appInfo. Returns the empty struct's zero values when slots are
-// unassigned. Surfaces a typed error naming the slot if any individual hop
-// fails for a reason other than 404 (which is treated as unassigned by
-// fetchCategoryRelationship).
+// fetchAllCategoryRelationships pulls every category slot for an appInfo; unassigned slots come back "".
 func fetchAllCategoryRelationships(ctx context.Context, c *asc.Client, appInfoID string) (categoryRelationships, error) {
 	var out categoryRelationships
 	for _, rel := range []struct {
@@ -449,13 +400,7 @@ func fetchAllCategoryRelationships(ctx context.Context, c *asc.Client, appInfoID
 	return out, nil
 }
 
-// categoriesDesiredState computes the desired post-set state from the flags
-// the user actually passed. A flag that wasn't changed leaves the current
-// value alone; an explicit --clear-* flag forces the matching slots empty.
-//
-// Returns an error if a clear flag and an explicit assignment flag for the
-// same field are combined (caller error — surface immediately rather than
-// silently picking one).
+// categoriesDesiredState applies only the flags the user passed; --clear-* wins, conflicts error.
 func categoriesDesiredState(cmd *cobra.Command, current categoryRelationships) (categoryRelationships, error) {
 	d := current
 	applyCategoriesAssignFlags(cmd, &d)
@@ -463,7 +408,7 @@ func categoriesDesiredState(cmd *cobra.Command, current categoryRelationships) (
 		return d, err
 	}
 	if d == current {
-		return d, fmt.Errorf("categories: nothing to do — no slot flags supplied (try --primary, --secondary, --primary-subcat, --secondary-subcat, or any --clear-* flag)")
+		return d, errors.New("categories: nothing to do: no slot flags supplied (try --primary, --secondary, --primary-subcat, --secondary-subcat, or any --clear-* flag)")
 	}
 	return d, nil
 }
@@ -491,14 +436,12 @@ func applyCategoriesAssignFlags(cmd *cobra.Command, d *categoryRelationships) {
 	}
 }
 
-// applyCategoriesClearFlags zeros out groups of slots when the matching
-// --clear-* flag is set, surfacing an error if any explicit assignment
-// flag for the same group is also passed.
+// applyCategoriesClearFlags zeros slot groups for each --clear-* flag; errors on a same-group conflict.
 func applyCategoriesClearFlags(cmd *cobra.Command, d *categoryRelationships) error {
 	flags := cmd.Flags()
 	if categoriesSetClearSecondary {
 		if flags.Changed("secondary") || flags.Changed("secondary-subcat") || flags.Changed("secondary-subcat-two") {
-			return fmt.Errorf("categories: --clear-secondary cannot be combined with --secondary / --secondary-subcat / --secondary-subcat-two")
+			return errors.New("categories: --clear-secondary cannot be combined with --secondary / --secondary-subcat / --secondary-subcat-two")
 		}
 		d.secondary = ""
 		d.secondarySub1 = ""
@@ -506,14 +449,14 @@ func applyCategoriesClearFlags(cmd *cobra.Command, d *categoryRelationships) err
 	}
 	if categoriesSetClearPrimarySub {
 		if flags.Changed("primary-subcat") || flags.Changed("primary-subcat-two") {
-			return fmt.Errorf("categories: --clear-primary-subcat cannot be combined with --primary-subcat / --primary-subcat-two")
+			return errors.New("categories: --clear-primary-subcat cannot be combined with --primary-subcat / --primary-subcat-two")
 		}
 		d.primarySubOne = ""
 		d.primarySubTwo = ""
 	}
 	if categoriesSetClearSecondarySub {
 		if flags.Changed("secondary-subcat") || flags.Changed("secondary-subcat-two") {
-			return fmt.Errorf("categories: --clear-secondary-subcat cannot be combined with --secondary-subcat / --secondary-subcat-two")
+			return errors.New("categories: --clear-secondary-subcat cannot be combined with --secondary-subcat / --secondary-subcat-two")
 		}
 		d.secondarySub1 = ""
 		d.secondarySub2 = ""
@@ -544,12 +487,8 @@ func categoriesDiff(current, desired categoryRelationships) []CategoriesFieldCha
 	return changes
 }
 
-// buildAppInfoCategoriesPatch crafts the JSON:API PATCH body for
-// /v1/appInfos/{id} carrying only the relationship slots that changed.
-// Apple accepts a partial relationships block — we explicitly send `null`
-// for cleared slots and omit untouched ones to avoid clobbering server
-// state we never observed (idempotency invariant: don't include fields
-// you're not certain about).
+// buildAppInfoCategoriesPatch sends only changed slots: null to clear, omitted to leave untouched.
+// Omitting unchanged slots is the idempotency invariant; never patch unobserved state.
 func buildAppInfoCategoriesPatch(appInfoID string, desired categoryRelationships, changes []CategoriesFieldChange) map[string]any {
 	rels := map[string]any{}
 	changeSet := make(map[string]bool, len(changes))
@@ -586,9 +525,7 @@ func buildAppInfoCategoriesPatch(appInfoID string, desired categoryRelationships
 	}
 }
 
-// currentToAssignmentView projects a categoryRelationships into the public
-// CategoryAssignmentView shape so callers (and the Result.Result field) get
-// a stable JSON view.
+// currentToAssignmentView projects categoryRelationships into the public CategoryAssignmentView.
 func currentToAssignmentView(bundleID, appInfoID, state string, r categoryRelationships) *CategoryAssignmentView {
 	return &CategoryAssignmentView{
 		BundleID:                bundleID,
@@ -603,14 +540,8 @@ func currentToAssignmentView(bundleID, appInfoID, state string, r categoryRelati
 	}
 }
 
-// fetchCategoryRelationship reads a single to-one category relationship off
-// an appInfo (e.g. /v1/appInfos/{id}/relationships/primaryCategory) and
-// returns the linked category id. Unassigned slots come back as a 200 with
-// `data: null`; we surface that as "" + nil error rather than a fault.
-//
-// We use the /relationships/<name> path (linkage-only) rather than /<name>
-// (full resource fetch) because we only need the id; one request, no extra
-// payload, no rate-limit waste.
+// fetchCategoryRelationship returns the linked category id, or "" for an unassigned slot.
+// Uses the linkage-only /relationships/<name> path since only the id is needed.
 func fetchCategoryRelationship(ctx context.Context, c *asc.Client, appInfoID, relName string) (string, error) {
 	path := "/v1/appInfos/" + appInfoID + "/relationships/" + relName
 	resp, err := asc.Get[categoryRelationshipResp](ctx, c, path, nil)

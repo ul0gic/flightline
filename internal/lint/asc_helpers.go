@@ -1,9 +1,3 @@
-// asc_helpers.go — small ASC HTTP shims shared by multiple rules.
-//
-// The first ASC helper a rule needs lives next to the rule. The moment a
-// second rule needs the same shape, it moves here so the duplication doesn't
-// fork. Anything still rule-local at the gate review is fair game to lift.
-
 package lint
 
 import (
@@ -13,9 +7,7 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// resolveVersionIDOnApp looks up an App Store version by versionString
-// (and platform=IOS, the default). Returns the resource ID. If
-// versionStr is empty the latest editable version is picked.
+// resolveVersionIDOnApp looks up an App Store version by versionString (platform=IOS). Empty versionStr picks latest.
 func resolveVersionIDOnApp(ctx CheckContext, appID, versionStr string) (string, error) {
 	q := url.Values{
 		"filter[platform]": {"IOS"},

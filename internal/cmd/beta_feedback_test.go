@@ -159,7 +159,7 @@ func TestBetaFeedback_JSONOutputStability_Crash(t *testing.T) {
 	}
 	for _, key := range []string{"id", "type", "attributes"} {
 		if _, ok := decoded.Submissions[0][key]; !ok {
-			t.Errorf("missing per-row key %q — JSON contract drift", key)
+			t.Errorf("missing per-row key %q: JSON contract drift", key)
 		}
 	}
 }

@@ -40,8 +40,8 @@ func TestMetadataCmd_Registered(t *testing.T) {
 	}
 }
 
-// TestMetadataView_JSONShape locks the joined-localization output contract.
-// Every consumer-visible field must be tagged with Apple's wire casing.
+// TestMetadataView_JSONShape locks the joined-localization output contract:
+// every field is tagged with Apple's wire casing.
 func TestMetadataView_JSONShape(t *testing.T) {
 	v := MetadataView{
 		Locale:                "en-US",
@@ -175,9 +175,8 @@ func TestDiffVersionLocAttrs_OnlyDifferingFields(t *testing.T) {
 	}
 }
 
-// TestDiffVersionLocAttrs_UnsetFlagsIgnored locks the rule that flags the
-// user did not pass do NOT enter the diff. Critical: an empty-string default
-// would otherwise clear server-side fields.
+// TestDiffVersionLocAttrs_UnsetFlagsIgnored locks the rule that unpassed flags
+// stay out of the diff; otherwise empty-string defaults would clear live fields.
 func TestDiffVersionLocAttrs_UnsetFlagsIgnored(t *testing.T) {
 	cur := metadataASCVersionLocalizationAttrs{Description: "live"}
 	flags := metadataFlagSet{} // no flags set
@@ -202,9 +201,8 @@ func TestDiffAppInfoLocAttrs_OnlyDifferingFields(t *testing.T) {
 	}
 }
 
-// TestVersionLocPatch_OmitsUnsetFields locks the wire body shape: pointer
-// + omitempty drops fields the user didn't pass, so a partial PATCH does
-// not accidentally clear unrelated fields.
+// TestVersionLocPatch_OmitsUnsetFields locks the wire body shape: pointer +
+// omitempty drops unpassed fields so a partial PATCH doesn't clear others.
 func TestVersionLocPatch_OmitsUnsetFields(t *testing.T) {
 	body := versionLocalizationPatch{
 		Data: versionLocalizationPatchData{
@@ -230,7 +228,7 @@ func TestVersionLocPatch_OmitsUnsetFields(t *testing.T) {
 	}
 }
 
-// TestAppInfoLocPatch_OmitsUnsetFields — same wire-shape lock for the
+// TestAppInfoLocPatch_OmitsUnsetFields: same wire-shape lock for the
 // appInfo variant.
 func TestAppInfoLocPatch_OmitsUnsetFields(t *testing.T) {
 	body := appInfoLocalizationPatch{
@@ -288,9 +286,8 @@ func TestMetadata_FixtureReplay_GetVersionLoc_Missing(t *testing.T) {
 	}
 }
 
-// TestMetadata_FixtureReplay_PatchVersionLoc exercises the PATCH path.
-// The fixture server returns the post-state body so the caller's after-
-// image renders correctly.
+// TestMetadata_FixtureReplay_PatchVersionLoc exercises the PATCH path; the
+// fixture returns the post-state body so the after-image renders correctly.
 func TestMetadata_FixtureReplay_PatchVersionLoc(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"PATCH /v1/appStoreVersionLocalizations/AC000000001": {File: "metadata_version_loc_patched"},
@@ -345,10 +342,7 @@ func TestMetadata_FixtureReplay_PatchAppInfoLoc(t *testing.T) {
 }
 
 // TestTruncateForTable confirms long copy is summarised in the table cell.
-//
-// Note: `…` is a 3-byte UTF-8 sequence, so the byte length of a truncated
-// string is (max - 1) bytes for the prefix + 3 bytes for the ellipsis,
-// totalling max + 2. The contract is "rune count ≤ max", not byte count.
+// The contract is "rune count ≤ max", not byte count (`…` is 3 bytes).
 func TestTruncateForTable(t *testing.T) {
 	short := "hi"
 	if got := truncateForTable(short, 10); got != short {

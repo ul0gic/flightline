@@ -16,7 +16,6 @@ func TestFilterAnalyticsReports_NoFilter(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("got %d, want 2", len(got))
 	}
-	// must return a copy, not the same slice header
 	got[0].Name = "MUTATED"
 	if in[0].Name == "MUTATED" {
 		t.Errorf("FilterAnalyticsReports returned aliased slice; mutated input")
@@ -117,8 +116,7 @@ func TestParseSegmentDownload_EmptyBody(t *testing.T) {
 
 func TestParseSegmentDownload_MalformedCSV(t *testing.T) {
 	t.Parallel()
-	// Unterminated quoted field — csv.Reader returns a parse error, but the
-	// helper should swallow it and still return ByteCount + nil Header.
+	// Unterminated quote: helper must swallow the csv parse error, returning ByteCount + nil Header.
 	body := []byte("\"unterminated\n")
 	got := ParseSegmentDownload("SEG-1", "INST-1", body)
 	if got.ByteCount != len(body) {
@@ -129,9 +127,7 @@ func TestParseSegmentDownload_MalformedCSV(t *testing.T) {
 	}
 }
 
-// TestSegmentDownloadResult_BytesNotInJSON guards the JSON contract: raw
-// bytes are excluded so JSON consumers don't get a base64 blob bloating
-// stdout. Bytes are written to disk separately by the CLI.
+// TestSegmentDownloadResult_BytesNotInJSON guards that raw bytes stay off JSON output.
 func TestSegmentDownloadResult_BytesNotInJSON(t *testing.T) {
 	t.Parallel()
 	r := SegmentDownloadResult{

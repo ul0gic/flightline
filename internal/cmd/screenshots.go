@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/md5" //nolint:gosec // Apple's API requires MD5 for upload integrity (sourceFileChecksum)
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -15,29 +16,8 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// screenshots upload is the cmd-layer wrapper around (*asc.Client).Upload.
-//
-// Wire dance:
-//   1. resolve bundle -> app -> version -> versionLocalization (locale)
-//   2. find or create the appScreenshotSet for (versionLocalization,
-//      screenshotDisplayType)
-//   3. enumerate the set's existing appScreenshots; index by
-//      sourceFileChecksum
-//   4. for each local file, compute md5; if a slot already carries that
-//      checksum, skip (idempotent contract); else hand the file to
-//      Client.Upload which performs reserve -> PUT chunks -> commit.
-//
-// Re-running with the same arguments is a no-op: every file is already in
-// place at its checksum, so step 4 short-circuits for all files.
-//
-// Files supplied without an explicit display type are assumed to belong to
-// --device-set; the spec says one device set per invocation, which keeps
-// the contract small and predictable. Multi-set uploads are a v2 problem.
-
 // validScreenshotDeviceSets is the canonical list of ScreenshotDisplayType
-// enum values pulled from openapi.oas.json. Surfaced as the --device-set
-// validator. Renaming or removing entries is a breaking change to the
-// flag contract.
+// enum values, surfaced as the --device-set validator.
 var validScreenshotDeviceSets = []string{
 	"APP_IPHONE_67", "APP_IPHONE_61", "APP_IPHONE_65", "APP_IPHONE_58",
 	"APP_IPHONE_55", "APP_IPHONE_47", "APP_IPHONE_40", "APP_IPHONE_35",
@@ -55,8 +35,6 @@ var validScreenshotDeviceSets = []string{
 	"IMESSAGE_APP_IPAD_105", "IMESSAGE_APP_IPAD_97",
 }
 
-// isValidDeviceSet reports whether the given string is one of Apple's
-// recognised ScreenshotDisplayType values.
 func isValidDeviceSet(s string) bool {
 	for _, v := range validScreenshotDeviceSets {
 		if v == s {
@@ -66,22 +44,20 @@ func isValidDeviceSet(s string) bool {
 	return false
 }
 
-// screenshotSetAttrs mirrors AppScreenshotSet.attributes — only the field
-// Flightline reads. Type is the Apple-side display type enum.
+// screenshotSetAttrs mirrors AppScreenshotSet.attributes, the field Flightline reads.
 type screenshotSetAttrs struct {
 	ScreenshotDisplayType string `json:"screenshotDisplayType,omitempty"`
 }
 
-// existingScreenshotAttrs mirrors AppScreenshot.attributes — only the
-// fields Flightline reads to decide whether a file is already uploaded.
+// existingScreenshotAttrs mirrors AppScreenshot.attributes, the fields used to
+// decide whether a file is already uploaded.
 type existingScreenshotAttrs struct {
 	FileName           string `json:"fileName,omitempty"`
 	SourceFileChecksum string `json:"sourceFileChecksum,omitempty"`
 	FileSize           int64  `json:"fileSize,omitempty"`
 }
 
-// ScreenshotUploadResultEntry describes the per-file outcome inside a
-// `screenshots upload` invocation. Stable JSON contract.
+// ScreenshotUploadResultEntry is the per-file outcome of `screenshots upload`.
 type ScreenshotUploadResultEntry struct {
 	Path     string `json:"path"`
 	FileName string `json:"fileName"`
@@ -105,7 +81,7 @@ type ScreenshotUploadResult struct {
 	Files         []ScreenshotUploadResultEntry `json:"files"`
 }
 
-// TableRows for ScreenshotUploadResult — header summary + per-file rows.
+// TableRows for ScreenshotUploadResult: header summary + per-file rows.
 func (r *ScreenshotUploadResult) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FILE", "ACTION", "MD5", "ASSET_ID"}
 	rows = make([][]string, 0, len(r.Files))
@@ -119,9 +95,8 @@ var screenshotsCmd = &cobra.Command{
 	Use:   "screenshots",
 	Short: "Manage App Store screenshots",
 	Long: `screenshots wraps Apple's appScreenshotSets / appScreenshots resources.
-Uploads use the 3-step reserve -> PUT chunks -> commit dance via the
-shared internal/asc/upload.go helper. All operations are idempotent — a
-file whose MD5 already matches a slot in the target set is skipped.`,
+Uploads use the 3-step reserve -> PUT chunks -> commit dance. All operations
+are idempotent: a file whose MD5 already matches a slot in the set is skipped.`,
 }
 
 var screenshotsUploadCmd = &cobra.Command{
@@ -130,9 +105,9 @@ var screenshotsUploadCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.MinimumNArgs(2),
 	RunE:         runScreenshotsUpload,
-	Example: `  fline screenshots upload com.example.myapp --version 1.0.1 --locale en-US --device-set APP_IPHONE_67 ./shots/iphone-67/*.png
-  fline screenshots upload com.example.myapp --version 1.0.1 --locale en-US --device-set APP_IPAD_PRO_3GEN_129 ./shots/ipad/01.png ./shots/ipad/02.png
-  fline screenshots upload com.example.myapp --version 1.0.1 --locale en-US --device-set APP_IPHONE_67 --resume ./shots/01.png`,
+	Example: `  flightline screenshots upload com.example.myapp --version 1.0.1 --locale en-US --device-set APP_IPHONE_67 ./shots/iphone-67/*.png
+  flightline screenshots upload com.example.myapp --version 1.0.1 --locale en-US --device-set APP_IPAD_PRO_3GEN_129 ./shots/ipad/01.png ./shots/ipad/02.png
+  flightline screenshots upload com.example.myapp --version 1.0.1 --locale en-US --device-set APP_IPHONE_67 --resume ./shots/01.png`,
 }
 
 var (
@@ -157,15 +132,13 @@ func init() {
 	rootCmd.AddCommand(screenshotsCmd)
 }
 
-// screenshotsUploadInput is the validated, normalized form of the flag
-// state plus positional args. Pulled out so the run loop reads top-down.
+// screenshotsUploadInput is the validated, normalized flags plus positional args.
 type screenshotsUploadInput struct {
 	bundleID, versionStr, platform, locale, deviceSet string
 	files                                             []string
 }
 
-// validateScreenshotsUploadFlags collapses every input-shape check into
-// one place. Returns a typed error on the first failure.
+// validateScreenshotsUploadFlags returns a typed error on the first bad input.
 func validateScreenshotsUploadFlags(args []string) (screenshotsUploadInput, error) {
 	in := screenshotsUploadInput{
 		bundleID:   args[0],
@@ -176,16 +149,16 @@ func validateScreenshotsUploadFlags(args []string) (screenshotsUploadInput, erro
 		deviceSet:  strings.TrimSpace(screenshotsUploadDeviceSet),
 	}
 	if in.versionStr == "" {
-		return in, fmt.Errorf("screenshots: --version is required")
+		return in, errors.New("screenshots: --version is required")
 	}
 	if in.locale == "" {
-		return in, fmt.Errorf("screenshots: --locale is required")
+		return in, errors.New("screenshots: --locale is required")
 	}
 	if !isValidDeviceSet(in.deviceSet) {
-		return in, fmt.Errorf("screenshots: --device-set %q is not a recognised ScreenshotDisplayType (see `fline screenshots upload --help`)", in.deviceSet)
+		return in, fmt.Errorf("screenshots: --device-set %q is not a recognised ScreenshotDisplayType (see `flightline screenshots upload --help`)", in.deviceSet)
 	}
 	if len(in.files) == 0 {
-		return in, fmt.Errorf("screenshots: at least one file path is required")
+		return in, errors.New("screenshots: at least one file path is required")
 	}
 	for _, p := range in.files {
 		if err := validateScreenshotFile(p); err != nil {
@@ -196,8 +169,7 @@ func validateScreenshotsUploadFlags(args []string) (screenshotsUploadInput, erro
 }
 
 // resolveScreenshotTarget walks bundleId -> appId -> versionId ->
-// versionLocId -> setId for the upload destination. Centralized so the
-// runner stays linear.
+// versionLocId -> setId for the upload destination.
 func resolveScreenshotTarget(ctx context.Context, c *asc.Client, in screenshotsUploadInput) (string, error) {
 	appID, err := resolveAppID(ctx, c, in.bundleID)
 	if err != nil {
@@ -220,8 +192,6 @@ func resolveScreenshotTarget(ctx context.Context, c *asc.Client, in screenshotsU
 	return findOrCreateScreenshotSet(ctx, c, versionLocID, in.deviceSet)
 }
 
-// uploadOrSkipFiles iterates the local files and runs each one through
-// processOneScreenshot.
 func uploadOrSkipFiles(
 	ctx context.Context,
 	c *asc.Client,
@@ -286,8 +256,6 @@ func runScreenshotsUpload(cmd *cobra.Command, args []string) error {
 	return Render(result, outputMode())
 }
 
-// actionForUpload picks the result-envelope action based on whether any
-// file was uploaded.
 func actionForUpload(uploadedCount int) string {
 	if uploadedCount == 0 {
 		return "noop"
@@ -295,12 +263,11 @@ func actionForUpload(uploadedCount int) string {
 	return "uploaded"
 }
 
-// validateScreenshotFile rejects files that don't exist, aren't regular,
-// or are zero-length. Catches typos and path-traversal-shaped inputs
-// before we hash them.
+// validateScreenshotFile rejects files that don't exist, aren't regular, or
+// are zero-length, catching bad input before hashing.
 func validateScreenshotFile(path string) error {
 	if path == "" {
-		return fmt.Errorf("screenshots: empty file path")
+		return errors.New("screenshots: empty file path")
 	}
 	info, err := os.Stat(path)
 	if err != nil {
@@ -315,9 +282,8 @@ func validateScreenshotFile(path string) error {
 	return nil
 }
 
-// processOneScreenshot hashes the file, looks for an existing slot at the
-// same checksum, and either skips (idempotent path) or hands off to
-// Client.Upload (the 3-step dance from internal/asc/upload.go).
+// processOneScreenshot skips a file whose checksum already has a slot,
+// otherwise hands it to Client.Upload.
 func processOneScreenshot(
 	ctx context.Context,
 	c *asc.Client,
@@ -356,15 +322,14 @@ func processOneScreenshot(
 	return entry, nil
 }
 
-// existingScreenshotEntry holds the resource identifiers that pair with a
-// known sourceFileChecksum.
+// existingScreenshotEntry holds the identifiers paired with a known sourceFileChecksum.
 type existingScreenshotEntry struct {
 	assetID  string
 	fileName string
 }
 
 // listScreenshotsByChecksum returns a checksum -> entry map for every
-// appScreenshot under setID. Used as the idempotency lookup table.
+// appScreenshot under setID, the idempotency lookup table.
 func listScreenshotsByChecksum(ctx context.Context, c *asc.Client, setID string) (map[string]existingScreenshotEntry, error) {
 	out := make(map[string]existingScreenshotEntry)
 	q := url.Values{"limit": {"200"}}
@@ -376,9 +341,8 @@ func listScreenshotsByChecksum(ctx context.Context, c *asc.Client, setID string)
 		}
 		for _, r := range page.Data {
 			if r.Attributes.SourceFileChecksum == "" {
-				// Skip in-flight slots that haven't committed yet — those
-				// shouldn't match a local checksum, and treating them as
-				// matches would silently drop a re-upload of the right file.
+				// Skip uncommitted slots: matching one would silently drop a
+				// re-upload of the correct file.
 				continue
 			}
 			out[r.Attributes.SourceFileChecksum] = existingScreenshotEntry{
@@ -390,10 +354,8 @@ func listScreenshotsByChecksum(ctx context.Context, c *asc.Client, setID string)
 	return out, nil
 }
 
-// findOrCreateScreenshotSet GETs the set with screenshotDisplayType=
-// deviceSet under versionLocID. If absent, POSTs a new one and returns
-// its ID. Idempotent by Apple's contract: there is at most one set per
-// (localization, displayType).
+// findOrCreateScreenshotSet returns the set for (versionLocID, deviceSet),
+// creating it if absent. Apple allows at most one set per pair, so it's idempotent.
 func findOrCreateScreenshotSet(ctx context.Context, c *asc.Client, versionLocID, deviceSet string) (string, error) {
 	q := url.Values{
 		"filter[screenshotDisplayType]": {deviceSet},
@@ -431,14 +393,12 @@ func findOrCreateScreenshotSet(ctx context.Context, c *asc.Client, versionLocID,
 		return "", err
 	}
 	if resp.Data.ID == "" {
-		return "", fmt.Errorf("screenshots: create appScreenshotSet returned empty id")
+		return "", errors.New("screenshots: create appScreenshotSet returned empty id")
 	}
 	return resp.Data.ID, nil
 }
 
-// screenshotSetCreateRequest mirrors Apple's
-// AppScreenshotSetCreateRequest. Built by hand because the surface is
-// small and lives only here.
+// screenshotSetCreateRequest mirrors Apple's AppScreenshotSetCreateRequest.
 type screenshotSetCreateRequest struct {
 	Data screenshotSetCreateData `json:"data"`
 }
@@ -466,11 +426,8 @@ type screenshotSetCreateRelRef struct {
 	ID   string `json:"id"`
 }
 
-// md5HexOfFile streams the file through md5 and returns a lowercase hex
-// digest. Apple requires MD5 for sourceFileChecksum — we re-implement it
-// here rather than reaching into asc.computeFileMD5 (unexported) because
-// this layer also computes MD5 for the idempotency probe before any
-// Upload call lands.
+// md5HexOfFile returns the file's lowercase hex MD5. Apple requires MD5 for
+// sourceFileChecksum; this layer needs it for the idempotency probe pre-Upload.
 func md5HexOfFile(path string) (string, error) {
 	f, err := os.Open(path) //nolint:gosec // path validated by validateScreenshotFile
 	if err != nil {
@@ -484,8 +441,7 @@ func md5HexOfFile(path string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// basename trims the directory portion of a path. Apple's fileName is
-// display-only; we don't preserve directory structure.
+// basename trims the directory portion of a path.
 func basename(path string) string {
 	if i := strings.LastIndexAny(path, `/\`); i >= 0 {
 		return path[i+1:]
@@ -493,8 +449,7 @@ func basename(path string) string {
 	return path
 }
 
-// validDeviceSetsSorted returns the canonical enum slice in deterministic
-// order for tests / completion functions.
+// validDeviceSetsSorted returns the canonical enum slice in deterministic order.
 func validDeviceSetsSorted() []string {
 	out := make([]string, len(validScreenshotDeviceSets))
 	copy(out, validScreenshotDeviceSets)

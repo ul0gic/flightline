@@ -1,15 +1,3 @@
-// lint.go — `fline lint <state.yaml>`.
-//
-// Offline-only preflight: load the state YAML, run every Mode=Offline rule
-// in internal/lint, render diagnostics. Exit codes:
-//
-//	0 — clean (no diagnostics or info-only)
-//	1 — at least one error-severity diagnostic
-//	2 — only warnings (no errors)
-//
-// Output modes match the rest of Flightline: --output table | json. JSON is
-// the LLM-stable contract; table is colorized humans.
-
 package cmd
 
 import (
@@ -25,8 +13,6 @@ import (
 )
 
 // LintResult is the JSON-stable envelope `lint` and `preflight` emit.
-// Field names are the wire contract: adding fields is fine, renaming or
-// removing is a breaking change.
 type LintResult struct {
 	BundleID    string            `json:"bundleId,omitempty"`
 	Version     string            `json:"version,omitempty"`
@@ -36,15 +22,12 @@ type LintResult struct {
 	Summary     LintResultSummary `json:"summary"`
 }
 
-// LintResultSummary counts diagnostics by severity for at-a-glance reads.
 type LintResultSummary struct {
 	Error   int `json:"error"`
 	Warning int `json:"warning"`
 	Info    int `json:"info"`
 }
 
-// TableRows renders a one-row-per-diagnostic summary plus a footer with
-// the summary counts.
 func (r *LintResult) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"SEVERITY", "RULE", "PATH", "MESSAGE"}
 	for _, d := range r.Diagnostics {
@@ -80,9 +63,9 @@ Exit codes:
 
 Use ` + "`--output json`" + ` for stable LLM/CI consumption; the table form is for
 humans.`,
-	Example: `  fline lint state.yaml
-  fline lint state.yaml --output json | jq '.diagnostics[] | select(.severity=="error")'
-  fline lint state.yaml --output json | jq -r '.summary'`,
+	Example: `  flightline lint state.yaml
+  flightline lint state.yaml --output json | jq '.diagnostics[] | select(.severity=="error")'
+  flightline lint state.yaml --output json | jq -r '.summary'`,
 }
 
 func init() {
@@ -98,14 +81,8 @@ func runLint(cmd *cobra.Command, args []string) error {
 
 	state, err := config.LoadState(abs)
 	if err != nil {
-		// Loader-level failures are file:line:col-anchored already; pass
-		// them through so the user sees the parse problem before any rule
-		// runs.
 		return err
 	}
-	// Schema validation runs as part of lint so the user sees one merged
-	// view: schema diagnostics first (mapped to the lint Diagnostic
-	// shape), then rule diagnostics.
 	schemaDiags := config.Validate(abs, state)
 
 	rules := lint.Filter(lint.ModeOffline)
@@ -132,37 +109,27 @@ func runLint(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Exit code mapping. cobra's RunE returns drive a non-zero exit; we
-	// use a custom error wrapper so main.go can map to 1 vs 2 in a
-	// future iteration. For now: errors fail with `lint: errors present`,
-	// warnings-only succeed silently (table renderer prints the warnings).
 	if lint.HasErrors(merged) {
-		return errLintErrors{count: out.Summary.Error}
+		return lintFailedError{count: out.Summary.Error}
 	}
 	if lint.HasWarnings(merged) {
-		// Warnings: print to stderr but do not fail the command. Phase 5
-		// gate will revisit exit-code-2 once main.go grows the mapping.
-		fmt.Fprintf(os.Stderr, "lint: %d warning(s) — review diagnostics above\n", out.Summary.Warning)
+		fmt.Fprintf(os.Stderr, "lint: %d warning(s): review diagnostics above\n", out.Summary.Warning)
 	}
 	return nil
 }
 
-// errLintErrors is the typed error returned when lint finds errors. main.go
-// already exits 1 on any non-nil error, so the count is informational; a
-// future change can map it to a distinct exit code.
-type errLintErrors struct{ count int }
+// lintFailedError is returned when lint finds error-severity diagnostics.
+type lintFailedError struct{ count int }
 
-func (e errLintErrors) Error() string {
+func (e lintFailedError) Error() string {
 	if e.count == 1 {
-		return "lint: 1 error-severity diagnostic — see output above"
+		return "lint: 1 error-severity diagnostic: see output above"
 	}
-	return fmt.Sprintf("lint: %d error-severity diagnostics — see output above", e.count)
+	return fmt.Sprintf("lint: %d error-severity diagnostics: see output above", e.count)
 }
 
-// mergeSchemaIntoLint converts config.Diagnostic (schema-validation output)
-// into lint.Diagnostic so the JSON output is one shape. Schema findings are
-// always SeverityError; we tag them with rule id "schema" so consumers can
-// filter.
+// mergeSchemaIntoLint converts schema diagnostics into lint.Diagnostic so the
+// JSON output is one shape; schema findings are always SeverityError, rule id "schema".
 func mergeSchemaIntoLint(schema []config.Diagnostic, rules []lint.Diagnostic) []lint.Diagnostic {
 	out := make([]lint.Diagnostic, 0, len(schema)+len(rules))
 	for _, d := range schema {
@@ -172,14 +139,12 @@ func mergeSchemaIntoLint(schema []config.Diagnostic, rules []lint.Diagnostic) []
 			Message:  d.Message,
 			Path:     d.Path,
 			FixHint: "fix the field to match the embedded JSON Schema. " +
-				"`fline lint <file>` shows every error before any wire call.",
+				"`flightline lint <file>` shows every error before any wire call.",
 			Reference: "schemas/flightline.schema.json",
 		})
 	}
 	out = append(out, rules...)
-	// Stable sort: rule, then path. Severity is already implicit in the
-	// rule's id ordering. Schema diagnostics sort to the top because their
-	// rule id is "schema" (alphabetically first among real rule prefixes).
+	// Sort by rule then path; "schema" sorts to the top alphabetically.
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].RuleID != out[j].RuleID {
 			return out[i].RuleID < out[j].RuleID

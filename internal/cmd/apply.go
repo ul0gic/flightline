@@ -1,10 +1,3 @@
-// apply.go — `fline apply <state.yaml> [--confirm] [--resume] [--dry-run]`.
-//
-// Without --confirm, apply prints the plan and refuses to write — the
-// terraform-style safety gate. With --confirm, it dispatches each
-// change to the L1 write surface via state.Apply, persisting a
-// per-change checkpoint so a Ctrl-C resumes cleanly.
-
 package cmd
 
 import (
@@ -19,9 +12,7 @@ import (
 	"github.com/ul0gic/flightline/internal/state"
 )
 
-// ApplyResult is the JSON-stable envelope `apply` emits in --output
-// json mode. Stable: adding fields fine, removing/renaming a breaking
-// change.
+// ApplyResult is the stable JSON envelope for `apply`; renaming or removing a field breaks consumers.
 type ApplyResult struct {
 	BundleID string              `json:"bundleId"`
 	Version  string              `json:"version,omitempty"`
@@ -31,7 +22,6 @@ type ApplyResult struct {
 	Errors   []state.ChangeError `json:"errors,omitempty"`
 }
 
-// TableRows renders a one-row-per-change summary.
 func (r *ApplyResult) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"STATUS", "OP", "PATH"}
 	for _, c := range r.Applied {
@@ -56,7 +46,7 @@ func init() {
 		Long: `Loads <state.yaml>, validates it against the schema, fetches live
 state, computes the diff, and writes the changes back to ASC.
 
-Without --confirm, apply prints the plan and refuses to write — same
+Without --confirm, apply prints the plan and refuses to write: same
 guardrail as terraform plan. With --confirm, every leaf-level change
 dispatches to its L1 writer, with a checkpoint persisted after every
 success so a Ctrl-C / crash mid-apply resumes cleanly via --resume.
@@ -65,10 +55,10 @@ success so a Ctrl-C / crash mid-apply resumes cleanly via --resume.
 for preview without --confirm.
 
 Examples:
-  fline apply state.yaml                 # plan only, refuses to write
-  fline apply state.yaml --confirm       # write changes
-  fline apply state.yaml --confirm --resume   # continue after Ctrl-C
-  fline apply state.yaml --dry-run --output json`,
+  flightline apply state.yaml                 # plan only, refuses to write
+  flightline apply state.yaml --confirm       # write changes
+  flightline apply state.yaml --confirm --resume   # continue after Ctrl-C
+  flightline apply state.yaml --dry-run --output json`,
 		Args: cobra.ExactArgs(1),
 		RunE: runApply,
 	}
@@ -122,9 +112,8 @@ func runApply(cmd *cobra.Command, args []string) error {
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
 	resume, _ := cmd.Flags().GetBool("resume")
 
-	// Without --confirm and without --dry-run, apply is plan + refuse.
 	if !confirm && !dryRun {
-		fmt.Fprintln(os.Stderr, "fline: apply without --confirm prints the plan and exits — pass --confirm to write.")
+		fmt.Fprintln(os.Stderr, "flightline: apply without --confirm prints the plan and exits: pass --confirm to write.")
 		return Render(&PlanResult{
 			BundleID: desired.Metadata.BundleID,
 			Version:  version,
@@ -144,7 +133,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 		Resume:  resume,
 		DryRun:  dryRun,
 		Logger: func(c plan.Change, status string) {
-			fmt.Fprintf(os.Stderr, "fline: %s %s %s\n", status, c.Op, c.Path)
+			fmt.Fprintf(os.Stderr, "flightline: %s %s %s\n", status, c.Op, c.Path)
 		},
 	})
 	out := &ApplyResult{

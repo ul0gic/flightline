@@ -54,9 +54,7 @@ func TestWhoamiInfo_JSONFieldStability(t *testing.T) {
 }
 
 func TestRenderWhoami_JSONRoundtrip(t *testing.T) {
-	// Capture stdout via a sink writer; renderWhoami writes via Render which
-	// targets os.Stdout. To keep the test hermetic we exercise Render through
-	// a TableRenderable+JSON path on a buffer.
+	// Exercise Render against a buffer so the test stays hermetic instead of writing os.Stdout.
 	var buf bytes.Buffer
 	info := WhoamiInfo{KeyID: "K", IssuerID: "I", Authorized: true}
 	if err := renderTo(&buf, info, "json", true); err != nil {
@@ -80,14 +78,7 @@ func TestWhoamiCommand_RegisteredOnRoot(t *testing.T) {
 	}
 }
 
-// TestWhoami_JSONOutputStability locks the JSON contract: every field
-// listed below MUST appear when the WhoamiInfo is rendered with
-// `--output json`.
-//
-// JSON output is a contract for LLM consumers and shell pipelines. Adding
-// fields is safe; renaming or removing a field is a breaking change. If
-// this test fails, the diff between expected and actual keys is the
-// breaking surface.
+// JSON output is a contract: adding fields is safe, renaming or removing one breaks consumers.
 func TestWhoami_JSONOutputStability(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -122,34 +113,37 @@ func TestWhoami_JSONOutputStability(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			var buf bytes.Buffer
-			if err := renderTo(&buf, tc.info, "json", true); err != nil {
-				t.Fatalf("renderTo: %v", err)
-			}
-			var decoded map[string]any
-			if err := json.Unmarshal(buf.Bytes(), &decoded); err != nil {
-				t.Fatalf("json decode: %v\nraw: %s", err, buf.String())
-			}
-			for _, key := range tc.wantKeys {
-				if _, ok := decoded[key]; !ok {
-					t.Errorf("missing JSON key %q — JSON output is a contract; "+
-						"adding fields is safe but removing/renaming breaks consumers. "+
-						"Got keys: %v", key, mapKeys(decoded))
-				}
-			}
-			if tc.notKey != "" {
-				if _, ok := decoded[tc.notKey]; ok {
-					t.Errorf("JSON key %q leaked when value was empty (omitempty broken): %s",
-						tc.notKey, buf.String())
-				}
-			}
+			assertWhoamiJSONKeys(t, tc.info, tc.wantKeys, tc.notKey)
 		})
 	}
 }
 
-// TestWhoami_AuthorizedTypePreservation ensures `authorized` stays a bool
-// in the JSON output. A regression to "true"/"false" string would silently
-// break LLM consumers parsing with `jq -e .authorized`.
+func assertWhoamiJSONKeys(t *testing.T, info WhoamiInfo, wantKeys []string, notKey string) {
+	t.Helper()
+	var buf bytes.Buffer
+	if err := renderTo(&buf, info, "json", true); err != nil {
+		t.Fatalf("renderTo: %v", err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &decoded); err != nil {
+		t.Fatalf("json decode: %v\nraw: %s", err, buf.String())
+	}
+	for _, key := range wantKeys {
+		if _, ok := decoded[key]; !ok {
+			t.Errorf("missing JSON key %q: JSON output is a contract; "+
+				"adding fields is safe but removing/renaming breaks consumers. "+
+				"Got keys: %v", key, mapKeys(decoded))
+		}
+	}
+	if notKey != "" {
+		if _, ok := decoded[notKey]; ok {
+			t.Errorf("JSON key %q leaked when value was empty (omitempty broken): %s",
+				notKey, buf.String())
+		}
+	}
+}
+
+// `authorized` must stay a JSON bool; a "true"/"false" string would break `jq -e .authorized`.
 func TestWhoami_AuthorizedTypePreservation(t *testing.T) {
 	info := WhoamiInfo{KeyID: "K", IssuerID: "I", Authorized: true}
 	var buf bytes.Buffer
@@ -169,8 +163,6 @@ func TestWhoami_AuthorizedTypePreservation(t *testing.T) {
 	}
 }
 
-// mapKeys returns the sorted top-level keys of a JSON object. Used in
-// failure messages so missing-key diagnostics show what we actually got.
 func mapKeys(m map[string]any) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {

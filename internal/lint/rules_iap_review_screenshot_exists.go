@@ -8,13 +8,8 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// iapReviewScreenshotExistsRule fires when an IAP product has no App Store
-// review screenshot attached. Apple requires a review screenshot for any
-// IAP submitted for review; missing it is a hard rejection cause.
-//
-// Live-only: the screenshot lives on the
-// /v2/inAppPurchases/{id}/appStoreReviewScreenshot relationship and only
-// the live API knows whether it's present.
+// iapReviewScreenshotExistsRule fires when an IAP going to review has no screenshot attached: hard rejection cause.
+// Live-only: presence is only knowable via /v2/inAppPurchases/{id}/appStoreReviewScreenshot.
 type iapReviewScreenshotExistsRule struct{}
 
 func init() { Register(iapReviewScreenshotExistsRule{}) }
@@ -49,8 +44,7 @@ func (r iapReviewScreenshotExistsRule) Check(ctx CheckContext) []Diagnostic {
 
 	out := make([]Diagnostic, 0, len(iaps))
 	for _, iap := range iaps {
-		// Skip states that aren't going to review yet — review screenshot is
-		// only required at submission time.
+		// Review screenshot is only required at submission time; skip pre-submission and post-review states.
 		if !needsReviewScreenshot(iap.Attributes.State) {
 			continue
 		}
@@ -74,18 +68,16 @@ func (r iapReviewScreenshotExistsRule) Check(ctx CheckContext) []Diagnostic {
 			Message:  fmt.Sprintf("IAP %q has no App Store review screenshot attached", iap.Attributes.ProductID),
 			Path:     "/spec/iap/products/" + iap.Attributes.ProductID + "/reviewScreenshot",
 			FixHint: fmt.Sprintf(
-				"upload one: `fline iap review-screenshot upload %s --product %s <file>`",
+				"upload one: `flightline iap review-screenshot upload %s --product %s <file>`",
 				ctx.BundleID, iap.Attributes.ProductID,
 			),
-			Reference: "PRD §L3 — IAP review-screenshot-exists",
+			Reference: "PRD §L3: IAP review-screenshot-exists",
 		})
 	}
 	return out
 }
 
-// needsReviewScreenshot returns true for states where Apple requires a
-// review screenshot at submission. MISSING_METADATA / WAITING_FOR_UPLOAD
-// are pre-submission states; APPROVED and friends are post-review.
+// needsReviewScreenshot returns true for states where Apple requires a review screenshot at submission.
 func needsReviewScreenshot(state string) bool {
 	switch state {
 	case asc.IAPStateReadyToSubmit,
@@ -99,16 +91,14 @@ func needsReviewScreenshot(state string) bool {
 	}
 }
 
-// hasReviewScreenshot calls the relationship endpoint and returns whether
-// the screenshot exists with a non-empty templated URL. Apple returns
-// `data: null` when no screenshot is attached (200 OK), and a 404 when the
-// relationship has never been touched. Both map to "no screenshot".
+// hasReviewScreenshot returns true when the screenshot relationship resolves to a non-empty asset.
+// Apple returns data:null (200) or 404 when absent; both map to false.
 func (iapReviewScreenshotExistsRule) hasReviewScreenshot(ctx CheckContext, iapID string) (bool, error) {
 	resp, err := asc.Get[asc.Single[asc.IAPReviewScreenshotAttributes]](
 		ctx.Ctx, ctx.Client, "/v2/inAppPurchases/"+iapID+"/appStoreReviewScreenshot", url.Values{},
 	)
 	if err != nil {
-		// 404 surfaces from the asc client as a typed error; treat as no screenshot.
+		// 404 = never-touched relationship; treat as no screenshot.
 		if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "NOT_FOUND") {
 			return false, nil
 		}

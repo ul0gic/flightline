@@ -10,18 +10,12 @@ import (
 	"testing"
 )
 
-// jwtRegex matches a 3-segment JWT (eyJ.eyJ.sig). Used to assert error
-// messages don't leak credentials. Mirrors the production redactor's
-// pattern in errors.go.
+// jwtRegex mirrors the production redactor in errors.go; tests assert it never matches.
 var jwtRegex = regexp.MustCompile(`eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+`)
 
-// keyIDLeakRegex matches plausible 10-char ASC key IDs as standalone
-// tokens. Tests use this to assert error strings have been redacted.
+// keyIDLeakRegex matches a standalone 10-char ASC key ID; tests assert it never matches.
 var keyIDLeakRegex = regexp.MustCompile(`\b[A-Z0-9]{10}\b`)
 
-// TestFixtureReplay_AppsList loads the apps_list golden and verifies the
-// generic Get pipeline decodes Apple's envelope into Collection[AppAttrs]
-// with all 3 records intact.
 func TestFixtureReplay_AppsList(t *testing.T) {
 	srv := fixtureServer(t, map[string]FixtureRoute{
 		"GET /v1/apps": {File: "apps_list"},
@@ -49,8 +43,6 @@ func TestFixtureReplay_AppsList(t *testing.T) {
 	}
 }
 
-// TestFixtureReplay_AppsGetByBundleId loads the single-result fixture and
-// verifies the filter-style get-by-bundle-id flow surfaces exactly one App.
 func TestFixtureReplay_AppsGetByBundleId(t *testing.T) {
 	srv := fixtureServer(t, map[string]FixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
@@ -75,10 +67,8 @@ func TestFixtureReplay_AppsGetByBundleId(t *testing.T) {
 	}
 }
 
-// TestFixtureReplay_AppsGetNotFound verifies the empty-data shape Apple
-// returns when a filter has no match. The client itself returns no error
-// (HTTP 200, valid JSON, just zero records) — translating that to a typed
-// not-found error is the caller's responsibility (see runAppsGet).
+// TestFixtureReplay_AppsGetNotFound: Apple returns HTTP 200 with an empty
+// array (not 404) on no match; mapping that to a typed error is the caller's job.
 func TestFixtureReplay_AppsGetNotFound(t *testing.T) {
 	srv := fixtureServer(t, map[string]FixtureRoute{
 		"GET /v1/apps": {File: "apps_get_notFound"},
@@ -100,9 +90,6 @@ func TestFixtureReplay_AppsGetNotFound(t *testing.T) {
 	}
 }
 
-// TestFixtureReplay_WhoamiAuthProbe verifies the limit=1 probe whoami uses
-// to confirm credentials work. The shape needs no special handling beyond
-// the standard Collection envelope.
 func TestFixtureReplay_WhoamiAuthProbe(t *testing.T) {
 	srv := fixtureServer(t, map[string]FixtureRoute{
 		"GET /v1/apps": {File: "whoami_apps_limit1"},
@@ -119,13 +106,42 @@ func TestFixtureReplay_WhoamiAuthProbe(t *testing.T) {
 	}
 }
 
-// TestFixtureReplay_ErrorEnvelopes is a table-driven suite that loads each
-// of the four canonical error fixtures and asserts:
-//   - APIError surfaces the HTTP status code intact
-//   - APIError.Error() contains Apple's `code` and `title`
-//   - 401 maps to ErrUnauthorized via errors.Is
-//   - 403 maps to ErrForbidden via errors.Is
-//   - error strings never contain JWT-looking tokens
+func assertErrorEnvelope(t *testing.T, err error, status int, wantCode, wantTitle string, wantSentinel error) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("Get: want error, got nil")
+	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("err = %v, want *APIError via errors.As", err)
+	}
+	if apiErr.HTTPStatus != status {
+		t.Errorf("HTTPStatus = %d, want %d", apiErr.HTTPStatus, status)
+	}
+	if len(apiErr.Errors) != 1 {
+		t.Fatalf("Errors len = %d, want 1", len(apiErr.Errors))
+	}
+	if apiErr.Errors[0].Code != wantCode {
+		t.Errorf("Errors[0].Code = %q, want %q", apiErr.Errors[0].Code, wantCode)
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, wantCode) {
+		t.Errorf("err.Error() = %q, missing code %q", msg, wantCode)
+	}
+	if !strings.Contains(msg, wantTitle) {
+		t.Errorf("err.Error() = %q, missing title %q", msg, wantTitle)
+	}
+	if jwtRegex.MatchString(msg) {
+		t.Errorf("err.Error() leaked a JWT-shaped token: %q", msg)
+	}
+	if keyIDLeakRegex.MatchString(msg) {
+		t.Errorf("err.Error() leaked a key-ID-shaped token: %q", msg)
+	}
+	if wantSentinel != nil && !errors.Is(err, wantSentinel) {
+		t.Errorf("errors.Is(err, %v) = false, want true", wantSentinel)
+	}
+}
+
 func TestFixtureReplay_ErrorEnvelopes(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -173,55 +189,12 @@ func TestFixtureReplay_ErrorEnvelopes(t *testing.T) {
 				"GET /v1/apps": {File: tc.file, Status: tc.status},
 			})
 			c := fixtureClient(t, srv)
-
 			_, err := Get[Collection[appAttrs]](context.Background(), c, "/v1/apps", nil)
-			if err == nil {
-				t.Fatal("Get: want error, got nil")
-			}
-
-			var apiErr *APIError
-			if !errors.As(err, &apiErr) {
-				t.Fatalf("err = %v, want *APIError via errors.As", err)
-			}
-			if apiErr.HTTPStatus != tc.status {
-				t.Errorf("HTTPStatus = %d, want %d", apiErr.HTTPStatus, tc.status)
-			}
-			if len(apiErr.Errors) != 1 {
-				t.Fatalf("Errors len = %d, want 1", len(apiErr.Errors))
-			}
-			if apiErr.Errors[0].Code != tc.wantCode {
-				t.Errorf("Errors[0].Code = %q, want %q", apiErr.Errors[0].Code, tc.wantCode)
-			}
-
-			msg := err.Error()
-			if !strings.Contains(msg, tc.wantCode) {
-				t.Errorf("err.Error() = %q, missing code %q", msg, tc.wantCode)
-			}
-			if !strings.Contains(msg, tc.wantTitle) {
-				t.Errorf("err.Error() = %q, missing title %q", msg, tc.wantTitle)
-			}
-			if jwtRegex.MatchString(msg) {
-				t.Errorf("err.Error() leaked a JWT-shaped token: %q", msg)
-			}
-			if keyIDLeakRegex.MatchString(msg) {
-				// The detail strings can legitimately contain ALL-CAPS tokens
-				// like RATE_LIMIT_EXCEEDED. Those have underscores so they
-				// don't match \b[A-Z0-9]{10}\b. If we ever add a fixture that
-				// does, this test catches it and the redactor scrubs it.
-				t.Errorf("err.Error() leaked a key-ID-shaped token: %q", msg)
-			}
-
-			if tc.wantSentinl != nil && !errors.Is(err, tc.wantSentinl) {
-				t.Errorf("errors.Is(err, %v) = false, want true", tc.wantSentinl)
-			}
+			assertErrorEnvelope(t, err, tc.status, tc.wantCode, tc.wantTitle, tc.wantSentinl)
 		})
 	}
 }
 
-// TestFixtureServer_UnknownRouteIs404 documents the helper's behavior on a
-// missing route: 404 with a fixture-no-route diagnostic body. Tests that
-// hit unexpected paths get a clear "you didn't register this route"
-// message rather than a confusing decode error.
 func TestFixtureServer_UnknownRouteIs404(t *testing.T) {
 	srv := fixtureServer(t, map[string]FixtureRoute{
 		"GET /v1/apps": {File: "apps_list"},

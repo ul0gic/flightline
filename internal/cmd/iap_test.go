@@ -173,7 +173,7 @@ func TestIAP_JSONOutputStability_List(t *testing.T) {
 	row := decoded.IAPs[0]
 	for _, key := range []string{"id", "type", "attributes"} {
 		if _, ok := row[key]; !ok {
-			t.Errorf("missing per-row key %q — JSON contract drift. Got keys: %v", key, mapKeys(row))
+			t.Errorf("missing per-row key %q: JSON contract drift. Got keys: %v", key, mapKeys(row))
 		}
 	}
 	attrs, ok := row["attributes"].(map[string]any)
@@ -182,7 +182,7 @@ func TestIAP_JSONOutputStability_List(t *testing.T) {
 	}
 	for _, key := range []string{"name", "productId", "inAppPurchaseType", "state", "reviewNote", "familySharable", "contentHosting"} {
 		if _, ok := attrs[key]; !ok {
-			t.Errorf("missing attribute key %q — JSON contract drift. Got: %v", key, mapKeys(attrs))
+			t.Errorf("missing attribute key %q: JSON contract drift. Got: %v", key, mapKeys(attrs))
 		}
 	}
 }
@@ -196,9 +196,8 @@ func TestIAPType_StaysInAppPurchases(t *testing.T) {
 	}
 }
 
-// TestIAP_FixtureReplay_List exercises collectIAPs against the captured
-// golden fixture, hitting the path the real `iap list` command takes
-// (resolveAppID -> /v1/apps/{id}/inAppPurchasesV2).
+// TestIAP_FixtureReplay_List exercises collectIAPs against the golden fixture
+// along the path `iap list` takes.
 func TestIAP_FixtureReplay_List(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
@@ -225,8 +224,7 @@ func TestIAP_FixtureReplay_List(t *testing.T) {
 	}
 }
 
-// TestIAP_FixtureReplay_GetWithScreenshot exercises findIAPByProductID +
-// fetchIAPReviewScreenshotURL together — this is the full `iap get` happy
+// TestIAP_FixtureReplay_GetWithScreenshot exercises the full `iap get` happy
 // path including the optional screenshot relationship hop.
 func TestIAP_FixtureReplay_GetWithScreenshot(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{

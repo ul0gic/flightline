@@ -1,12 +1,5 @@
-// Package cmd — reviewer-demo set: configures the App Store Review demo
-// account + reviewer contact info on the per-version appStoreReviewDetail.
-//
-// Security note: the --password flag is the only credential surface that
-// flows through Flightline. We never log it (production code never writes it
-// to stderr; --verbose does not echo it), never include it in error
-// messages (every error path filters the user-supplied password substring
-// out before returning), and offer --password-file <path> as the
-// preferred input so the password never lands in shell history.
+// The --password flag is a credential surface: it is never logged, never
+// echoed by --verbose, and filtered out of every error string before return.
 package cmd
 
 import (
@@ -14,18 +7,15 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// AppStoreReviewDetailAttributes mirrors components.schemas.AppStoreReviewDetail
-// .attributes — the per-version "info to give Apple's reviewer" record.
-//
-// Fields use *string so the diff path can distinguish "leave alone" from
-// "explicitly clear" (Apple's PATCH treats null as clear). DemoAccountRequired
-// is a *bool for the same reason.
+// AppStoreReviewDetailAttributes mirrors Apple's AppStoreReviewDetail.attributes.
+// Pointers distinguish "leave alone" from "clear", since Apple's PATCH treats null as clear.
 type AppStoreReviewDetailAttributes struct {
 	ContactFirstName    *string `json:"contactFirstName,omitempty"`
 	ContactLastName     *string `json:"contactLastName,omitempty"`
@@ -59,10 +49,8 @@ type reviewDetailPatchData struct {
 	Attributes AppStoreReviewDetailAttributes `json:"attributes"`
 }
 
-// ReviewerDemoWriteResult is the JSON-stable view returned by `reviewer-demo
-// set`. The DemoAccountPasswordSet boolean reports whether a password is on
-// file WITHOUT echoing the value — JSON consumers branch on that, never on
-// the secret itself.
+// ReviewerDemoWriteResult is the JSON-stable view returned by `reviewer-demo set`.
+// DemoAccountPasswordSet reports whether a password is on file without echoing the secret.
 type ReviewerDemoWriteResult struct {
 	Action                 string   `json:"action"`
 	ID                     string   `json:"id"`
@@ -82,7 +70,7 @@ type ReviewerDemoWriteResult struct {
 }
 
 // TableRows for ReviewerDemoWriteResult. Password value is intentionally
-// absent — only the boolean "set" flag.
+// absent: only the boolean "set" flag.
 func (r *ReviewerDemoWriteResult) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
 	rows = [][]string{
@@ -91,14 +79,14 @@ func (r *ReviewerDemoWriteResult) TableRows() (headers []string, rows [][]string
 		{"TYPE", r.Type},
 		{"BUNDLE_ID", r.BundleID},
 		{"VERSION", r.VersionString},
-		{"NOOP", fmt.Sprintf("%t", r.NoOp)},
+		{"NOOP", strconv.FormatBool(r.NoOp)},
 		{"CHANGED_KEYS", strings.Join(r.ChangedKeys, ",")},
 		{"CONTACT_FIRST_NAME", r.ContactFirstName},
 		{"CONTACT_LAST_NAME", r.ContactLastName},
 		{"CONTACT_PHONE", r.ContactPhone},
 		{"CONTACT_EMAIL", r.ContactEmail},
 		{"DEMO_ACCOUNT_NAME", r.DemoAccountName},
-		{"DEMO_ACCOUNT_PASSWORD_SET", fmt.Sprintf("%t", r.DemoAccountPasswordSet)},
+		{"DEMO_ACCOUNT_PASSWORD_SET", strconv.FormatBool(r.DemoAccountPasswordSet)},
 		{"DEMO_ACCOUNT_REQUIRED", boolPtrStr(r.DemoAccountRequired)},
 		{"NOTES", r.Notes},
 	}
@@ -123,15 +111,15 @@ var reviewerDemoSetCmd = &cobra.Command{
 	Args:         cobra.ExactArgs(1),
 	RunE:         runReviewerDemoSet,
 	Long: `set creates or PATCHes the appStoreReviewDetail for a version. Diffs
-against current state — only fields that differ go in the body. When all
+against current state: only fields that differ go in the body. When all
 supplied flags already match current state, returns noop=true.
 
 The --password flag is treated specially: never logged, never echoed,
 never included in any error output. Use --password-file <path> to read
 the secret from a file rather than the shell command line.`,
-	Example: `  fline reviewer-demo set com.example.myapp --version 1.0.1 --contact-name "Jane Doe" --contact-email reviewer@example.com
-  fline reviewer-demo set com.example.myapp --version 1.0.1 --username demo@example.com --password-file ./.password
-  fline reviewer-demo set com.example.myapp --version 1.0.1 --notes "Tap the gear icon to access the demo flow"`,
+	Example: `  flightline reviewer-demo set com.example.myapp --version 1.0.1 --contact-name "Jane Doe" --contact-email reviewer@example.com
+  flightline reviewer-demo set com.example.myapp --version 1.0.1 --username demo@example.com --password-file ./.password
+  flightline reviewer-demo set com.example.myapp --version 1.0.1 --notes "Tap the gear icon to access the demo flow"`,
 }
 
 var (
@@ -214,7 +202,7 @@ func runReviewerDemoSet(cmd *cobra.Command, args []string) error {
 		return Render(buildReviewerResult("create", resp.Data.ID, resp.Data.Type, bundleID, versionStr, false, allChangedKeys(desired), resp.Data.Attributes), outputMode())
 	}
 
-	// Update — diff against current.
+	// Update: diff against current.
 	delta, changed := diffReviewerDetail(current, desired)
 	if !changed {
 		return Render(buildReviewerResult("set", existingID, "appStoreReviewDetails", bundleID, versionStr, true, nil, current), outputMode())
@@ -236,9 +224,8 @@ func runReviewerDemoSet(cmd *cobra.Command, args []string) error {
 	return Render(buildReviewerResult("set", resp.Data.ID, resp.Data.Type, bundleID, versionStr, false, changedKeys(delta), resp.Data.Attributes), outputMode())
 }
 
-// resolveReviewerPassword picks --password-file over --password. Empty
-// password is allowed — the field is optional. Reading the file does NOT
-// log its contents; errors that surface naming the file path do.
+// resolveReviewerPassword picks --password-file over --password; empty is allowed.
+// File contents are never logged; only the path appears in errors.
 func resolveReviewerPassword() (string, error) {
 	if reviewerDemoSetPasswordFile != "" && reviewerDemoSetPassword != "" {
 		return "", errors.New("reviewer-demo set: --password and --password-file are mutually exclusive (pick one)")
@@ -248,17 +235,14 @@ func resolveReviewerPassword() (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("reviewer-demo set: read --password-file %s: %w", reviewerDemoSetPasswordFile, err)
 		}
-		// Trim trailing whitespace (typical "echo > file" trailing newline).
-		// Inner whitespace stays — passwords can legitimately contain spaces.
+		// Trim only trailing newline; inner whitespace is part of the password.
 		return strings.TrimRight(string(buf), "\r\n"), nil
 	}
 	return reviewerDemoSetPassword, nil
 }
 
-// buildDesiredReviewerDetail composes the AppStoreReviewDetailAttributes
-// envelope from the cmd-layer flag state. Only flags the user actually
-// supplied land in the struct (cmd.Flags().Changed gates each one) so the
-// idempotent diff doesn't accidentally clobber unmentioned fields.
+// buildDesiredReviewerDetail builds the desired attributes from flag state.
+// Only flags the user changed are set, so the diff never clobbers unmentioned fields.
 func buildDesiredReviewerDetail(cmd *cobra.Command, password string) AppStoreReviewDetailAttributes {
 	out := AppStoreReviewDetailAttributes{}
 	if cmd.Flags().Changed("contact-name") {
@@ -281,8 +265,8 @@ func buildDesiredReviewerDetail(cmd *cobra.Command, password string) AppStoreRev
 	if cmd.Flags().Changed("notes") {
 		out.Notes = strPtr(reviewerDemoSetNotes)
 	}
-	// demoAccountRequired is implied by username+password presence; we don't
-	// write it directly. Apple computes it server-side.
+	// demoAccountRequired is computed server-side from username+password
+	// presence; never written directly.
 	return out
 }
 
@@ -296,9 +280,7 @@ func splitContactName(full string) (firstName, lastName string) {
 	return full, ""
 }
 
-// fetchAppStoreReviewDetail returns the existing review detail for a version
-// or ("", zero, nil) when no detail exists. A 404 from Apple counts as "not
-// yet created" — caller routes to the POST path.
+// fetchAppStoreReviewDetail returns the existing detail, or zero values when Apple 404s (not yet created).
 func fetchAppStoreReviewDetail(ctx context.Context, c *asc.Client, versionID string) (string, AppStoreReviewDetailAttributes, error) {
 	resp, err := asc.Get[asc.Single[AppStoreReviewDetailAttributes]](
 		ctx, c, "/v1/appStoreVersions/"+versionID+"/appStoreReviewDetail", nil,
@@ -313,10 +295,7 @@ func fetchAppStoreReviewDetail(ctx context.Context, c *asc.Client, versionID str
 	return resp.Data.ID, resp.Data.Attributes, nil
 }
 
-// diffReviewerDetail returns (delta, true) when at least one field differs
-// between current and desired, (zero, false) otherwise. Only fields the
-// user supplied (non-nil in desired) are compared — leaves alone any
-// current-side field the user didn't mention.
+// diffReviewerDetail returns the changed-field delta; only non-nil desired fields are compared.
 func diffReviewerDetail(current, desired AppStoreReviewDetailAttributes) (AppStoreReviewDetailAttributes, bool) {
 	out := AppStoreReviewDetailAttributes{}
 	changed := false
@@ -342,10 +321,8 @@ func diffReviewerDetail(current, desired AppStoreReviewDetailAttributes) (AppSto
 		changed = true
 	}
 	if desired.DemoAccountPassword != nil {
-		// Apple does not return the password on read, so we cannot compare
-		// against current. Always include in PATCH when supplied — the
-		// idempotency contract treats password as "always write through" since
-		// we have no way to verify it's already correct on the server side.
+		// Apple never returns the password on read, so it can't be diffed
+		// against current; password is always written through when supplied.
 		out.DemoAccountPassword = desired.DemoAccountPassword
 		changed = true
 	}
@@ -365,8 +342,7 @@ func strPtrEq(a, b *string) bool {
 	return *a == *b
 }
 
-// changedKeys returns the wire-name keys present in delta. Sorted for
-// deterministic JSON output.
+// changedKeys returns the wire-name keys present in delta, sorted for stable JSON output.
 func changedKeys(delta AppStoreReviewDetailAttributes) []string {
 	var keys []string
 	if delta.ContactFirstName != nil {
@@ -394,15 +370,13 @@ func changedKeys(delta AppStoreReviewDetailAttributes) []string {
 	return keys
 }
 
-// allChangedKeys is changedKeys for the create branch — same shape but
+// allChangedKeys is changedKeys for the create branch: same shape but
 // implies every supplied key is "changed" (no current to diff against).
 func allChangedKeys(desired AppStoreReviewDetailAttributes) []string {
 	return changedKeys(desired)
 }
 
-// buildReviewerResult composes the JSON-stable result view from server
-// attributes. CRITICAL: never copies DemoAccountPassword into the result —
-// only sets the boolean DemoAccountPasswordSet.
+// buildReviewerResult composes the result view; never copies the password, only DemoAccountPasswordSet.
 func buildReviewerResult(action, id, typ, bundleID, version string, noop bool, changed []string, attrs AppStoreReviewDetailAttributes) *ReviewerDemoWriteResult {
 	return &ReviewerDemoWriteResult{
 		Action:                 action,
@@ -423,8 +397,6 @@ func buildReviewerResult(action, id, typ, bundleID, version string, noop bool, c
 	}
 }
 
-// derefStr returns *p or "" when nil. Avoids inline nil-checks at the
-// build-result site.
 func derefStr(p *string) string {
 	if p == nil {
 		return ""
@@ -432,12 +404,8 @@ func derefStr(p *string) string {
 	return *p
 }
 
-// redactReviewerError filters the user-supplied password substring out of
-// any error returned to the caller. Defense-in-depth: even if Apple echoes
-// the password in a 4xx error body or a wrap site somewhere down the chain
-// concatenated the password into a message, this scrubs it before stderr.
-//
-// Empty password is a no-op.
+// redactReviewerError scrubs the password substring from any error before it reaches stderr.
+// Defense-in-depth against Apple echoing it in a 4xx body or a wrap site concatenating it.
 func redactReviewerError(err error, password string) error {
 	if err == nil {
 		return nil

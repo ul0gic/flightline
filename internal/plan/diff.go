@@ -1,16 +1,5 @@
-// Package plan computes the change set between a desired *config.State
-// (loaded from state.yaml) and a live *config.State (fetched from ASC).
-//
-// Diff is leaf-level: every Change names exactly one path that needs a
-// PATCH (or POST/DELETE), so the apply orchestrator can dispatch one
-// API call per change and persist a per-change checkpoint without
-// reasoning about partial trees.
-//
-// Stable ordering: results sort by Path so plan output is deterministic
-// across runs and CI diffs are clean.
-//
-// Idempotent: Diff(s, s) returns nil. Nil sub-specs in desired mean
-// "not managed" — Flightline leaves the surface alone.
+// Package plan computes the leaf-level change set between desired and live *config.State.
+// Nil sub-specs in desired mean "not managed": Flightline leaves that surface alone.
 package plan
 
 import (
@@ -22,8 +11,7 @@ import (
 	"github.com/ul0gic/flightline/internal/config"
 )
 
-// Op is one of create / update / delete. Pricing-style "no-op idempotent"
-// changes never appear in Diff output.
+// Op is one of create / update / delete.
 type Op string
 
 // Op values.
@@ -33,9 +21,7 @@ const (
 	OpDelete Op = "delete"
 )
 
-// Change is a single leaf-level mutation. Path is a JSON-Pointer-ish
-// path into the spec. Resource is a coarser identifier the apply
-// orchestrator's dispatch table uses to pick the right L1 write.
+// Change is a single leaf-level mutation keyed by Resource (dispatch table) and Path (JSON-Pointer).
 type Change struct {
 	Op       Op     `json:"op"`
 	Resource string `json:"resource"`
@@ -45,9 +31,7 @@ type Change struct {
 	Hint     string `json:"hint,omitempty"`
 }
 
-// Diff computes the change set from live → desired. nil entries in
-// desired.Spec mean "not managed" and produce no changes for that
-// surface (matches the schema convention).
+// Diff computes the change set from live to desired state.
 func Diff(desired, live *config.State) []Change {
 	var out []Change
 	if desired == nil {
@@ -55,8 +39,6 @@ func Diff(desired, live *config.State) []Change {
 	}
 
 	if live == nil {
-		// Treat empty live state as a fully-empty live spec so we
-		// surface every desired field as a create.
 		live = &config.State{}
 	}
 
@@ -77,12 +59,8 @@ func Diff(desired, live *config.State) []Change {
 	return out
 }
 
-// --- helpers ---
-
-// emitIfDiff appends an OpUpdate change when desired and live differ.
-// Pointer-typed fields where desired==nil are "not managed" and produce
-// no change. This is the single canonical leaf comparison — every diff
-// helper funnels here so the rules stay consistent.
+// emitIfDiff appends a change when desired and live differ.
+// A nil desired means "not managed": no change is emitted.
 func emitIfDiff(out *[]Change, resource, path string, desired, live any) {
 	if desired == nil {
 		return // not managed
@@ -109,9 +87,7 @@ func emitIfDiff(out *[]Change, resource, path string, desired, live any) {
 	})
 }
 
-// derefAny reflects through pointer chains so *string("foo") compares
-// equal to *string("foo"). Returns nil for nil pointers and zero-value
-// reflects.
+// derefAny reflects through pointer chains so *string("foo") compares equal to *string("foo").
 func derefAny(v any) any {
 	rv := reflect.ValueOf(v)
 	for rv.Kind() == reflect.Pointer {
@@ -136,8 +112,6 @@ func formatHint(path string, from, to any) string {
 		return fmt.Sprintf("%s: %v -> %v", path, from, to)
 	}
 }
-
-// --- per-surface diffs ---
 
 func diffVersion(d, l *config.VersionSpec, out *[]Change) {
 	if d == nil {
@@ -171,7 +145,7 @@ func diffBuild(d, l *config.BuildSpec, out *[]Change) {
 			Path:     "/spec/build/number",
 			From:     emptyToNil(live),
 			To:       d.Number,
-			Hint:     fmt.Sprintf("attach build %s", d.Number),
+			Hint:     "attach build " + d.Number,
 		})
 	}
 }
@@ -267,7 +241,6 @@ func diffIAP(d, l *config.IAPSpec, out *[]Change) {
 		emitIfDiff(out, "iap."+pid, base+"/familySharable", dp.FamilySharable, lp.FamilySharable)
 		emitIfDiff(out, "iap."+pid, base+"/contentHosting", dp.ContentHosting, lp.ContentHosting)
 		emitIfDiff(out, "iap."+pid, base+"/reviewNote", dp.ReviewNote, lp.ReviewNote)
-		// reviewScreenshot — full struct compare (path-only object).
 		if !reflect.DeepEqual(dp.ReviewScreenshot, lp.ReviewScreenshot) && dp.ReviewScreenshot != nil {
 			op := OpUpdate
 			if lp.ReviewScreenshot == nil {
@@ -276,7 +249,7 @@ func diffIAP(d, l *config.IAPSpec, out *[]Change) {
 			*out = append(*out, Change{
 				Op: op, Resource: "iap." + pid + ".reviewScreenshot",
 				Path: base + "/reviewScreenshot", From: lp.ReviewScreenshot, To: dp.ReviewScreenshot,
-				Hint: fmt.Sprintf("upload IAP review screenshot for %s", pid),
+				Hint: "upload IAP review screenshot for " + pid,
 			})
 		}
 		// localizations
@@ -349,10 +322,7 @@ func diffReviewerDemo(d, l *config.ReviewerDemoSpec, out *[]Change) {
 		live = *l
 	}
 	emitIfDiff(out, "reviewerDemo", "/spec/reviewerDemo/username", d.Username, live.Username)
-	// passwordRef / passwordFile aren't sent; the resolved password is.
-	// Diff at the *reference* level so churn isn't constant — the apply
-	// orchestrator resolves to the current secret at write time and
-	// PATCHes only on a real value drift.
+	// Diff the reference, not the resolved secret: apply resolves at write time so plan is stable.
 	emitIfDiff(out, "reviewerDemo", "/spec/reviewerDemo/passwordRef", d.PasswordRef, live.PasswordRef)
 	emitIfDiff(out, "reviewerDemo", "/spec/reviewerDemo/passwordFile", d.PasswordFile, live.PasswordFile)
 	emitIfDiff(out, "reviewerDemo", "/spec/reviewerDemo/notes", d.Notes, live.Notes)
@@ -423,14 +393,13 @@ func diffTestFlight(d, l *config.TestFlightSpec, out *[]Change) {
 			*out = append(*out, Change{
 				Op: OpCreate, Resource: "testflight." + g,
 				Path: base, To: dg,
-				Hint: fmt.Sprintf("create TestFlight group %s", g),
+				Hint: "create TestFlight group " + g,
 			})
 			continue
 		}
 		emitIfDiff(out, "testflight."+g, base+"/isInternal", dg.IsInternal, lg.IsInternal)
 		emitIfDiff(out, "testflight."+g, base+"/publicLink", dg.PublicLink, lg.PublicLink)
 		emitIfDiff(out, "testflight."+g, base+"/publicLinkLimit", dg.PublicLinkLimit, lg.PublicLinkLimit)
-		// Tester rosters compared as set-by-email.
 		dEmails := testerEmails(dg.Testers)
 		lEmails := testerEmails(lg.Testers)
 		for _, e := range dEmails {
@@ -470,12 +439,11 @@ func diffCustomProductPages(d, l config.CustomProductPagesSpec, out *[]Change) {
 			*out = append(*out, Change{
 				Op: OpCreate, Resource: "customProductPages." + name,
 				Path: base, To: dp,
-				Hint: fmt.Sprintf("create custom product page %s", name),
+				Hint: "create custom product page " + name,
 			})
 			continue
 		}
 		emitIfDiff(out, "customProductPages."+name, base+"/visible", dp.Visible, lp.Visible)
-		// Localizations compared as full sub-trees per locale.
 		for _, loc := range sortedKeys(dp.Localizations) {
 			dl := dp.Localizations[loc]
 			ll := lp.Localizations[loc]
@@ -507,8 +475,6 @@ func derefCPP(p *config.CustomProductPagesSpec) config.CustomProductPagesSpec {
 	}
 	return *p
 }
-
-// --- generic helpers ---
 
 func sortedKeys[V any](m map[string]V) []string {
 	out := make([]string, 0, len(m))

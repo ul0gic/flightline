@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,13 +15,7 @@ import (
 )
 
 // AnalyticsRequestView is the JSON contract for `analytics request`.
-//
-// Field names match the surface a CLI consumer expects: requestId is the
-// Apple-assigned identifier, status reflects the on-disk state file's
-// status field (queued / processing / completed / stopped / failed), and
-// reports is the de-dup list collected during --wait. When --wait is not
-// passed reports is empty and the command returns immediately after the
-// state file is persisted.
+// Reports is populated only under --wait.
 type AnalyticsRequestView struct {
 	BundleID    string                         `json:"bundleId"`
 	RequestID   string                         `json:"requestId"`
@@ -31,7 +26,6 @@ type AnalyticsRequestView struct {
 	Reports     []asc.PersistedAnalyticsReport `json:"reports"`
 }
 
-// TableRows implements TableRenderable for `analytics request`.
 func (v AnalyticsRequestView) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
 	rows = [][]string{
@@ -41,25 +35,22 @@ func (v AnalyticsRequestView) TableRows() (headers []string, rows [][]string) {
 		{"STATUS", v.Status},
 		{"SUBMITTED_AT", v.SubmittedAt},
 		{"LAST_POLL_AT", v.LastPollAt},
-		{"REPORTS_OBSERVED", fmt.Sprintf("%d", len(v.Reports))},
+		{"REPORTS_OBSERVED", strconv.Itoa(len(v.Reports))},
 	}
 	return headers, rows
 }
 
-// AnalyticsInstancesView is the JSON contract for `analytics list-instances`.
 type AnalyticsInstancesView struct {
 	BundleID  string                          `json:"bundleId"`
 	RequestID string                          `json:"requestId"`
 	Reports   []AnalyticsReportInstancesEntry `json:"reports"`
 }
 
-// AnalyticsReportInstancesEntry pairs one report with its instances.
 type AnalyticsReportInstancesEntry struct {
 	Report    asc.PersistedAnalyticsReport  `json:"report"`
 	Instances []asc.AnalyticsReportInstance `json:"instances"`
 }
 
-// TableRows implements TableRenderable for `analytics list-instances`.
 func (v AnalyticsInstancesView) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"REPORT", "CATEGORY", "INSTANCE", "GRANULARITY", "DATE"}
 	for _, entry := range v.Reports {
@@ -85,7 +76,6 @@ func (v AnalyticsInstancesView) TableRows() (headers []string, rows [][]string) 
 	return headers, rows
 }
 
-// AnalyticsDownloadView is the JSON contract for `analytics download`.
 type AnalyticsDownloadView struct {
 	BundleID   string                      `json:"bundleId"`
 	InstanceID string                      `json:"instanceId"`
@@ -94,7 +84,6 @@ type AnalyticsDownloadView struct {
 	Segments   []asc.SegmentDownloadResult `json:"segments"`
 }
 
-// TableRows implements TableRenderable for `analytics download`.
 func (v AnalyticsDownloadView) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"SEGMENT", "BYTES", "FILE"}
 	for i, seg := range v.Segments {
@@ -104,14 +93,13 @@ func (v AnalyticsDownloadView) TableRows() (headers []string, rows [][]string) {
 		}
 		rows = append(rows, []string{
 			seg.SegmentID,
-			fmt.Sprintf("%d", seg.ByteCount),
+			strconv.Itoa(seg.ByteCount),
 			file,
 		})
 	}
 	return headers, rows
 }
 
-// AnalyticsStatusView is the JSON contract for `analytics status`.
 type AnalyticsStatusView struct {
 	BundleID    string                         `json:"bundleId"`
 	StateFile   string                         `json:"stateFile"`
@@ -123,7 +111,6 @@ type AnalyticsStatusView struct {
 	Downloaded  []string                       `json:"downloadedSegments"`
 }
 
-// TableRows implements TableRenderable for `analytics status`.
 func (v AnalyticsStatusView) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
 	rows = [][]string{
@@ -133,25 +120,21 @@ func (v AnalyticsStatusView) TableRows() (headers []string, rows [][]string) {
 		{"STATUS", v.Status},
 		{"SUBMITTED_AT", v.SubmittedAt},
 		{"LAST_POLL_AT", v.LastPollAt},
-		{"REPORTS", fmt.Sprintf("%d", len(v.Reports))},
-		{"DOWNLOADED_SEGMENTS", fmt.Sprintf("%d", len(v.Downloaded))},
+		{"REPORTS", strconv.Itoa(len(v.Reports))},
+		{"DOWNLOADED_SEGMENTS", strconv.Itoa(len(v.Downloaded))},
 	}
 	return headers, rows
 }
-
-// ---------------------------------------------------------------------------
-// cobra wiring
-// ---------------------------------------------------------------------------
 
 var analyticsCmd = &cobra.Command{
 	Use:   "analytics",
 	Short: "Request, track, and download Apple analytics reports",
 	Long: `analytics drives Apple's asynchronous analytics report lifecycle:
 
-	1. request  — submit an analyticsReportRequests entry to Apple
-	2. status   — read the persisted state file for an in-flight request
-	3. list-instances — enumerate report instances for the active request
-	4. download — pull every segment of an instance to local CSV files
+	1. request : submit an analyticsReportRequests entry to Apple
+	2. status  : read the persisted state file for an in-flight request
+	3. list-instances: enumerate report instances for the active request
+	4. download: pull every segment of an instance to local CSV files
 
 State persists to $XDG_STATE_HOME/flightline/<bundleId>/analytics.json so a
 Ctrl-C between submit and download resumes cleanly on the next run.`,
@@ -163,9 +146,9 @@ var analyticsRequestCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runAnalyticsRequest,
-	Example: `  fline analytics request com.example.myapp --access-type ONE_TIME_SNAPSHOT
-  fline analytics request com.example.myapp --access-type ONE_TIME_SNAPSHOT --wait
-  fline analytics request com.example.myapp --access-type ONGOING --wait --max-duration 10m`,
+	Example: `  flightline analytics request com.example.myapp --access-type ONE_TIME_SNAPSHOT
+  flightline analytics request com.example.myapp --access-type ONE_TIME_SNAPSHOT --wait
+  flightline analytics request com.example.myapp --access-type ONGOING --wait --max-duration 10m`,
 }
 
 var analyticsListInstancesCmd = &cobra.Command{
@@ -174,9 +157,9 @@ var analyticsListInstancesCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runAnalyticsListInstances,
-	Example: `  fline analytics list-instances com.example.myapp
-  fline analytics list-instances com.example.myapp --report-id RPT-1
-  fline analytics list-instances com.example.myapp --category APP_USAGE --name-contains daily`,
+	Example: `  flightline analytics list-instances com.example.myapp
+  flightline analytics list-instances com.example.myapp --report-id RPT-1
+  flightline analytics list-instances com.example.myapp --category APP_USAGE --name-contains daily`,
 }
 
 var analyticsDownloadCmd = &cobra.Command{
@@ -185,8 +168,8 @@ var analyticsDownloadCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runAnalyticsDownload,
-	Example: `  fline analytics download com.example.myapp --instance INST-1
-  fline analytics download com.example.myapp --instance INST-1 --out ./reports/`,
+	Example: `  flightline analytics download com.example.myapp --instance INST-1
+  flightline analytics download com.example.myapp --instance INST-1 --out ./reports/`,
 }
 
 var analyticsStatusCmd = &cobra.Command{
@@ -195,8 +178,8 @@ var analyticsStatusCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runAnalyticsStatus,
-	Example: `  fline analytics status com.example.myapp
-  fline analytics status com.example.myapp --output json | jq .requestId`,
+	Example: `  flightline analytics status com.example.myapp
+  flightline analytics status com.example.myapp --output json | jq .requestId`,
 }
 
 var (
@@ -211,10 +194,8 @@ var (
 	analyticsDownloadInstance string
 	analyticsDownloadOut      string
 
-	// analyticsPollOpts is the PollOpts handed to PollAnalyticsReport during
-	// --wait. Defaults are documented on asc.PollOpts (30s→5m, 1.5x). Tests
-	// override this with shorter intervals so the lifecycle exercises in
-	// sub-second wall time without falling out of the production code path.
+	// Tests override with shorter intervals so the lifecycle runs in
+	// sub-second wall time without leaving the production code path.
 	analyticsPollOpts asc.PollOpts
 )
 
@@ -224,7 +205,7 @@ func init() {
 	analyticsRequestCmd.Flags().BoolVar(&analyticsRequestWait, "wait", false,
 		"block until reports are available; pair with --max-duration for ONGOING")
 	analyticsRequestCmd.Flags().DurationVar(&analyticsRequestMaxDuration, "max-duration", 0,
-		"upper bound on --wait (e.g. 10m); 0 = no bound — required for ONGOING with --wait")
+		"upper bound on --wait (e.g. 10m); 0 = no bound: required for ONGOING with --wait")
 	_ = analyticsRequestCmd.MarkFlagRequired("access-type")
 
 	analyticsListInstancesCmd.Flags().StringVar(&analyticsListReportID, "report-id", "",
@@ -247,14 +228,8 @@ func init() {
 	rootCmd.AddCommand(analyticsCmd)
 }
 
-// ---------------------------------------------------------------------------
-// request
-// ---------------------------------------------------------------------------
-
-// runAnalyticsRequest submits a new request and (optionally) blocks until
-// reports are available. The state file is written immediately after Apple
-// returns the request ID — even if --wait is interrupted, the state file
-// captures the request ID so a resume picks up where it left off.
+// State is persisted immediately after Apple returns the request ID, so an
+// interrupted --wait still resumes from the captured request ID.
 func runAnalyticsRequest(cmd *cobra.Command, args []string) error {
 	bundleID := args[0]
 	access, err := parseAccessType(analyticsRequestAccessType)
@@ -288,9 +263,6 @@ func runAnalyticsRequest(cmd *cobra.Command, args []string) error {
 	return Render(view, outputMode())
 }
 
-// submitAndPersist runs the POST and writes the initial state file, returning
-// a hydrated AnalyticsRequestView. Split out so the cyclomatic complexity of
-// runAnalyticsRequest stays under the lint ceiling.
 func submitAndPersist(ctx context.Context, c *asc.Client, bundleID, appID string, access asc.AnalyticsAccessType) (AnalyticsRequestView, error) {
 	id, err := c.RequestAnalyticsReport(ctx, asc.AnalyticsReportRequestParams{
 		AppID:      appID,
@@ -320,8 +292,6 @@ func submitAndPersist(ctx context.Context, c *asc.Client, bundleID, appID string
 	}, nil
 }
 
-// pollAndAppend drives PollAnalyticsReport, optionally bounded by
-// maxDuration, accumulating reports onto the view and persisting state.
 func pollAndAppend(ctx context.Context, c *asc.Client, view AnalyticsRequestView, maxDuration time.Duration) (AnalyticsRequestView, error) {
 	pollCtx := ctx
 	if maxDuration > 0 {
@@ -344,9 +314,8 @@ func pollAndAppend(ctx context.Context, c *asc.Client, view AnalyticsRequestView
 	return finishPoll(view, nil)
 }
 
-// finishPoll writes the terminal state file and returns either the view (on
-// nil/sentinel errors) or the wrapped error. Sentinel errors that mean
-// "this is a normal terminal" are folded into the view's Status field.
+// Sentinel errors that signal a normal terminal are folded into Status
+// rather than returned as failures.
 func finishPoll(view AnalyticsRequestView, err error) (AnalyticsRequestView, error) {
 	now := time.Now().UTC()
 	view.LastPollAt = now.Format(time.RFC3339)
@@ -381,13 +350,6 @@ func finishPoll(view AnalyticsRequestView, err error) (AnalyticsRequestView, err
 	return view, nil
 }
 
-// ---------------------------------------------------------------------------
-// list-instances
-// ---------------------------------------------------------------------------
-
-// runAnalyticsListInstances loads the cached report list from state, filters
-// it client-side (--report-id / --category / --name-contains), then walks
-// each remaining report listing its instances.
 func runAnalyticsListInstances(cmd *cobra.Command, args []string) error {
 	bundleID := args[0]
 	state, err := loadAnalyticsState(bundleID)
@@ -419,8 +381,6 @@ func runAnalyticsListInstances(cmd *cobra.Command, args []string) error {
 	return Render(view, outputMode())
 }
 
-// filterReportsForList narrows the persisted report list by the three CLI
-// filters. Pure helper so runAnalyticsListInstances stays small.
 func filterReportsForList(reports []asc.PersistedAnalyticsReport, reportID, category, nameContains string) []asc.PersistedAnalyticsReport {
 	if reportID != "" {
 		for _, r := range reports {
@@ -450,12 +410,6 @@ func filterReportsForList(reports []asc.PersistedAnalyticsReport, reportID, cate
 	return out
 }
 
-// ---------------------------------------------------------------------------
-// download
-// ---------------------------------------------------------------------------
-
-// runAnalyticsDownload pulls every segment of one instance to local files.
-// File naming: <bundleId>-<instanceId>-<segmentN>.csv (under --out if set).
 func runAnalyticsDownload(cmd *cobra.Command, args []string) error {
 	bundleID := args[0]
 	if _, err := loadAnalyticsState(bundleID); err != nil {
@@ -497,9 +451,6 @@ func runAnalyticsDownload(cmd *cobra.Command, args []string) error {
 	return Render(view, outputMode())
 }
 
-// writeSegmentFile picks the destination path and writes body. If out is
-// empty the file lands in cwd. If out names an existing directory the file
-// is placed inside it; otherwise out is used as a literal prefix.
 func writeSegmentFile(bundleID, instanceID string, index int, body []byte, out string) (string, error) {
 	name := fmt.Sprintf("%s-%s-segment%d.csv", bundleID, instanceID, index)
 	dir := "."
@@ -509,11 +460,10 @@ func writeSegmentFile(bundleID, instanceID string, index int, body []byte, out s
 		case err == nil && info.IsDir():
 			dir = out
 		case err == nil:
-			// out is an existing file — overwrite by appending the segment
-			// suffix so we never silently clobber the user's pointer.
+			// Refuse an existing file: silently clobbering it would lose data.
 			return "", fmt.Errorf("--out %q is an existing file; pass a directory or a non-existent prefix", out)
 		default:
-			// Try to interpret as a directory we can create.
+			// Treat a non-existent path as a directory to create.
 			if err := os.MkdirAll(out, 0o700); err != nil {
 				return "", fmt.Errorf("create --out %q: %w", out, err)
 			}
@@ -527,12 +477,6 @@ func writeSegmentFile(bundleID, instanceID string, index int, body []byte, out s
 	return path, nil
 }
 
-// ---------------------------------------------------------------------------
-// status
-// ---------------------------------------------------------------------------
-
-// runAnalyticsStatus reads the persisted state and emits it. Missing file
-// returns the canonical helpful error.
 func runAnalyticsStatus(_ *cobra.Command, args []string) error {
 	bundleID := args[0]
 	state, err := loadAnalyticsState(bundleID)
@@ -566,19 +510,13 @@ func runAnalyticsStatus(_ *cobra.Command, args []string) error {
 	return Render(view, outputMode())
 }
 
-// ---------------------------------------------------------------------------
-// shared helpers
-// ---------------------------------------------------------------------------
-
-// loadAnalyticsState reads the per-bundle analytics state file and returns
-// a typed error message when no prior request exists. Other readers
-// (download, list-instances, status) bottleneck through this so the
-// no-prior-request hint stays consistent across commands.
+// All readers bottleneck through this so the no-prior-request hint stays
+// consistent across commands.
 func loadAnalyticsState(bundleID string) (asc.AsyncState, error) {
 	state, err := asc.LoadAsyncState(bundleID, asc.ReportClassAnalytics)
 	if errors.Is(err, os.ErrNotExist) {
 		return asc.AsyncState{}, fmt.Errorf(
-			"analytics: no active analytics request for %q — run `fline analytics request %s --access-type ONE_TIME_SNAPSHOT` first",
+			"analytics: no active analytics request for %q: run `flightline analytics request %s --access-type ONE_TIME_SNAPSHOT` first",
 			bundleID, bundleID,
 		)
 	}
@@ -587,14 +525,13 @@ func loadAnalyticsState(bundleID string) (asc.AsyncState, error) {
 	}
 	if state.RequestID == "" {
 		return asc.AsyncState{}, fmt.Errorf(
-			"analytics: state file for %q has no request ID — re-submit via `fline analytics request %s`",
+			"analytics: state file for %q has no request ID: re-submit via `flightline analytics request %s`",
 			bundleID, bundleID,
 		)
 	}
 	return state, nil
 }
 
-// parseAccessType validates and normalizes the --access-type flag.
 func parseAccessType(s string) (asc.AnalyticsAccessType, error) {
 	switch strings.ToUpper(strings.TrimSpace(s)) {
 	case string(asc.AccessTypeOneTimeSnapshot):
@@ -608,9 +545,8 @@ func parseAccessType(s string) (asc.AnalyticsAccessType, error) {
 	}
 }
 
-// validateWaitFlags rejects combinations that would block forever. ONGOING
-// requests never auto-terminate, so --wait without --max-duration would
-// hang the CLI indefinitely.
+// ONGOING requests never auto-terminate, so --wait without --max-duration
+// would hang the CLI indefinitely.
 func validateWaitFlags(access asc.AnalyticsAccessType, wait bool, maxDuration time.Duration) error {
 	if !wait {
 		return nil
@@ -623,11 +559,8 @@ func validateWaitFlags(access asc.AnalyticsAccessType, wait bool, maxDuration ti
 	return nil
 }
 
-// parseRFC3339OrZero is a defensive parser used when re-persisting state
-// inside the poll lifecycle. The view's SubmittedAt was minted via
-// Format(time.RFC3339) earlier in the same RunE, so a parse failure means
-// programmer error rather than user input — fall back to the zero time
-// rather than abort the whole flow.
+// SubmittedAt was minted via Format(time.RFC3339) in the same RunE, so a
+// parse failure is programmer error; fall back to zero rather than abort.
 func parseRFC3339OrZero(s string) time.Time {
 	if s == "" {
 		return time.Time{}

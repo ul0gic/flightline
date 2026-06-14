@@ -2,16 +2,8 @@ package asc
 
 import "encoding/json"
 
-// Apple's App Store Connect API uses JSON:API-style envelopes. These generic
-// containers cover every endpoint Flightline touches; per-resource files declare
-// only the *Attributes struct (e.g. AppAttributes) carrying the fields Flightline
-// actually reads or writes.
-//
-// Fields are tagged to match Apple's wire casing exactly (`bundleId`, not
-// `bundle_id`). Output stability is a contract — see PRD § Output convention.
-
-// Resource is one JSON:API resource object: the {type, id, attributes,
-// relationships, links} quad. A is the per-resource attributes struct.
+// Resource is one JSON:API resource object: {type, id, attributes, relationships, links}. A is the per-resource attributes struct.
+// Fields are tagged to match Apple's wire casing exactly (`bundleId`, not `bundle_id`): output is a stable contract.
 type Resource[A any] struct {
 	Type          string                  `json:"type"`
 	ID            string                  `json:"id"`
@@ -20,9 +12,7 @@ type Resource[A any] struct {
 	Links         ResourceLinks           `json:"links,omitempty"`
 }
 
-// Single is the single-resource response envelope: GET /v1/<resource>/{id}.
-// Included carries side-loaded resources of varying types; consumers decode
-// individual entries on demand.
+// Single is the single-resource response envelope: GET /v1/<resource>/{id}. Included holds side-loaded resources.
 type Single[A any] struct {
 	Data     Resource[A]       `json:"data"`
 	Included []json.RawMessage `json:"included,omitempty"`
@@ -37,10 +27,8 @@ type Collection[A any] struct {
 	Included []json.RawMessage `json:"included,omitempty"`
 }
 
-// Relationship is one entry in a resource's relationships map. Apple uses
-// to-one and to-many shapes; both share the same envelope, with Data being
-// either a single ref or an array of refs. We decode as RawMessage to defer
-// shape detection until the caller knows what they expect.
+// Relationship is one entry in a resource's relationships map (to-one or to-many, same envelope).
+// Data is RawMessage to defer shape detection until the caller knows whether it's a ref or array of refs.
 type Relationship struct {
 	Links RelationshipLinks  `json:"links,omitempty"`
 	Meta  CollectionMetaInfo `json:"meta,omitempty"`

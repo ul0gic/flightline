@@ -8,23 +8,8 @@ import (
 	"github.com/ul0gic/flightline/internal/config"
 )
 
-// versionAgeRatingAnsweredRule fires when the age-rating questionnaire is
-// not fully answered. Apple's submission flow blocks until every prompt has
-// a value; partially-answered questionnaires surface as a soft block on the
-// version's "Submit for Review" button.
-//
-// Offline: scans State.Spec.AgeRating for the *required* fields that map to
-// the schema (every frequency-enum field plus the boolean prompts). A
-// pointer that is nil means "not answered". Pointer-to-empty-string is
-// treated as not answered too (the schema's enum constraint will catch it
-// separately, but the rule's job here is rejection prevention not schema
-// validation).
-//
-// Live: re-fetches the AgeRatingDeclaration via the editable AppInfo and
-// checks the same fields against Apple's wire shape. Apple's enum-valued
-// fields are plain strings (no nil); empty == not answered.
-//
-// Mode=Both.
+// versionAgeRatingAnsweredRule fires when the age-rating questionnaire has unanswered prompts.
+// Apple blocks "Submit for Review" until every frequency-enum and boolean field has a value. Mode=Both.
 type versionAgeRatingAnsweredRule struct{}
 
 func init() { Register(versionAgeRatingAnsweredRule{}) }
@@ -49,11 +34,11 @@ func (r versionAgeRatingAnsweredRule) checkOffline(ctx CheckContext) []Diagnosti
 		return []Diagnostic{{
 			RuleID:   r.ID(),
 			Severity: SeverityError,
-			Message:  "spec.ageRating is missing — Apple requires every prompt to be answered",
+			Message:  "spec.ageRating is missing: Apple requires every prompt to be answered",
 			Path:     "/spec/ageRating",
 			FixHint: "add the ageRating block; every frequency-enum and boolean prompt must " +
 				"have a value. See docs/state-yaml.md#spec-agerating.",
-			Reference: "PRD §L3 — version.age-rating-answered",
+			Reference: "PRD §L3: version.age-rating-answered",
 		}}
 	}
 	missing := unansweredAgeRatingFields(ar)
@@ -66,7 +51,7 @@ func (r versionAgeRatingAnsweredRule) checkOffline(ctx CheckContext) []Diagnosti
 			Path:     "/spec/ageRating/" + field,
 			FixHint: "set every age-rating prompt to a value (NONE is valid for frequency " +
 				"fields; false is valid for boolean prompts).",
-			Reference: "PRD §L3 — version.age-rating-answered",
+			Reference: "PRD §L3: version.age-rating-answered",
 		})
 	}
 	return out
@@ -104,8 +89,8 @@ func (r versionAgeRatingAnsweredRule) checkLive(ctx CheckContext) []Diagnostic {
 			Message:  fmt.Sprintf("live age-rating field %q is not answered", field),
 			Path:     "/spec/ageRating/" + field,
 			FixHint: "answer the prompt in App Store Connect or via " +
-				"`fline age-rating set <bundleId> --version <v> --from age.yaml`.",
-			Reference: "PRD §L3 — version.age-rating-answered",
+				"`flightline age-rating set <bundleId> --version <v> --from age.yaml`.",
+			Reference: "PRD §L3: version.age-rating-answered",
 		})
 	}
 	return out
@@ -120,13 +105,8 @@ func (r versionAgeRatingAnsweredRule) fetchErr(what string, err error) Diagnosti
 	}
 }
 
-// unansweredAgeRatingFields returns the schema field names whose pointer is
-// nil. Frequency enums (string pointers) and boolean prompts (bool pointers)
-// are both treated the same: "answered" means non-nil. The nil-vs-empty-
-// string distinction is the whole reason these fields are pointers.
-//
-// Reflection beats writing a 25-line nil check by hand — and survives
-// schema additions without manual edits.
+// unansweredAgeRatingFields returns names of nil pointer fields; uses reflection so new schema fields are automatic.
+// Fields are pointers precisely to distinguish nil (unanswered) from empty string (wrong answer).
 func unansweredAgeRatingFields(ar *config.AgeRatingSpec) []string {
 	if ar == nil {
 		return nil
@@ -134,10 +114,8 @@ func unansweredAgeRatingFields(ar *config.AgeRatingSpec) []string {
 	v := reflect.ValueOf(*ar)
 	t := v.Type()
 	out := make([]string, 0, t.NumField())
-	for i := 0; i < t.NumField(); i++ {
+	for i := range t.NumField() {
 		f := t.Field(i)
-		// Use the JSON tag (which matches the schema field name) so the
-		// diagnostic Path is wire-shape-stable.
 		name := jsonTagName(f.Tag.Get("json"))
 		if name == "" || name == "-" {
 			continue
@@ -150,15 +128,9 @@ func unansweredAgeRatingFields(ar *config.AgeRatingSpec) []string {
 	return out
 }
 
-// unansweredLiveAgeRatingFields walks the live wire shape. Apple's enum-
-// valued fields are plain strings (empty = unanswered) and boolean prompts
-// are *bool. We track the schema-shape names rather than Apple's wire names
-// so the Path matches the offline diagnostic.
+// unansweredLiveAgeRatingFields checks the wire shape: enum fields are empty strings, bool fields are nil *bool.
+// Uses schema-side names so Path matches the offline diagnostic. Duplicates projectAgeRating's mapping: lint is independent of internal/state.
 func unansweredLiveAgeRatingFields(a asc.AgeRatingDeclarationAttributes) []string {
-	// Mapping: schema field name -> Apple wire field check.
-	// Flightline's projectAgeRating already does this re-mapping in reverse;
-	// we duplicate the small subset here rather than depend on it (lint must
-	// stay independent of internal/state).
 	missing := make([]string, 0, 16)
 
 	checkStr := func(name, val string) {
@@ -188,8 +160,7 @@ func unansweredLiveAgeRatingFields(a asc.AgeRatingDeclarationAttributes) []strin
 	return missing
 }
 
-// jsonTagName extracts the field name from a `json:"name,omitempty"` tag,
-// returning "" when the tag is empty.
+// jsonTagName extracts the field name from a `json:"name,omitempty"` tag.
 func jsonTagName(tag string) string {
 	if tag == "" {
 		return ""
@@ -202,8 +173,7 @@ func jsonTagName(tag string) string {
 	return tag
 }
 
-// liveAppInfoID is local to this rule — fully answered age-rating data
-// hangs off the appInfo. Mirrors state.fetchEditableAppInfo.
+// liveAppInfoID returns an editable appInfo ID for the app. Mirrors state.fetchEditableAppInfo.
 func liveAppInfoID(ctx CheckContext, appID string) (string, error) {
 	page, err := asc.Get[asc.Collection[asc.AppInfoAttributes]](
 		ctx.Ctx, ctx.Client, "/v1/apps/"+appID+"/appInfos", nil,

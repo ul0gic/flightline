@@ -80,7 +80,7 @@ func TestCustomProductPageDetail_TableRowsVerticalLayout(t *testing.T) {
 			{ID: "CPPV-2", Attributes: asc.AppCustomProductPageVersionAttributes{Version: "2", State: "APPROVED"}},
 		},
 		Localizations: []CustomProductPageLocalizationView{
-			{ID: "CPPL-EN", Attributes: asc.AppCustomProductPageLocalizationAttributes{Locale: "en-US", PromotionalText: "Limited time holiday savings — 50% off Pro!"}},
+			{ID: "CPPL-EN", Attributes: asc.AppCustomProductPageLocalizationAttributes{Locale: "en-US", PromotionalText: "Limited time holiday savings: 50% off Pro!"}},
 		},
 	}
 	headers, rows := v.TableRows()
@@ -132,7 +132,6 @@ func TestCustomProductPagesCommand_RegisteredOnRoot(t *testing.T) {
 	}
 }
 
-// TestCustomProductPages_JSONOutputStability_List asserts the list shape.
 func TestCustomProductPages_JSONOutputStability_List(t *testing.T) {
 	visible := true
 	list := CustomProductPageList{
@@ -155,12 +154,11 @@ func TestCustomProductPages_JSONOutputStability_List(t *testing.T) {
 	}
 	for _, key := range []string{"id", "type", "attributes"} {
 		if _, ok := decoded.Pages[0][key]; !ok {
-			t.Errorf("missing per-row key %q — JSON contract drift", key)
+			t.Errorf("missing per-row key %q: JSON contract drift", key)
 		}
 	}
 }
 
-// TestCustomProductPages_JSONOutputStability_Get locks the detail shape.
 func TestCustomProductPages_JSONOutputStability_Get(t *testing.T) {
 	v := &CustomProductPageDetail{
 		ID:            "CPP-1",
@@ -179,19 +177,16 @@ func TestCustomProductPages_JSONOutputStability_Get(t *testing.T) {
 	}
 	for _, key := range []string{"id", "type", "attributes", "versions", "localizations"} {
 		if _, ok := decoded[key]; !ok {
-			t.Errorf("missing top-level key %q — JSON contract drift", key)
+			t.Errorf("missing top-level key %q: JSON contract drift", key)
 		}
 	}
 }
 
-// TestCustomProductPages_FixtureReplay_List exercises collectCustomProductPages
-// against the fixture: 2 pages.
 func TestCustomProductPages_FixtureReplay_List(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
 		"GET /v1/apps/1234567890/appCustomProductPages": {File: "custom_product_pages_list"},
 
-		// Per-page version lookup the list flow performs.
 		"GET /v1/appCustomProductPages/CPP-1/appCustomProductPageVersions": {File: "custom_product_pages_versions"},
 		"GET /v1/appCustomProductPages/CPP-2/appCustomProductPageVersions": {File: "custom_product_pages_versions"},
 	})
@@ -212,7 +207,6 @@ func TestCustomProductPages_FixtureReplay_List(t *testing.T) {
 	if views[0].Attributes.Name != "Holiday Promo" {
 		t.Errorf("pages[0].Name = %q, want Holiday Promo", views[0].Attributes.Name)
 	}
-	// Try a per-page version lookup.
 	ver, state, err := fetchCurrentCustomProductPageVersion(ctx, c, views[0].ID)
 	if err != nil {
 		t.Fatalf("fetchCurrentCustomProductPageVersion: %v", err)
@@ -225,8 +219,6 @@ func TestCustomProductPages_FixtureReplay_List(t *testing.T) {
 	}
 }
 
-// TestCustomProductPages_FixtureReplay_GetDetail exercises the full chain:
-// page get + versions list + localizations list (on the highest version).
 func TestCustomProductPages_FixtureReplay_GetDetail(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps":                        {File: "apps_get_byBundleId"},
@@ -256,7 +248,6 @@ func TestCustomProductPages_FixtureReplay_GetDetail(t *testing.T) {
 	if len(versions) != 2 {
 		t.Fatalf("versions len = %d, want 2", len(versions))
 	}
-	// The "current" version is CPPV-2 (version "2", APPROVED).
 	locs, err := collectCustomProductPageLocalizations(ctx, c, "CPPV-2", 0)
 	if err != nil {
 		t.Fatalf("collectCustomProductPageLocalizations: %v", err)
@@ -269,8 +260,6 @@ func TestCustomProductPages_FixtureReplay_GetDetail(t *testing.T) {
 	}
 }
 
-// TestCustomProductPages_FixtureReplay_AppNotFound asserts the error names
-// the bundleId.
 func TestCustomProductPages_FixtureReplay_AppNotFound(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_notFound"},
@@ -285,8 +274,6 @@ func TestCustomProductPages_FixtureReplay_AppNotFound(t *testing.T) {
 	}
 }
 
-// TestCustomProductPagesWrites_RegisteredOnGroup confirms create / update /
-// delete subcommands and their flags.
 func TestCustomProductPagesWrites_RegisteredOnGroup(t *testing.T) {
 	var cpp *cobra.Command
 	for _, c := range rootCmd.Commands() {
@@ -317,8 +304,6 @@ func TestCustomProductPagesWrites_RegisteredOnGroup(t *testing.T) {
 	}
 }
 
-// TestBuildCustomProductPageCreate_Shape locks the JSON:API POST body
-// shape: required (name, app), with no included block at L1.
 func TestBuildCustomProductPageCreate_Shape(t *testing.T) {
 	body := buildCustomProductPageCreate("APP-1", "Holiday Promo")
 	raw, _ := json.Marshal(body)
@@ -337,9 +322,6 @@ func TestBuildCustomProductPageCreate_Shape(t *testing.T) {
 	}
 }
 
-// TestComputeCustomProductPagePatchAttrs_NoOpAndChange asserts that an
-// unset flag never produces a patch entry; a same-value flag is filtered
-// out; a new value lands in the patch.
 func TestComputeCustomProductPagePatchAttrs_NoOpAndChange(t *testing.T) {
 	yes := true
 	cur := asc.AppCustomProductPageAttributes{
@@ -384,8 +366,6 @@ func TestComputeCustomProductPagePatchAttrs_NoOpAndChange(t *testing.T) {
 	}
 }
 
-// TestFindCustomProductPageByName_FixtureReplay walks the read path used
-// by the idempotent create.
 func TestFindCustomProductPageByName_FixtureReplay(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps/1234567890/appCustomProductPages": {File: "custom_product_pages_list"},
@@ -407,8 +387,6 @@ func TestFindCustomProductPageByName_FixtureReplay(t *testing.T) {
 	}
 }
 
-// TestCustomProductPageSetResult_JSONShape locks the JSON contract for
-// the create/update result.
 func TestCustomProductPageSetResult_JSONShape(t *testing.T) {
 	yes := true
 	r := &CustomProductPageSetResult{
@@ -435,13 +413,11 @@ func TestCustomProductPageSetResult_JSONShape(t *testing.T) {
 	}
 }
 
-// TestCustomProductPageDeleteResult_TableRows_NoChange covers the
-// idempotent delete row.
 func TestCustomProductPageDeleteResult_TableRows_NoChange(t *testing.T) {
 	r := &CustomProductPageDeleteResult{
 		PageID:  "CPP-1",
 		Changed: false,
-		Note:    "no change (idempotent) — page already absent",
+		Note:    "no change (idempotent): page already absent",
 	}
 	_, rows := r.TableRows()
 	foundNote := false

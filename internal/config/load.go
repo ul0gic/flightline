@@ -1,16 +1,5 @@
 // Package config loads and validates Flightline state YAML files.
-//
-// Two stages:
-//
-//  1. LoadState — pure YAML decode into the typed *State tree, with
-//     KnownFields(true) so unknown keys become DiagnosticErrors anchored to
-//     the offending line/col. Coercion footguns (`yes`/`no` for bool,
-//     bare-decimal price tiers) surface here as type-mismatch errors.
-//  2. Validate (schema.go) — runs *State through the embedded JSON Schema
-//     for cross-field rules the Go types can't express.
-//
-// Diagnostics from both stages share the Diagnostic type so cmd/plan and
-// cmd/apply can render them uniformly.
+// KnownFields(true) is set so unknown keys surface as anchored Diagnostics before schema validation.
 package config
 
 import (
@@ -19,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	yaml "go.yaml.in/yaml/v3"
 )
@@ -39,9 +29,8 @@ type StateMetadata struct {
 	Platform string `yaml:"platform,omitempty" json:"platform,omitempty"`
 }
 
-// StateSpec mirrors schemas/flightline.schema.json's spec section. Each
-// field is a typed sub-spec; nil pointers mean "not managed" — Flightline
-// leaves that surface alone during apply.
+// StateSpec mirrors schemas/flightline.schema.json's spec section.
+// A nil sub-spec means "not managed": apply leaves that surface alone.
 type StateSpec struct {
 	Version            *VersionSpec            `yaml:"version,omitempty"            json:"version,omitempty"`
 	Build              *BuildSpec              `yaml:"build,omitempty"              json:"build,omitempty"`
@@ -57,7 +46,7 @@ type StateSpec struct {
 	CustomProductPages *CustomProductPagesSpec `yaml:"customProductPages,omitempty" json:"customProductPages,omitempty"`
 }
 
-// VersionSpec — see #/$defs/versionSpec.
+// VersionSpec: see #/$defs/versionSpec.
 type VersionSpec struct {
 	ReleaseType         *string `yaml:"releaseType,omitempty"         json:"releaseType,omitempty"`
 	EarliestReleaseDate *string `yaml:"earliestReleaseDate,omitempty" json:"earliestReleaseDate,omitempty"`
@@ -65,17 +54,17 @@ type VersionSpec struct {
 	Downloadable        *bool   `yaml:"downloadable,omitempty"        json:"downloadable,omitempty"`
 }
 
-// BuildSpec — see #/$defs/buildSpec.
+// BuildSpec: see #/$defs/buildSpec.
 type BuildSpec struct {
 	Number string `yaml:"number,omitempty" json:"number,omitempty"`
 }
 
-// MetadataSpec — see #/$defs/metadataSpec.
+// MetadataSpec: see #/$defs/metadataSpec.
 type MetadataSpec struct {
 	Locales map[string]MetadataLocale `yaml:"locales,omitempty" json:"locales,omitempty"`
 }
 
-// MetadataLocale — see #/$defs/metadataLocale.
+// MetadataLocale: see #/$defs/metadataLocale.
 type MetadataLocale struct {
 	Name             *string `yaml:"name,omitempty"             json:"name,omitempty"`
 	Subtitle         *string `yaml:"subtitle,omitempty"         json:"subtitle,omitempty"`
@@ -88,23 +77,23 @@ type MetadataLocale struct {
 	PrivacyPolicyURL *string `yaml:"privacyPolicyUrl,omitempty" json:"privacyPolicyUrl,omitempty"`
 }
 
-// ScreenshotsSpec — see #/$defs/screenshotsSpec.
+// ScreenshotsSpec: see #/$defs/screenshotsSpec.
 type ScreenshotsSpec struct {
 	Locales map[string]map[string][]ScreenshotFile `yaml:"locales,omitempty" json:"locales,omitempty"`
 }
 
-// ScreenshotFile — see #/$defs/screenshotFile.
+// ScreenshotFile: see #/$defs/screenshotFile.
 type ScreenshotFile struct {
 	Path string  `yaml:"path"          json:"path"`
 	Alt  *string `yaml:"alt,omitempty" json:"alt,omitempty"`
 }
 
-// IAPSpec — see #/$defs/iapSpec.
+// IAPSpec: see #/$defs/iapSpec.
 type IAPSpec struct {
 	Products map[string]IAPProduct `yaml:"products,omitempty" json:"products,omitempty"`
 }
 
-// IAPProduct — see #/$defs/iapProduct.
+// IAPProduct: see #/$defs/iapProduct.
 type IAPProduct struct {
 	Type             string                     `yaml:"type"                       json:"type"`
 	Name             *string                    `yaml:"name,omitempty"             json:"name,omitempty"`
@@ -120,13 +109,13 @@ type IAPReviewScreenshot struct {
 	Path string `yaml:"path" json:"path"`
 }
 
-// IAPLocalization — see #/$defs/iapLocalization.
+// IAPLocalization: see #/$defs/iapLocalization.
 type IAPLocalization struct {
 	Name        *string `yaml:"name,omitempty"        json:"name,omitempty"`
 	Description *string `yaml:"description,omitempty" json:"description,omitempty"`
 }
 
-// AgeRatingSpec — see #/$defs/ageRatingSpec. Pointer-typed enums and
+// AgeRatingSpec: see #/$defs/ageRatingSpec. Pointer-typed enums and
 // booleans so Flightline can distinguish "answered NONE" from "not managed".
 type AgeRatingSpec struct {
 	CartoonOrFantasyViolence                  *string `yaml:"cartoonOrFantasyViolence,omitempty"                    json:"cartoonOrFantasyViolence,omitempty"`
@@ -146,7 +135,7 @@ type AgeRatingSpec struct {
 	SeventeenPlus                             *bool   `yaml:"seventeenPlus,omitempty"                               json:"seventeenPlus,omitempty"`
 }
 
-// ExportComplianceSpec — see #/$defs/exportComplianceSpec.
+// ExportComplianceSpec: see #/$defs/exportComplianceSpec.
 type ExportComplianceSpec struct {
 	UsesNonExemptEncryption *bool                        `yaml:"usesNonExemptEncryption,omitempty" json:"usesNonExemptEncryption,omitempty"`
 	Declaration             *ExportComplianceDeclaration `yaml:"declaration,omitempty"             json:"declaration,omitempty"`
@@ -164,7 +153,7 @@ type ExportComplianceDeclaration struct {
 	DocumentURL                     *string `yaml:"documentUrl,omitempty"                     json:"documentUrl,omitempty"`
 }
 
-// ReviewerDemoSpec — see #/$defs/reviewerDemoSpec.
+// ReviewerDemoSpec: see #/$defs/reviewerDemoSpec.
 type ReviewerDemoSpec struct {
 	Username     *string `yaml:"username,omitempty"     json:"username,omitempty"`
 	PasswordRef  *string `yaml:"passwordRef,omitempty"  json:"passwordRef,omitempty"`
@@ -175,7 +164,7 @@ type ReviewerDemoSpec struct {
 	ContactPhone *string `yaml:"contactPhone,omitempty" json:"contactPhone,omitempty"`
 }
 
-// CategoriesSpec — see #/$defs/categoriesSpec.
+// CategoriesSpec: see #/$defs/categoriesSpec.
 type CategoriesSpec struct {
 	Primary                *string  `yaml:"primary,omitempty"                json:"primary,omitempty"`
 	Secondary              *string  `yaml:"secondary,omitempty"              json:"secondary,omitempty"`
@@ -183,18 +172,18 @@ type CategoriesSpec struct {
 	SecondarySubcategories []string `yaml:"secondarySubcategories,omitempty" json:"secondarySubcategories,omitempty"`
 }
 
-// PricingSpec — see #/$defs/pricingSpec.
+// PricingSpec: see #/$defs/pricingSpec.
 type PricingSpec struct {
 	BaseTerritory   *string `yaml:"baseTerritory,omitempty"   json:"baseTerritory,omitempty"`
 	AppPricePointID *string `yaml:"appPricePointId,omitempty" json:"appPricePointId,omitempty"`
 }
 
-// TestFlightSpec — see #/$defs/testflightSpec.
+// TestFlightSpec: see #/$defs/testflightSpec.
 type TestFlightSpec struct {
 	Groups map[string]TestFlightGroup `yaml:"groups,omitempty" json:"groups,omitempty"`
 }
 
-// TestFlightGroup — see #/$defs/testflightGroup.
+// TestFlightGroup: see #/$defs/testflightGroup.
 type TestFlightGroup struct {
 	IsInternal      *bool              `yaml:"isInternal,omitempty"      json:"isInternal,omitempty"`
 	PublicLink      *bool              `yaml:"publicLink,omitempty"      json:"publicLink,omitempty"`
@@ -202,29 +191,24 @@ type TestFlightGroup struct {
 	Testers         []TestFlightTester `yaml:"testers,omitempty"         json:"testers,omitempty"`
 }
 
-// TestFlightTester — see #/$defs/testflightTester.
+// TestFlightTester: see #/$defs/testflightTester.
 type TestFlightTester struct {
 	Email     string  `yaml:"email"               json:"email"`
 	FirstName *string `yaml:"firstName,omitempty" json:"firstName,omitempty"`
 	LastName  *string `yaml:"lastName,omitempty"  json:"lastName,omitempty"`
 }
 
-// CustomProductPagesSpec — see #/$defs/customProductPagesSpec. Keys
-// are the page identifier (slug); values describe the page.
-//
-// The schema models this as a patternProperties object at the root of
-// `customProductPages`, so the Go type is a bare map. The pointer in
-// StateSpec lets callers distinguish "not managed" (nil) from
-// "explicitly empty" (zero-len map).
+// CustomProductPagesSpec maps page slug to page (schema patternProperties object).
+// Its StateSpec pointer distinguishes "not managed" (nil) from "explicitly empty".
 type CustomProductPagesSpec map[string]CustomProductPage
 
-// CustomProductPage — see #/$defs/customProductPage.
+// CustomProductPage: see #/$defs/customProductPage.
 type CustomProductPage struct {
 	Visible       *bool                              `yaml:"visible,omitempty"       json:"visible,omitempty"`
 	Localizations map[string]CustomProductPageLocale `yaml:"localizations,omitempty" json:"localizations,omitempty"`
 }
 
-// CustomProductPageLocale — one locale's content on a custom product page.
+// CustomProductPageLocale: one locale's content on a custom product page.
 type CustomProductPageLocale struct {
 	PromotionalText *string                     `yaml:"promotionalText,omitempty" json:"promotionalText,omitempty"`
 	Screenshots     map[string][]ScreenshotFile `yaml:"screenshots,omitempty"     json:"screenshots,omitempty"`
@@ -266,9 +250,8 @@ func (d Diagnostic) String() string {
 	return fmt.Sprintf("%s: %s: %s", loc, d.Severity, d.Message)
 }
 
-// LoadError is returned by LoadState when YAML decoding fails. Carries
-// the per-error Diagnostics so callers can format them however they
-// like (cmd/plan, cmd/apply, future LSP server).
+// LoadError is returned by LoadState when YAML decoding fails, carrying
+// per-error Diagnostics so callers can format them however they like.
 type LoadError struct {
 	Diagnostics []Diagnostic
 }
@@ -281,19 +264,17 @@ func (e *LoadError) Error() string {
 	if len(e.Diagnostics) == 1 {
 		return e.Diagnostics[0].String()
 	}
-	out := fmt.Sprintf("%d errors:", len(e.Diagnostics))
+	var b strings.Builder
+	fmt.Fprintf(&b, "%d errors:", len(e.Diagnostics))
 	for _, d := range e.Diagnostics {
-		out += "\n  " + d.String()
+		b.WriteString("\n  ")
+		b.WriteString(d.String())
 	}
-	return out
+	return b.String()
 }
 
 // LoadState reads a YAML state file and decodes it to *State.
-//
-// On any decode error (unknown key, type mismatch, malformed YAML), returns
-// a *LoadError carrying file:line:col-anchored Diagnostics. Schema
-// validation against schemas/flightline.schema.json runs separately via
-// Validate — LoadState only does structural decode.
+// On any decode error it returns a *LoadError with file:line:col-anchored Diagnostics.
 func LoadState(path string) (*State, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
@@ -326,10 +307,7 @@ func loadStateFromReader(file string, r io.Reader) (*State, error) {
 	return &s, nil
 }
 
-// yamlErrorToDiagnostic extracts file:line:col anchors from yaml.v3's
-// *yaml.TypeError and falls back to a path-less diagnostic for everything
-// else. yaml.v3 stuffs line numbers into the error string; we prefer
-// structured access where the library exposes it.
+// yamlErrorToDiagnostic extracts file:line:col from yaml.TypeError when present.
 func yamlErrorToDiagnostic(file string, err error) Diagnostic {
 	d := Diagnostic{
 		File:     file,
@@ -338,9 +316,6 @@ func yamlErrorToDiagnostic(file string, err error) Diagnostic {
 	}
 	var te *yaml.TypeError
 	if errors.As(err, &te) && len(te.Errors) > 0 {
-		// TypeError carries one or more "line N: ..." messages. Render
-		// them all in the message (separate diagnostics is overkill for
-		// this stage; the schema validator will be more granular).
 		d.Message = "yaml: " + te.Error()
 	}
 	return d

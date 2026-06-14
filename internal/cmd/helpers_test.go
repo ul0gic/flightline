@@ -18,25 +18,14 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// fixtureRoute describes one entry in the cmd-level fixture-server route
-// table: which JSON file under ../asc/testdata/golden/ to serve, with what
-// HTTP status. Status defaults to 200 when zero.
-//
-// This mirrors internal/asc/fixture_test.go's helper but lives in the cmd
-// package so cmd-level tests can replay the same golden corpus through the
-// production-shaped client (with Options.BaseURL pointing at httptest).
+// Status defaults to 200 when zero.
 type fixtureRoute struct {
 	File   string
 	Status int
 }
 
-// startFixtureServer spins an httptest.Server backed by a route table.
-// Routes are matched against METHOD + URL.Path (query strings ignored).
-//
-// Unknown routes return 404 with a body that names the offending route, so
-// failures pinpoint typos rather than masquerading as request bugs.
-//
-// Calls t.Cleanup to close the server; callers do NOT defer Close.
+// Routes match on METHOD + URL.Path (query ignored); unknown routes 404 with
+// the offending route in the body. Closes via t.Cleanup: callers do NOT defer.
 func startFixtureServer(t *testing.T, routes map[string]fixtureRoute) *httptest.Server {
 	t.Helper()
 	captured := make(map[string]fixtureRoute, len(routes))
@@ -72,8 +61,7 @@ func startFixtureServer(t *testing.T, routes map[string]fixtureRoute) *httptest.
 	return srv
 }
 
-// readGoldenFixture loads a golden JSON file from internal/asc/testdata/golden/.
-// Shared corpus across asc and cmd packages — single source of truth.
+// Golden corpus is shared with the asc package: single source of truth.
 func readGoldenFixture(name string) ([]byte, error) {
 	if strings.Contains(name, "..") || strings.HasPrefix(name, "/") {
 		return nil, errors.New("fixture: path traversal: " + name)
@@ -85,10 +73,7 @@ func readGoldenFixture(name string) ([]byte, error) {
 	return os.ReadFile(path) // #nosec G304 -- name is sanitized above
 }
 
-// fixtureASCClient builds a production-shaped asc.Client wired to the
-// supplied fixture server via Options.BaseURL. Each call writes an ephemeral
-// P-256 PKCS8 PEM at mode 0600 in t.TempDir() (never a real .p8) so the JWT
-// minter runs unmodified.
+// Writes an ephemeral P-256 key (never a real .p8) so the JWT minter runs unmodified.
 func fixtureASCClient(t *testing.T, srv *httptest.Server) *asc.Client {
 	t.Helper()
 	keyPath := writeEphemeralKey(t)
@@ -106,8 +91,6 @@ func fixtureASCClient(t *testing.T, srv *httptest.Server) *asc.Client {
 	return c
 }
 
-// writeEphemeralKey generates a fresh P-256 PKCS8 key into t.TempDir at mode
-// 0600 and returns the path. Never use a real .p8 in tests.
 func writeEphemeralKey(t *testing.T) string {
 	t.Helper()
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

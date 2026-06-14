@@ -1,10 +1,3 @@
-// dispatchers_test.go — per-surface apply dispatcher tests.
-//
-// One subtest per surface that: stages a Change, runs Apply against
-// an httptest server, asserts the expected method+path was hit. The
-// fixture handler asserts on body shape only when correctness depends
-// on it (PATCH attribute name, relationship type, etc.).
-
 package state
 
 import (
@@ -23,9 +16,7 @@ func ctxApply() ApplyContext {
 	return ApplyContext{BundleID: "com.example.app", Version: "1.0", Platform: "IOS"}
 }
 
-// runOneChange wires Apply against an httptest handler and a single
-// change. Returns the request count + any error so the test can
-// assert "exactly one PATCH was issued at expected path".
+// runOneChange wires Apply against an httptest handler and a single change.
 func runOneChange(t *testing.T, handler http.Handler, ch plan.Change) (int32, error) {
 	t.Helper()
 	withTempCacheDir(t)
@@ -38,8 +29,6 @@ func runOneChange(t *testing.T, handler http.Handler, ch plan.Change) (int32, er
 	return 0, err
 }
 
-// TestDispatch_Categories — one categories Change → one PATCH on the
-// appInfo's primaryCategory relationship.
 func TestDispatch_Categories(t *testing.T) {
 	var patches int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -75,8 +64,6 @@ func TestDispatch_Categories(t *testing.T) {
 	}
 }
 
-// TestDispatch_Metadata — version-localization field PATCHes the right
-// resource (description lives on appStoreVersionLocalizations).
 func TestDispatch_Metadata(t *testing.T) {
 	var versionPatches, appInfoPatches int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -120,9 +107,6 @@ func TestDispatch_Metadata(t *testing.T) {
 	}
 }
 
-// TestDispatch_TestFlightTesterAdd — OpCreate on testers/<email>
-// should look up or create the tester then POST to the group's
-// betaTesters relationship.
 func TestDispatch_TestFlightTesterAdd(t *testing.T) {
 	var posts int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -162,9 +146,6 @@ func TestDispatch_TestFlightTesterAdd(t *testing.T) {
 	}
 }
 
-// TestDispatch_ReviewerDemoUsername — username PATCH lands on the
-// appStoreReviewDetail's demoAccountName attribute (schema → wire
-// rename).
 func TestDispatch_ReviewerDemoUsername(t *testing.T) {
 	var patches int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -202,8 +183,6 @@ func TestDispatch_ReviewerDemoUsername(t *testing.T) {
 	}
 }
 
-// TestDispatch_PasswordRefResolvesEnv — passwordRef "env:VAR" must
-// look up the env var and PATCH demoAccountPassword with the value.
 func TestDispatch_PasswordRefResolvesEnv(t *testing.T) {
 	var bodyText string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -242,7 +221,6 @@ func TestDispatch_PasswordRefResolvesEnv(t *testing.T) {
 	}
 }
 
-// TestDispatch_PasswordRefMissingEnvErrors — env var unset → typed error.
 func TestDispatch_PasswordRefMissingEnvErrors(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {}))
 	defer srv.Close()
@@ -260,8 +238,6 @@ func TestDispatch_PasswordRefMissingEnvErrors(t *testing.T) {
 	}
 }
 
-// TestDispatch_IAPField — name update on an existing IAP PATCHes
-// /v2/inAppPurchases/{id}.
 func TestDispatch_IAPField(t *testing.T) {
 	var patches int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -300,6 +276,4 @@ func TestDispatch_IAPField(t *testing.T) {
 	}
 }
 
-// silence the unused-helper lint while we keep runOneChange around
-// as a drop-in for future surface tests.
-var _ = runOneChange
+var _ = runOneChange // kept as a drop-in for future surface tests

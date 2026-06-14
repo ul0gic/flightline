@@ -10,41 +10,6 @@ import (
 	"testing"
 )
 
-// Phase 3.4.3 — Multipart upload resume tests.
-//
-// upload_test.go already covers the per-step contracts: happy path, manual
-// checkpoint seed → resume skips chunk 0, MD5 mismatch returns
-// ErrCheckpointMismatch, commit removes the checkpoint, mid-upload PUT
-// failure persists [0] in UploadedChunks. This file adds the full
-// end-to-end resume cycle the build plan calls out:
-//
-//   1. Fresh upload that fails on chunk 1. Verify checkpoint persists
-//      with UploadedChunks=[0].
-//   2. Second invocation against the same Asset.Path with
-//      ResumeFromCheckpoint=true. Verify chunk 0 is NOT re-PUT and the
-//      upload completes successfully.
-//
-// Plus a few hardening cases on the checkpoint-loader path that the
-// existing tests don't cover:
-//   - Corrupt checkpoint surfaces ErrCheckpointCorrupt and prevents
-//     accidental re-upload of mismatched bytes.
-//   - Schema-version forward-incompat is rejected with
-//     ErrCheckpointCorrupt.
-//   - Resume with no on-disk checkpoint falls back to a fresh reserve.
-
-// ---------------------------------------------------------------------------
-// End-to-end resume cycle: fail-then-succeed.
-//
-// Round 1: fixture fails chunk 1. Upload returns an error, checkpoint
-// persists with UploadedChunks=[0].
-// Round 2: same UploadOptions plus ResumeFromCheckpoint=true. Fixture
-// recovers (failChunkIdx clears after the first hit). Upload should:
-//   - NOT POST a new reserve (asset already exists).
-//   - GET the existing asset to refresh upload operations.
-//   - PUT only chunk 1. Chunk 0's PUT count must remain at 1 from round 1.
-//   - PATCH commit, remove checkpoint.
-// ---------------------------------------------------------------------------
-
 func TestUpload_EndToEndResume_FailThenSucceed(t *testing.T) {
 	root := withUploadCacheRoot(t)
 	f := newUploadFixture(t,
@@ -55,7 +20,7 @@ func TestUpload_EndToEndResume_FailThenSucceed(t *testing.T) {
 	c := uploadFixtureClient(t, f)
 	path := writeUploadPayload(t, "screenshot.png")
 
-	// Round 1: chunk 1 fails (one-shot — server clears the trip after firing).
+	// Round 1: chunk 1 fails (one-shot: server clears the trip after firing).
 	f.failChunkIdx = 1
 	_, err := c.Upload(context.Background(), UploadOptions{
 		Kind:     AssetKindAppScreenshot,
@@ -128,12 +93,6 @@ func TestUpload_EndToEndResume_FailThenSucceed(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Resume with no on-disk checkpoint falls back to a fresh reserve.
-// Sanity check the resolveUploadPlan branch when ResumeFromCheckpoint=true
-// but no checkpoint exists.
-// ---------------------------------------------------------------------------
-
 func TestUpload_ResumeWithoutCheckpoint_FreshReserve(t *testing.T) {
 	withUploadCacheRoot(t)
 	f := newUploadFixture(t,
@@ -161,12 +120,6 @@ func TestUpload_ResumeWithoutCheckpoint_FreshReserve(t *testing.T) {
 			f.chunkPutCount[0].Load(), f.chunkPutCount[1].Load())
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Corrupt checkpoint — JSON garbage at the expected path. tryLoadCheckpoint
-// ForAsset scans the directory; a single corrupt entry returns
-// ErrCheckpointCorrupt rather than silently failing over.
-// ---------------------------------------------------------------------------
 
 func TestUpload_CorruptCheckpoint_SurfacesTypedError(t *testing.T) {
 	root := withUploadCacheRoot(t)
@@ -201,12 +154,6 @@ func TestUpload_CorruptCheckpoint_SurfacesTypedError(t *testing.T) {
 		t.Fatalf("err = %v, want errors.Is ErrCheckpointCorrupt", err)
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Schema-version forward-incompat — a checkpoint written by a future build
-// is rejected with ErrCheckpointCorrupt rather than silently truncating
-// fields it can't decode.
-// ---------------------------------------------------------------------------
 
 func TestUpload_FutureSchemaVersionCheckpoint_Rejected(t *testing.T) {
 	root := withUploadCacheRoot(t)
@@ -249,11 +196,6 @@ func TestUpload_FutureSchemaVersionCheckpoint_Rejected(t *testing.T) {
 		t.Fatalf("err = %v, want errors.Is ErrCheckpointCorrupt", err)
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Checkpoint kind mismatch — the checkpoint records appScreenshot but the
-// caller passes IAPReviewScreenshot. validateCheckpointForReuse rejects.
-// ---------------------------------------------------------------------------
 
 func TestUpload_CheckpointKindMismatch_Rejected(t *testing.T) {
 	root := withUploadCacheRoot(t)
@@ -299,13 +241,6 @@ func TestUpload_CheckpointKindMismatch_Rejected(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Stale-but-orphan checkpoint cleanup — when a checkpoint exists for a
-// different file path, it does NOT match the current upload and the helper
-// proceeds with a fresh reserve (rather than mistakenly resuming someone
-// else's asset).
-// ---------------------------------------------------------------------------
-
 func TestUpload_OrphanCheckpoint_DoesNotInterfereWithFreshReserve(t *testing.T) {
 	root := withUploadCacheRoot(t)
 	f := newUploadFixture(t,
@@ -315,9 +250,8 @@ func TestUpload_OrphanCheckpoint_DoesNotInterfereWithFreshReserve(t *testing.T) 
 	)
 	c := uploadFixtureClient(t, f)
 
-	// Pre-seed a checkpoint that references a DIFFERENT local file path.
-	// tryLoadCheckpointForAsset matches on absolute path; this one shouldn't
-	// match, so resume path falls through to fresh reserve.
+	// Checkpoint for a different file path; absolute-path match misses, so resume
+	// falls through to a fresh reserve.
 	cpDir := filepath.Join(root, "uploads")
 	if err := os.MkdirAll(cpDir, 0o700); err != nil {
 		t.Fatalf("mkdir cache: %v", err)
@@ -340,7 +274,7 @@ func TestUpload_OrphanCheckpoint_DoesNotInterfereWithFreshReserve(t *testing.T) 
 		t.Fatalf("seed orphan checkpoint: %v", err)
 	}
 
-	// Fresh upload of the real payload — should reserve a new asset and
+	// Fresh upload of the real payload: should reserve a new asset and
 	// upload both chunks normally.
 	path := writeUploadPayload(t, "screenshot.png")
 	got, err := c.Upload(context.Background(), UploadOptions{
@@ -363,7 +297,7 @@ func TestUpload_OrphanCheckpoint_DoesNotInterfereWithFreshReserve(t *testing.T) 
 		t.Errorf("chunk 1 PUT count = %d, want 1", f.chunkPutCount[1].Load())
 	}
 
-	// Orphan checkpoint should still be on disk — we didn't commit against
+	// Orphan checkpoint should still be on disk: we didn't commit against
 	// its asset ID.
 	orphanPath := filepath.Join(cpDir, "orphan-asset-id.json")
 	if _, err := os.Stat(orphanPath); err != nil {

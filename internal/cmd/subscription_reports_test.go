@@ -90,8 +90,8 @@ func TestParseDurationDays(t *testing.T) {
 		{"P30D", 30, false},
 		{"P1M", 30, false},
 		{"P1Y", 365, false},
-		{"p7d", 7, false}, // case-insensitive
-		{"", 7, false},    // empty defaults to 7
+		{"p7d", 7, false},
+		{"", 7, false},
 		{"7d", 0, true},
 		{"PXD", 0, true},
 	}
@@ -137,7 +137,7 @@ func TestBuildSubscriptionPlan_DefaultRange(t *testing.T) {
 func TestBuildSubscriptionPlan_Month(t *testing.T) {
 	resetSubscriptionReportFlags()
 	subscriptionsReportsMonth = "2026-04"
-	subscriptionsReportsRange = "P7D" // default — must not collide
+	subscriptionsReportsRange = "P7D" // default: must not collide
 
 	plan, err := buildSubscriptionPlan(time.Now())
 	if err != nil {

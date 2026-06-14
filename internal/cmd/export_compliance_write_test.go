@@ -121,8 +121,7 @@ func TestExportComplianceWriteResult_JSONShape(t *testing.T) {
 }
 
 func TestExportComplianceWriteResult_JSONShape_NilEncryption(t *testing.T) {
-	// nil pointer must serialize as null per the JSON contract — consumers
-	// distinguish "answered yes/no" from "no answer yet" off this.
+	// nil must serialize as null: consumers read it as "no answer yet", not false.
 	r := ExportComplianceWriteResult{
 		Action:                  "set",
 		BundleID:                "com.example.alpha",
@@ -146,9 +145,8 @@ func TestExportComplianceWriteResult_TableRows(t *testing.T) {
 	}
 }
 
-// TestFetchVersionBuildEncryptionForSet_NoBuild covers the path where a
-// version exists but no build is attached. The set helper must distinguish
-// this from a real error so the cmd layer can give an actionable hint.
+// A 404 (version exists, no build attached) must read as zero values, not an
+// error, so the cmd layer can give an actionable hint.
 func TestFetchVersionBuildEncryptionForSet_NoBuild(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/appStoreVersions/V1/build": {File: "iap_get_notFound", Status: 404},
@@ -163,10 +161,8 @@ func TestFetchVersionBuildEncryptionForSet_NoBuild(t *testing.T) {
 	}
 }
 
-// TestExportComplianceSet_Idempotent_NoPATCH simulates the noop branch: the
-// build's UsesNonExemptEncryption already matches the requested value, so no
-// PATCH is issued. We assert by NOT registering a PATCH route — if the
-// helper PATCHed, the fixture server would return 404.
+// Idempotency is asserted by NOT registering a PATCH route: if the helper
+// PATCHed when the value already matched, the fixture server would 404.
 func TestExportComplianceSet_Idempotent_NoPATCH(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
@@ -190,12 +186,9 @@ func TestExportComplianceSet_Idempotent_NoPATCH(t *testing.T) {
 	if buildID == "" {
 		t.Skip("fixture has no attached build; skipping idempotency check")
 	}
-	// If current already matches desired, no PATCH should be needed.
 	desiredVal := false
 	desired := &desiredVal
 	if current != nil && *current == *desired {
-		// Idempotent: no PATCH should fire. Test just confirms the equality
-		// helper recognizes this case.
 		if !boolPtrEq(current, desired) {
 			t.Errorf("boolPtrEq sanity check failed for matching pointer values")
 		}

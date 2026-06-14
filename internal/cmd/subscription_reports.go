@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -10,10 +12,8 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// SubscriptionReport is the JSON contract for `subscriptions reports`.
-// Subscription reports are time-series data on /v1/salesReports with
-// reportType ∈ {SUBSCRIPTION, SUBSCRIPTION_EVENT, SUBSCRIBER}, distinct from
-// the configuration-level read commands in subscriptions.go (Phase 2.4).
+// Time-series salesReports data, distinct from the config-level reads in
+// subscriptions.go.
 type SubscriptionReport struct {
 	BundleID     string               `json:"bundleId"`
 	VendorNumber string               `json:"vendorNumber"`
@@ -24,7 +24,6 @@ type SubscriptionReport struct {
 	Rows         []asc.SalesReportRow `json:"rows"`
 }
 
-// TableRows for SubscriptionReport renders a SKU/units summary.
 func (r SubscriptionReport) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"SKU", "DATE", "UNITS", "PROCEEDS", "CURRENCY"}
 	if len(r.Rows) == 0 {
@@ -44,9 +43,6 @@ func (r SubscriptionReport) TableRows() (headers []string, rows [][]string) {
 	return headers, rows
 }
 
-// subscriptionsReportsCmd is registered as a subcommand of the existing
-// `subscriptions` command (defined in subscriptions.go). The parent var
-// `subscriptionsCmd` is package-level and stable.
 var subscriptionsReportsCmd = &cobra.Command{
 	Use:   "reports <bundleId>",
 	Short: "Fetch subscription time-series reports (summary / events / retention)",
@@ -58,9 +54,9 @@ var subscriptionsReportsCmd = &cobra.Command{
   --type retention  → SUBSCRIBER         (subscriber-level retention rows)
 
 Distinct from ` + "`subscriptions list`" + ` and ` + "`subscriptions get`" + `,
-which read the configuration of subscription products (Phase 2.4). This
-command is the analytical view: how many subscribers, when did they
-churn, where they came from.
+which read the configuration of subscription products. This command is the
+analytical view: how many subscribers, when did they churn, where they
+came from.
 
 Frequency is inferred from --range:
   P1D / P7D / P30D / P1Y → DAILY (one call per day, 1..N calls)
@@ -73,10 +69,10 @@ vendor-wide on the wire).`,
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runSubscriptionsReports,
-	Example: `  fline subscriptions reports com.example.myapp --type summary --range P30D
-  fline subscriptions reports com.example.myapp --type events --range P7D
-  fline subscriptions reports com.example.myapp --type retention --month 2026-04
-  fline subscriptions reports com.example.myapp --type summary --range P30D --output json | jq '.rows | length'`,
+	Example: `  flightline subscriptions reports com.example.myapp --type summary --range P30D
+  flightline subscriptions reports com.example.myapp --type events --range P7D
+  flightline subscriptions reports com.example.myapp --type retention --month 2026-04
+  flightline subscriptions reports com.example.myapp --type summary --range P30D --output json | jq '.rows | length'`,
 }
 
 var (
@@ -99,8 +95,6 @@ func init() {
 	subscriptionsCmd.AddCommand(subscriptionsReportsCmd)
 }
 
-// subscriptionReportTypeMap normalises the human-friendly --type values to
-// Apple's salesReports reportType enum.
 var subscriptionReportTypeMap = map[string]asc.SalesReportType{
 	"summary":   asc.SalesReportTypeSubscription,
 	"events":    asc.SalesReportTypeSubscriptionEvent,
@@ -165,8 +159,6 @@ func runSubscriptionsReports(cmd *cobra.Command, args []string) error {
 	return Render(report, mode)
 }
 
-// resolveSubscriptionReportType maps the human-friendly --type to the Apple
-// enum value, returning an actionable error for typos.
 func resolveSubscriptionReportType(raw string) (asc.SalesReportType, error) {
 	v := strings.ToLower(strings.TrimSpace(raw))
 	rt, ok := subscriptionReportTypeMap[v]
@@ -176,8 +168,6 @@ func resolveSubscriptionReportType(raw string) (asc.SalesReportType, error) {
 	return rt, nil
 }
 
-// buildSubscriptionPlan turns the flag inputs into a date list + frequency,
-// reusing the salesPlan shape.
 func buildSubscriptionPlan(now time.Time) (salesPlan, error) {
 	month := strings.TrimSpace(subscriptionsReportsMonth)
 	dur := strings.TrimSpace(subscriptionsReportsRange)
@@ -186,7 +176,7 @@ func buildSubscriptionPlan(now time.Time) (salesPlan, error) {
 	case month != "" && dur != "" && dur != "P7D":
 		// "P7D" is the flag default; users explicitly setting --month should
 		// be allowed without the default value triggering a conflict error.
-		return salesPlan{}, fmt.Errorf("subscriptions reports: --month and --range are mutually exclusive")
+		return salesPlan{}, errors.New("subscriptions reports: --month and --range are mutually exclusive")
 	case month != "":
 		if _, err := time.Parse("2006-01", month); err != nil {
 			return salesPlan{}, fmt.Errorf("subscriptions reports: --month must be YYYY-MM, got %q", subscriptionsReportsMonth)
@@ -205,10 +195,8 @@ func buildSubscriptionPlan(now time.Time) (salesPlan, error) {
 	}
 }
 
-// parseDurationDays handles a small subset of ISO-8601 durations: P1D, P7D,
-// P30D, P1M (≈30 days), P1Y (≈365 days). Apple's reportDate API works in
-// dates not durations, so we approximate the month/year shorthands; users
-// who want exact months should use --month YYYY-MM.
+// Apple's reportDate API works in dates not durations, so the month/year
+// shorthands are approximations; exact months require --month YYYY-MM.
 func parseDurationDays(dur string) (int, error) {
 	d := strings.ToUpper(strings.TrimSpace(dur))
 	switch d {
@@ -233,11 +221,10 @@ func parseDurationDays(dur string) (int, error) {
 	}
 }
 
-// planDailySubscriptionWindow builds a daily date list for the last `n`
-// days ending yesterday. Apple lags by ~1 day so today's not available yet.
+// Window ends yesterday: Apple lags by ~1 day, today isn't available yet.
 func planDailySubscriptionWindow(now time.Time, n int) (salesPlan, error) {
 	if n <= 0 {
-		return salesPlan{}, fmt.Errorf("subscriptions reports: range produced 0 days")
+		return salesPlan{}, errors.New("subscriptions reports: range produced 0 days")
 	}
 	freq := asc.SalesFrequencyDaily
 	if override := strings.TrimSpace(subscriptionsReportsFrequency); override != "" {
@@ -251,12 +238,10 @@ func planDailySubscriptionWindow(now time.Time, n int) (salesPlan, error) {
 	return salesPlan{frequency: freq, dates: dates}, nil
 }
 
-// intCell formats an int for table output.
 func intCell(n int) string {
-	return fmt.Sprintf("%d", n)
+	return strconv.Itoa(n)
 }
 
-// floatCell formats a float for table output (2 decimals).
 func floatCell(f float64) string {
 	return fmt.Sprintf("%.2f", f)
 }

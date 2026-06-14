@@ -9,9 +9,7 @@ import (
 	"testing"
 )
 
-// TestLoadState_Example proves the loader accepts the canonical
-// schemas/example.state.yaml without an error and that every top-level
-// spec field round-trips into the typed tree.
+// TestLoadState_Example proves the loader round-trips the canonical example.state.yaml into the typed tree.
 func TestLoadState_Example(t *testing.T) {
 	repoRoot, err := filepath.Abs("../..")
 	if err != nil {
@@ -81,10 +79,7 @@ spec:
 	}
 }
 
-// TestLoadState_TypeMismatch — a sequence where a string is expected.
-// yaml.v3 surfaces this as a TypeError. (Note: yaml.v3 happily coerces
-// `"yes"`/`"no"` into booleans — those footguns are caught at the lint
-// layer in Phase 5, not here.)
+// TestLoadState_TypeMismatch: a string-where-sequence-expected surfaces as a yaml.v3 TypeError.
 func TestLoadState_TypeMismatch(t *testing.T) {
 	yaml := `apiVersion: flightline.dev/v1alpha1
 kind: AppState
@@ -114,7 +109,7 @@ spec:
 	}
 }
 
-// TestLoadState_EmptyFile — the empty-file diagnostic.
+// TestLoadState_EmptyFile: the empty-file diagnostic.
 func TestLoadState_EmptyFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "state.yaml")
@@ -130,7 +125,7 @@ func TestLoadState_EmptyFile(t *testing.T) {
 	}
 }
 
-// TestLoadState_MissingFile — clean error when the path doesn't exist.
+// TestLoadState_MissingFile: clean error when the path doesn't exist.
 func TestLoadState_MissingFile(t *testing.T) {
 	_, err := LoadState("/nonexistent/flightline-test/state.yaml")
 	if err == nil {
@@ -138,9 +133,7 @@ func TestLoadState_MissingFile(t *testing.T) {
 	}
 }
 
-// TestLoadState_JSONRoundTrip — the typed tree must JSON-marshal cleanly
-// for cmd/fetch --output json. Validates the JSON tags match what we'd
-// expose in machine output.
+// TestLoadState_JSONRoundTrip: the typed tree must JSON-marshal cleanly for `--output json`.
 func TestLoadState_JSONRoundTrip(t *testing.T) {
 	repoRoot, err := filepath.Abs("../..")
 	if err != nil {

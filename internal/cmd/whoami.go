@@ -8,11 +8,8 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// WhoamiInfo is the command's stable JSON output shape. Field names match
-// Apple's env-var convention for symmetry with the user's shell config.
-//
-// The struct is exported because the JSON contract is the public surface for
-// LLM consumers; renaming a field is a breaking change.
+// WhoamiInfo is the command's stable JSON output shape; renaming a field is a
+// breaking change. Field names follow Apple's env-var convention.
 type WhoamiInfo struct {
 	KeyID        string `json:"keyId"`
 	IssuerID     string `json:"issuerId"`
@@ -55,9 +52,9 @@ The .p8 private key is read from $APP_STORE_CONNECT_KEY_PATH if set, otherwise
 ~/.appstoreconnect/AuthKey_<KEY_ID>.p8 (mode 0600 required).
 
 Examples:
-  fline whoami
-  fline whoami --output json | jq -r .keyId
-  fline whoami --output json | jq -e .authorized   # exit nonzero on failure`,
+  flightline whoami
+  flightline whoami --output json | jq -r .keyId
+  flightline whoami --output json | jq -e .authorized   # exit nonzero on failure`,
 	SilenceUsage: true,
 	Args:         cobra.NoArgs,
 	RunE:         runWhoami,
@@ -72,9 +69,7 @@ func runWhoami(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	// Hit the cheapest auth-required endpoint to confirm the JWT works.
-	// /v1/apps?limit=1 returns at most one App resource (or an empty array
-	// for accounts that have no apps yet — still a 200 on success).
+	// Cheapest auth-required endpoint; a 200 (even with no apps) confirms the JWT works.
 	type minAppAttrs struct{}
 	if _, err := asc.Get[asc.Collection[minAppAttrs]](
 		cmd.Context(),

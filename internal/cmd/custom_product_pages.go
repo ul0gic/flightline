@@ -3,8 +3,8 @@ package cmd
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -12,9 +12,7 @@ import (
 )
 
 // CustomProductPageView is one row of the custom-product-pages list output.
-// CurrentVersion + CurrentState are pulled from the page's most-recent
-// AppCustomProductPageVersion (highest version string by lex order; in
-// practice Apple's versions are monotonic integers).
+// Current* fields come from the most-recent version (highest version by lex order).
 type CustomProductPageView struct {
 	ID             string                             `json:"id"`
 	Type           string                             `json:"type"`
@@ -46,8 +44,6 @@ func (l CustomProductPageList) TableRows() (headers []string, rows [][]string) {
 }
 
 // CustomProductPageDetail is the read-side view for `custom-product-pages get`.
-// Carries the page itself, all versions (chronologically), and all
-// localizations on the current version.
 type CustomProductPageDetail struct {
 	ID            string                              `json:"id"`
 	Type          string                              `json:"type"`
@@ -70,18 +66,17 @@ type CustomProductPageLocalizationView struct {
 	Attributes asc.AppCustomProductPageLocalizationAttributes `json:"attributes"`
 }
 
-// TableRows for the page detail. Vertical layout for the page header, then
-// a small list of versions and localizations.
 func (v *CustomProductPageDetail) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
-	rows = [][]string{
-		{"ID", v.ID},
-		{"NAME", v.Attributes.Name},
-		{"URL", v.Attributes.URL},
-		{"VISIBLE", boolPtrStr(v.Attributes.Visible)},
-		{"VERSIONS", fmt.Sprintf("%d", len(v.Versions))},
-		{"LOCALIZATIONS", fmt.Sprintf("%d", len(v.Localizations))},
-	}
+	rows = make([][]string, 0, 6+len(v.Versions)+len(v.Localizations))
+	rows = append(rows,
+		[]string{"ID", v.ID},
+		[]string{"NAME", v.Attributes.Name},
+		[]string{"URL", v.Attributes.URL},
+		[]string{"VISIBLE", boolPtrStr(v.Attributes.Visible)},
+		[]string{"VERSIONS", strconv.Itoa(len(v.Versions))},
+		[]string{"LOCALIZATIONS", strconv.Itoa(len(v.Localizations))},
+	)
 	for i := range v.Versions {
 		ver := &v.Versions[i]
 		rows = append(rows, []string{
@@ -99,8 +94,7 @@ func (v *CustomProductPageDetail) TableRows() (headers []string, rows [][]string
 	return headers, rows
 }
 
-// truncate trims a string to maxLen runes, appending "…" when cut. Used
-// only for table mode; JSON gets full strings.
+// truncate trims a string to maxLen runes, appending "…" when cut.
 func truncate(s string, maxLen int) string {
 	r := []rune(s)
 	if len(r) <= maxLen {
@@ -113,12 +107,12 @@ var customProductPagesCmd = &cobra.Command{
 	Use:   "custom-product-pages",
 	Short: "Inspect App Store Custom Product Pages",
 	Long: `custom-product-pages groups read commands over Apple's
-AppCustomProductPage resources — alternate App Store listings used to
+AppCustomProductPage resources: alternate App Store listings used to
 target ad-driven traffic with different screenshots and descriptions.
 
-  list <bundleId>           — list all configured pages with current state
+  list <bundleId>          : list all configured pages with current state
   get  <bundleId> --page <id>
-                            — detail for one page (versions + localizations)`,
+                           : detail for one page (versions + localizations)`,
 }
 
 var customProductPagesListCmd = &cobra.Command{
@@ -127,8 +121,8 @@ var customProductPagesListCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runCustomProductPagesList,
-	Example: `  fline custom-product-pages list com.example.myapp
-  fline custom-product-pages list com.example.myapp --output json | jq -r '.pages[].attributes.name'`,
+	Example: `  flightline custom-product-pages list com.example.myapp
+  flightline custom-product-pages list com.example.myapp --output json | jq -r '.pages[].attributes.name'`,
 }
 
 var customProductPagesGetCmd = &cobra.Command{
@@ -137,35 +131,32 @@ var customProductPagesGetCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runCustomProductPagesGet,
-	Example: `  fline custom-product-pages get com.example.myapp --page 8000000001
-  fline custom-product-pages get com.example.myapp --page 8000000001 --output json`,
+	Example: `  flightline custom-product-pages get com.example.myapp --page 8000000001
+  flightline custom-product-pages get com.example.myapp --page 8000000001 --output json`,
 }
 
-// customProductPagesCreateCmd creates a new AppCustomProductPage on the
-// app via POST /v1/appCustomProductPages. Idempotent on (app, name): if
-// a page with the same name already exists for the app, the existing
-// page is returned with changed=false rather than POSTed.
+// customProductPagesCreateCmd creates an AppCustomProductPage. Idempotent on
+// (app, name): an existing same-name page returns changed=false, no POST.
 var customProductPagesCreateCmd = &cobra.Command{
 	Use:          "create <bundleId>",
 	Short:        "Create a custom product page (idempotent on name)",
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runCustomProductPagesCreate,
-	Example: `  fline custom-product-pages create com.example.myapp --name "Holiday Promo"
-  fline custom-product-pages create com.example.myapp --name "Spring 2026" --output json`,
+	Example: `  flightline custom-product-pages create com.example.myapp --name "Holiday Promo"
+  flightline custom-product-pages create com.example.myapp --name "Spring 2026" --output json`,
 }
 
-// customProductPagesUpdateCmd PATCHes mutable attributes (name, visible)
-// on a custom product page. Idempotent: only PATCHes when at least one
-// supplied attribute differs from current.
+// customProductPagesUpdateCmd PATCHes mutable attributes (name, visible).
+// Idempotent: only PATCHes when a supplied attribute differs from current.
 var customProductPagesUpdateCmd = &cobra.Command{
 	Use:          "update <pageId>",
 	Short:        "Update a custom product page's mutable attributes (idempotent)",
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runCustomProductPagesUpdate,
-	Example: `  fline custom-product-pages update CPP-1 --visible
-  fline custom-product-pages update CPP-1 --name "Updated Holiday"`,
+	Example: `  flightline custom-product-pages update CPP-1 --visible
+  flightline custom-product-pages update CPP-1 --name "Updated Holiday"`,
 }
 
 // customProductPagesDeleteCmd deletes a custom product page. Idempotent:
@@ -176,7 +167,7 @@ var customProductPagesDeleteCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runCustomProductPagesDelete,
-	Example:      `  fline custom-product-pages delete CPP-1`,
+	Example:      `  flightline custom-product-pages delete CPP-1`,
 }
 
 var (
@@ -226,12 +217,8 @@ func runCustomProductPagesList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// For each page, fetch its most-recent version to populate
-	// CurrentVersion + CurrentState. One extra request per page; rate-limit
-	// budget is the constraint here, so cap at 50 lookups regardless of
-	// page count to avoid eating the per-hour quota on apps with dozens of
-	// CPPs. Beyond 50, leave fields empty (JSON consumers see omitempty,
-	// table mode shows blank).
+	// One version lookup per page; cap at 50 so apps with dozens of CPPs
+	// don't burn the per-hour rate-limit quota. Beyond 50, fields stay empty.
 	const versionLookupCap = 50
 	for i := range views {
 		if i >= versionLookupCap {
@@ -251,7 +238,7 @@ func runCustomProductPagesGet(cmd *cobra.Command, args []string) error {
 	bundleID := args[0]
 	pageID := strings.TrimSpace(customProductPagesGetPage)
 	if pageID == "" {
-		return fmt.Errorf("custom-product-pages: --page is required")
+		return errors.New("custom-product-pages: --page is required")
 	}
 
 	c, err := newClient()
@@ -276,9 +263,7 @@ func runCustomProductPagesGet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Find the most-recent version (highest by version string ordering — in
-	// practice Apple's are monotonic integers but lex-compare is safe for
-	// typical sizes).
+	// Highest version string wins; Apple's are monotonic ints, lex-compare is safe.
 	var current *CustomProductPageVersionView
 	for i := range versions {
 		v := &versions[i]
@@ -305,10 +290,8 @@ func runCustomProductPagesGet(cmd *cobra.Command, args []string) error {
 	return Render(view, outputMode())
 }
 
-// fetchCurrentCustomProductPageVersion pulls the page's
-// appCustomProductPageVersions and returns the highest-version row's
-// (version, state). Page size 50 is Apple's default; in practice CPPs have
-// a handful of versions, not 50+.
+// fetchCurrentCustomProductPageVersion returns the highest-version row's
+// (version, state) for the page.
 func fetchCurrentCustomProductPageVersion(ctx context.Context, c *asc.Client, pageID string) (version, state string, err error) {
 	q := url.Values{"limit": {"50"}}
 	page, err := asc.Get[asc.Collection[asc.AppCustomProductPageVersionAttributes]](
@@ -383,8 +366,8 @@ func collectCustomProductPageLocalizations(ctx context.Context, c *asc.Client, v
 	return out, nil
 }
 
-// CustomProductPageSetResult is the structured outcome of `custom-product-pages
-// create / update`. Surfaces whether a write was issued.
+// CustomProductPageSetResult is the outcome of create / update; Changed reports
+// whether a write was issued.
 type CustomProductPageSetResult struct {
 	PageID     string                             `json:"pageId"`
 	Changed    bool                               `json:"changed"`
@@ -431,7 +414,6 @@ func (r *CustomProductPageDeleteResult) TableRows() (headers []string, rows [][]
 	return headers, rows
 }
 
-// boolStrCPP renders a bool as "true"/"false" for CPP result tables.
 func boolStrCPP(b bool) string {
 	if b {
 		return "true"
@@ -439,13 +421,11 @@ func boolStrCPP(b bool) string {
 	return "false"
 }
 
-// runCustomProductPagesCreate creates an AppCustomProductPage on the named
-// app. Idempotent on (app, name).
 func runCustomProductPagesCreate(cmd *cobra.Command, args []string) error {
 	bundleID := args[0]
 	name := strings.TrimSpace(customProductPagesCreateName)
 	if name == "" {
-		return fmt.Errorf("custom-product-pages: --name is required")
+		return errors.New("custom-product-pages: --name is required")
 	}
 
 	c, err := newClient()
@@ -466,7 +446,7 @@ func runCustomProductPagesCreate(cmd *cobra.Command, args []string) error {
 			PageID:     existing.ID,
 			Changed:    false,
 			Created:    false,
-			Note:       "no change (idempotent) — page with same name already exists",
+			Note:       "no change (idempotent): page with same name already exists",
 			Attributes: existing.Attributes,
 		}, outputMode())
 	}
@@ -486,8 +466,6 @@ func runCustomProductPagesCreate(cmd *cobra.Command, args []string) error {
 	}, outputMode())
 }
 
-// runCustomProductPagesUpdate PATCHes a page's mutable attributes.
-// Idempotent: only PATCHes when at least one supplied attribute differs.
 func runCustomProductPagesUpdate(cmd *cobra.Command, args []string) error {
 	pageID := args[0]
 	c, err := newClient()
@@ -507,7 +485,7 @@ func runCustomProductPagesUpdate(cmd *cobra.Command, args []string) error {
 		return Render(&CustomProductPageSetResult{
 			PageID:     pageID,
 			Changed:    false,
-			Note:       "no change (idempotent) — all requested attributes already match",
+			Note:       "no change (idempotent): all requested attributes already match",
 			Attributes: cur.Data.Attributes,
 		}, outputMode())
 	}
@@ -532,9 +510,8 @@ func runCustomProductPagesUpdate(cmd *cobra.Command, args []string) error {
 	}, outputMode())
 }
 
-// computeCustomProductPagePatchAttrs builds the partial attributes map
-// for a page PATCH. Only flags actually passed contribute; same-value
-// flags are filtered so re-runs produce no PATCH.
+// computeCustomProductPagePatchAttrs builds the partial PATCH attributes.
+// Only passed flags contribute, and same-value flags are filtered for idempotency.
 func computeCustomProductPagePatchAttrs(cmd *cobra.Command, cur asc.AppCustomProductPageAttributes) map[string]any {
 	patch := map[string]any{}
 	flags := cmd.Flags()
@@ -556,9 +533,8 @@ func computeCustomProductPagePatchAttrs(cmd *cobra.Command, cur asc.AppCustomPro
 	return patch
 }
 
-// runCustomProductPagesDelete deletes a custom product page. Idempotent:
-// 404 (already absent) reports changed=false rather than erroring so
-// re-runs of a delete script are safe.
+// runCustomProductPagesDelete deletes a page. Idempotent: a 404 reports
+// changed=false rather than erroring so delete-script re-runs are safe.
 func runCustomProductPagesDelete(cmd *cobra.Command, args []string) error {
 	pageID := args[0]
 	c, err := newClient()
@@ -571,7 +547,7 @@ func runCustomProductPagesDelete(cmd *cobra.Command, args []string) error {
 			return Render(&CustomProductPageDeleteResult{
 				PageID:  pageID,
 				Changed: false,
-				Note:    "no change (idempotent) — page already absent",
+				Note:    "no change (idempotent): page already absent",
 			}, outputMode())
 		}
 		return err
@@ -582,9 +558,8 @@ func runCustomProductPagesDelete(cmd *cobra.Command, args []string) error {
 	}, outputMode())
 }
 
-// findCustomProductPageByName scans the app's pages and returns the first
-// one whose name matches (case-sensitive). Returns (nil, nil) when no
-// match exists.
+// findCustomProductPageByName returns the first page whose name matches
+// (case-sensitive), or (nil, nil) when none match.
 func findCustomProductPageByName(ctx context.Context, c *asc.Client, appID, name string) (*asc.Resource[asc.AppCustomProductPageAttributes], error) {
 	q := url.Values{"limit": {"200"}}
 	page, err := asc.Get[asc.Collection[asc.AppCustomProductPageAttributes]](
@@ -601,10 +576,8 @@ func findCustomProductPageByName(ctx context.Context, c *asc.Client, appID, name
 	return nil, nil
 }
 
-// buildCustomProductPageCreate crafts the JSON:API POST body for
-// /v1/appCustomProductPages with only the required (name, app) fields.
-// The included inline-versions/localizations are not modelled at L1;
-// callers create those via the version subresource later.
+// buildCustomProductPageCreate crafts the POST body with only the required
+// (name, app) fields; versions/localizations are created via subresources later.
 func buildCustomProductPageCreate(appID, name string) map[string]any {
 	return map[string]any{
 		"data": map[string]any{

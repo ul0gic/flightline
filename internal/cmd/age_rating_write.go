@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -17,8 +18,7 @@ import (
 )
 
 // AgeRatingWriteResult is the JSON-stable view returned by `age-rating set`.
-// noop=true means current state already matched the supplied payload —
-// idempotency contract.
+// noop=true means current state already matched the payload.
 type AgeRatingWriteResult struct {
 	Action       string                             `json:"action"`
 	ID           string                             `json:"id"`
@@ -31,8 +31,6 @@ type AgeRatingWriteResult struct {
 	Attributes   asc.AgeRatingDeclarationAttributes `json:"attributes"`
 }
 
-// TableRows for AgeRatingWriteResult — vertical layout, identifying fields up
-// top, then changed keys, then a snapshot of attributes.
 func (r *AgeRatingWriteResult) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
 	rows = [][]string{
@@ -42,14 +40,12 @@ func (r *AgeRatingWriteResult) TableRows() (headers []string, rows [][]string) {
 		{"BUNDLE_ID", r.BundleID},
 		{"VERSION", r.Version},
 		{"VERSION_STATE", r.VersionState},
-		{"NOOP", fmt.Sprintf("%t", r.NoOp)},
+		{"NOOP", strconv.FormatBool(r.NoOp)},
 		{"CHANGED_KEYS", strings.Join(r.ChangedKeys, ",")},
 	}
 	return headers, rows
 }
 
-// ageRatingPatchRequest is the wire body for PATCH
-// /v1/ageRatingDeclarations/{id}. Mirrors AgeRatingDeclarationUpdateRequest.
 type ageRatingPatchRequest struct {
 	Data ageRatingPatchData `json:"data"`
 }
@@ -78,8 +74,8 @@ Validation: every key must be a recognized field on the declaration; an
 unknown key surfaces as a typed error naming the offending key. Frequency
 enums must be one of NONE | INFREQUENT_OR_MILD | FREQUENT_OR_INTENSE |
 INFREQUENT | FREQUENT. Boolean fields must be true/false.`,
-	Example: `  fline age-rating set com.example.myapp --version 1.0.1 --from age-rating.yaml
-  fline age-rating set com.example.myapp --version 1.0.1 --from age-rating.json --output json`,
+	Example: `  flightline age-rating set com.example.myapp --version 1.0.1 --from age-rating.yaml
+  flightline age-rating set com.example.myapp --version 1.0.1 --from age-rating.json --output json`,
 }
 
 var (
@@ -109,8 +105,7 @@ func runAgeRatingSet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Load + validate the payload BEFORE we hit the API. Surface bad input
-	// with file path + key context so users edit the right line.
+	// Validate before any API call so bad input surfaces with file+key context.
 	payload, err := loadAgeRatingPayload(from)
 	if err != nil {
 		return err
@@ -123,7 +118,6 @@ func runAgeRatingSet(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("age-rating set: %s: %w", from, err)
 	}
 
-	// Resolve version → appInfo → ageRatingDeclaration ID.
 	appID, err := resolveAppID(cmd.Context(), c, bundleID)
 	if err != nil {
 		return err
@@ -141,7 +135,6 @@ func runAgeRatingSet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Diff: build a map of changed-only fields.
 	changes := diffAgeRating(current, desired, payload.providedKeys())
 	if len(changes) == 0 {
 		return Render(&AgeRatingWriteResult{
@@ -187,20 +180,13 @@ func runAgeRatingSet(cmd *cobra.Command, args []string) error {
 	}, outputMode())
 }
 
-// ----------------------------------------------------------------------------
-// Payload loading + validation
-// ----------------------------------------------------------------------------
-
 // ageRatingPayload is the parsed --from file. raw holds the original key/value
-// map so we can distinguish "user set this to empty/false" from "user did not
-// supply this key" — the difference between an explicit clear and a leave-
-// alone in idempotent diffs.
+// map to distinguish "set to empty/false" from "key absent" in idempotent diffs.
 type ageRatingPayload struct {
 	raw map[string]any
 }
 
-// providedKeys returns the wire keys the user explicitly set in the file.
-// Sorted for deterministic test output.
+// providedKeys returns the wire keys explicitly set in the file.
 func (p *ageRatingPayload) providedKeys() map[string]struct{} {
 	out := make(map[string]struct{}, len(p.raw))
 	for k := range p.raw {
@@ -209,9 +195,7 @@ func (p *ageRatingPayload) providedKeys() map[string]struct{} {
 	return out
 }
 
-// loadAgeRatingPayload reads --from and decodes JSON or YAML based on the
-// file extension. Empty file is rejected — callers shouldn't run a set with
-// nothing to say.
+// loadAgeRatingPayload reads --from and decodes JSON or YAML by file extension.
 func loadAgeRatingPayload(path string) (*ageRatingPayload, error) {
 	if path == "" {
 		return nil, errors.New("age-rating set: --from is required")
@@ -236,7 +220,6 @@ func loadAgeRatingPayload(path string) (*ageRatingPayload, error) {
 			return nil, fmt.Errorf("age-rating set: parse %s as YAML: %w", path, err)
 		}
 	default:
-		// Try JSON first then YAML — neither extension match.
 		if jerr := json.Unmarshal(buf, &raw); jerr != nil {
 			if yerr := yaml.Unmarshal(buf, &raw); yerr != nil {
 				return nil, fmt.Errorf("age-rating set: %s: not parseable as JSON or YAML: %w", path, yerr)
@@ -244,14 +227,13 @@ func loadAgeRatingPayload(path string) (*ageRatingPayload, error) {
 		}
 	}
 	if len(raw) == 0 {
-		return nil, fmt.Errorf("age-rating set: %s decoded to an empty object — at least one questionnaire key required", path)
+		return nil, fmt.Errorf("age-rating set: %s decoded to an empty object: at least one questionnaire key required", path)
 	}
 	return &ageRatingPayload{raw: raw}, nil
 }
 
-// toAttributes round-trips the raw map through JSON into the typed
-// AgeRatingDeclarationAttributes struct. Unknown wire keys are caught here
-// (json.DisallowUnknownFields) so the user sees what they typo'd.
+// toAttributes round-trips the raw map through JSON into the typed struct.
+// DisallowUnknownFields surfaces typo'd wire keys instead of dropping them.
 func (p *ageRatingPayload) toAttributes() (asc.AgeRatingDeclarationAttributes, error) {
 	if err := assertKnownAgeRatingKeys(p.raw); err != nil {
 		return asc.AgeRatingDeclarationAttributes{}, err
@@ -270,9 +252,7 @@ func (p *ageRatingPayload) toAttributes() (asc.AgeRatingDeclarationAttributes, e
 }
 
 // knownAgeRatingKeys enumerates Apple's wire keys for the age-rating
-// declaration. Sourced from the OpenAPI spec's
-// AgeRatingDeclarationUpdateRequest. A typo in the user's YAML surfaces as
-// "unknown key X" rather than silently dropping the value.
+// declaration. A typo surfaces as "unknown key X" rather than dropping silently.
 var knownAgeRatingKeys = map[string]struct{}{
 	"advertising":                                 {},
 	"ageAssurance":                                {},
@@ -303,9 +283,8 @@ var knownAgeRatingKeys = map[string]struct{}{
 	"violenceRealisticProlongedGraphicOrSadistic": {},
 }
 
-// assertKnownAgeRatingKeys returns a typed error naming any unknown keys in
-// the user's payload. Catches typos before we hit Apple's API (which would
-// silently ignore them).
+// assertKnownAgeRatingKeys returns a typed error naming unknown payload keys.
+// Apple silently ignores them, so catch typos before the API call.
 func assertKnownAgeRatingKeys(raw map[string]any) error {
 	var bad []string
 	for k := range raw {
@@ -320,8 +299,7 @@ func assertKnownAgeRatingKeys(raw map[string]any) error {
 	return fmt.Errorf("unknown age-rating keys: %s (see openapi.oas.json AgeRatingDeclarationUpdateRequest)", strings.Join(bad, ", "))
 }
 
-// validFrequencyEnum is the set of frequency-enum values Apple accepts on
-// every frequency-shaped field.
+// validFrequencyEnum is the set of frequency-enum values Apple accepts.
 var validFrequencyEnum = map[string]struct{}{
 	"NONE":                {},
 	"INFREQUENT_OR_MILD":  {},
@@ -347,8 +325,7 @@ var frequencyKeys = []string{
 	"violenceRealisticProlongedGraphicOrSadistic",
 }
 
-// validateAgeRatingAttributes runs server-side gates locally so users see
-// errors before a wasted API hit.
+// validateAgeRatingAttributes runs server-side gates locally to avoid a wasted API hit.
 func validateAgeRatingAttributes(a asc.AgeRatingDeclarationAttributes) error {
 	v := reflect.ValueOf(a)
 	t := v.Type()
@@ -368,10 +345,9 @@ func validateAgeRatingAttributes(a asc.AgeRatingDeclarationAttributes) error {
 	return nil
 }
 
-// fieldByJSONTag finds the struct field whose `json:"<name>"` tag matches
-// the requested wire name. Returns (zero, false) when not found.
+// fieldByJSONTag finds the struct field whose json tag matches name.
 func fieldByJSONTag(t reflect.Type, name string) (reflect.StructField, bool) {
-	for i := 0; i < t.NumField(); i++ {
+	for i := range t.NumField() {
 		tag := t.Field(i).Tag.Get("json")
 		if tag == "" {
 			continue
@@ -386,19 +362,14 @@ func fieldByJSONTag(t reflect.Type, name string) (reflect.StructField, bool) {
 	return reflect.StructField{}, false
 }
 
-// ----------------------------------------------------------------------------
-// Diff — only fields the user supplied AND that differ from current
-// ----------------------------------------------------------------------------
-
 // diffAgeRating returns the subset of desired fields that differ from current.
-// providedKeys gates the diff so we don't accidentally PATCH a field the user
-// didn't set in their file (zero-value vs unset distinction).
+// providedKeys gates the diff so a field absent from the file is never PATCHed.
 func diffAgeRating(current, desired asc.AgeRatingDeclarationAttributes, providedKeys map[string]struct{}) map[string]any {
 	out := map[string]any{}
 	cv := reflect.ValueOf(current)
 	dv := reflect.ValueOf(desired)
 	t := cv.Type()
-	for i := 0; i < t.NumField(); i++ {
+	for i := range t.NumField() {
 		field := t.Field(i)
 		tag := field.Tag.Get("json")
 		if tag == "" {
@@ -420,12 +391,8 @@ func diffAgeRating(current, desired asc.AgeRatingDeclarationAttributes, provided
 	return out
 }
 
-// ----------------------------------------------------------------------------
-// API resolution helpers
-// ----------------------------------------------------------------------------
-
 // lookupVersionState resolves bundle+version+platform to the version's
-// lifecycle state string. Used to pick the matching appInfo bucket.
+// lifecycle state, used to pick the matching appInfo bucket.
 func lookupVersionState(ctx context.Context, c *asc.Client, appID, versionStr, platform string) (string, error) {
 	q := url.Values{
 		"filter[versionString]": {versionStr},
@@ -447,8 +414,7 @@ func lookupVersionState(ctx context.Context, c *asc.Client, appID, versionStr, p
 }
 
 // fetchAgeRatingDeclaration returns the current questionnaire attributes plus
-// the declaration ID for PATCHing. The declaration is a singleton on the
-// appInfo — Apple returns Single[…], not a collection.
+// the declaration ID for PATCHing. The declaration is a singleton on the appInfo.
 func fetchAgeRatingDeclaration(ctx context.Context, c *asc.Client, appInfoID string) (asc.AgeRatingDeclarationAttributes, string, error) {
 	resp, err := asc.Get[asc.Single[asc.AgeRatingDeclarationAttributes]](
 		ctx, c, "/v1/appInfos/"+appInfoID+"/ageRatingDeclaration", nil,
@@ -462,8 +428,7 @@ func fetchAgeRatingDeclaration(ctx context.Context, c *asc.Client, appInfoID str
 	return resp.Data.Attributes, resp.Data.ID, nil
 }
 
-// sortStrings sorts a string slice in place. Tiny wrapper to avoid an
-// import-only-for-sort.Strings in this file.
+// sortStrings sorts a string slice in place.
 func sortStrings(ss []string) {
 	for i := 1; i < len(ss); i++ {
 		for j := i; j > 0 && ss[j-1] > ss[j]; j-- {

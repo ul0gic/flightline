@@ -2,12 +2,14 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,23 +17,16 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// BetaFeedbackCrashView is one row of the beta-feedback crash list output.
 type BetaFeedbackCrashView struct {
 	ID         string                                    `json:"id"`
 	Type       string                                    `json:"type"`
 	Attributes asc.BetaFeedbackCrashSubmissionAttributes `json:"attributes"`
 }
 
-// BetaFeedbackCrashList is the table-aware view for `beta-feedback crash`.
 type BetaFeedbackCrashList struct {
 	Submissions []BetaFeedbackCrashView `json:"submissions"`
 }
 
-// TableRows implements TableRenderable for the crash submissions list.
-//
-// Surface the pieces a triage operator wants at a glance: when the crash
-// landed, what device, what OS, the tester's comment (truncated), and the
-// id (for `beta-feedback download`).
 func (l BetaFeedbackCrashList) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"DATE", "DEVICE", "OS", "COMMENT", "ID"}
 	rows = make([][]string, 0, len(l.Submissions))
@@ -48,19 +43,16 @@ func (l BetaFeedbackCrashList) TableRows() (headers []string, rows [][]string) {
 	return headers, rows
 }
 
-// BetaFeedbackScreenshotView is one row of the beta-feedback screenshot list.
 type BetaFeedbackScreenshotView struct {
 	ID         string                                         `json:"id"`
 	Type       string                                         `json:"type"`
 	Attributes asc.BetaFeedbackScreenshotSubmissionAttributes `json:"attributes"`
 }
 
-// BetaFeedbackScreenshotList is the table-aware view for `beta-feedback screenshot`.
 type BetaFeedbackScreenshotList struct {
 	Submissions []BetaFeedbackScreenshotView `json:"submissions"`
 }
 
-// TableRows implements TableRenderable for the screenshot submissions list.
 func (l BetaFeedbackScreenshotList) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"DATE", "DEVICE", "OS", "COMMENT", "IMAGES", "ID"}
 	rows = make([][]string, 0, len(l.Submissions))
@@ -71,19 +63,14 @@ func (l BetaFeedbackScreenshotList) TableRows() (headers []string, rows [][]stri
 			s.Attributes.DeviceModel,
 			s.Attributes.OsVersion,
 			truncTitle(s.Attributes.Comment, 50),
-			fmt.Sprintf("%d", len(s.Attributes.Screenshots)),
+			strconv.Itoa(len(s.Attributes.Screenshots)),
 			s.ID,
 		})
 	}
 	return headers, rows
 }
 
-// BetaFeedbackDownloadView is the result of `beta-feedback download`.
-//
-// SavedTo names the local path that received the file. Type identifies
-// which feedback resource the id resolved to — "crashLog" for crash log
-// text, "screenshot" for screenshot bytes — so consumers can branch off
-// the JSON contract.
+// BetaFeedbackDownloadView reports a download; Type is "crashLog" or "screenshot".
 type BetaFeedbackDownloadView struct {
 	ID      string `json:"id"`
 	Type    string `json:"type"`
@@ -91,14 +78,13 @@ type BetaFeedbackDownloadView struct {
 	Bytes   int    `json:"bytes"`
 }
 
-// TableRows for the download result.
 func (v *BetaFeedbackDownloadView) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
 	rows = [][]string{
 		{"ID", v.ID},
 		{"TYPE", v.Type},
 		{"SAVED_TO", v.SavedTo},
-		{"BYTES", fmt.Sprintf("%d", v.Bytes)},
+		{"BYTES", strconv.Itoa(v.Bytes)},
 	}
 	return headers, rows
 }
@@ -108,11 +94,11 @@ var betaFeedbackCmd = &cobra.Command{
 	Short: "Read TestFlight beta feedback (crash submissions, screenshots)",
 	Long: `beta-feedback groups read commands over Apple's TestFlight feedback resources:
 
-  - crash <bundleId>           — list crash submissions, optionally filtered by build
-  - screenshot <bundleId>      — list screenshot submissions, optionally filtered by build
-  - download <feedbackId>      — download the crash log or screenshot to disk
+  - crash <bundleId>          : list crash submissions, optionally filtered by build
+  - screenshot <bundleId>     : list screenshot submissions, optionally filtered by build
+  - download <feedbackId>     : download the crash log or screenshot to disk
 
-Phase 3 has no write surface here — feedback is tester-authored.`,
+Phase 3 has no write surface here: feedback is tester-authored.`,
 }
 
 var betaFeedbackCrashCmd = &cobra.Command{
@@ -121,9 +107,9 @@ var betaFeedbackCrashCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runBetaFeedbackCrash,
-	Example: `  fline beta-feedback crash com.example.myapp
-  fline beta-feedback crash com.example.myapp --build 42
-  fline beta-feedback crash com.example.myapp --output json | jq '.submissions[].attributes.deviceModel'`,
+	Example: `  flightline beta-feedback crash com.example.myapp
+  flightline beta-feedback crash com.example.myapp --build 42
+  flightline beta-feedback crash com.example.myapp --output json | jq '.submissions[].attributes.deviceModel'`,
 }
 
 var betaFeedbackScreenshotCmd = &cobra.Command{
@@ -132,8 +118,8 @@ var betaFeedbackScreenshotCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runBetaFeedbackScreenshot,
-	Example: `  fline beta-feedback screenshot com.example.myapp
-  fline beta-feedback screenshot com.example.myapp --build 42 --output json`,
+	Example: `  flightline beta-feedback screenshot com.example.myapp
+  flightline beta-feedback screenshot com.example.myapp --build 42 --output json`,
 }
 
 var betaFeedbackDownloadCmd = &cobra.Command{
@@ -142,9 +128,9 @@ var betaFeedbackDownloadCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runBetaFeedbackDownload,
-	Example: `  fline beta-feedback download CRASH-1234 --out crash.txt
-  fline beta-feedback download SCREENSHOT-5678 --type screenshot --out shot.png
-  fline beta-feedback download CRASH-1234 --output json`,
+	Example: `  flightline beta-feedback download CRASH-1234 --out crash.txt
+  flightline beta-feedback download SCREENSHOT-5678 --type screenshot --out shot.png
+  flightline beta-feedback download CRASH-1234 --output json`,
 }
 
 var (
@@ -249,7 +235,7 @@ func runBetaFeedbackScreenshot(cmd *cobra.Command, args []string) error {
 func runBetaFeedbackDownload(cmd *cobra.Command, args []string) error {
 	feedbackID := strings.TrimSpace(args[0])
 	if feedbackID == "" {
-		return fmt.Errorf("beta-feedback: feedback id is required")
+		return errors.New("beta-feedback: feedback id is required")
 	}
 	feedbackType := strings.ToLower(strings.TrimSpace(betaFeedbackDownloadType))
 	if feedbackType != "crash" && feedbackType != "screenshot" {
@@ -270,8 +256,6 @@ func runBetaFeedbackDownload(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// downloadCrashLog fetches the crash log resource for a crash submission and
-// writes the symbolicated text to disk. Returns the saved path.
 func downloadCrashLog(ctx context.Context, c *asc.Client, feedbackID, outPath string) error {
 	resp, err := asc.Get[asc.Single[asc.BetaCrashLogAttributes]](
 		ctx, c, "/v1/betaFeedbackCrashSubmissions/"+feedbackID+"/crashLog", nil,
@@ -298,10 +282,7 @@ func downloadCrashLog(ctx context.Context, c *asc.Client, feedbackID, outPath st
 	}, outputMode())
 }
 
-// downloadScreenshot fetches the screenshot submission, picks the first
-// image's pre-signed URL, and downloads its bytes to disk. The URL is
-// transient (Apple sets an expiration date) so we never cache the URL,
-// only the resolved bytes.
+// Apple's screenshot URL is pre-signed and expires; resolve to bytes immediately, never cache the URL.
 func downloadScreenshot(ctx context.Context, c *asc.Client, feedbackID, outPath string) error {
 	resp, err := asc.Get[asc.Single[asc.BetaFeedbackScreenshotSubmissionAttributes]](
 		ctx, c, "/v1/betaFeedbackScreenshotSubmissions/"+feedbackID, nil,
@@ -337,9 +318,6 @@ func downloadScreenshot(ctx context.Context, c *asc.Client, feedbackID, outPath 
 	}, outputMode())
 }
 
-// screenshotExt returns the file extension implied by the URL path. Apple
-// pre-signs CDN URLs that end in .png / .jpg; fall back to .png when no
-// extension is detectable so the output is at least playable.
 func screenshotExt(rawURL string) string {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -352,10 +330,7 @@ func screenshotExt(rawURL string) string {
 	return ext
 }
 
-// fetchBytes downloads bytes from a non-Apple-API URL (Apple's screenshot
-// CDN). No JWT — the URL is already pre-signed; injecting one would
-// invalidate the signature. Bounded read to 64 MiB to defend against a
-// runaway response.
+// No JWT: the CDN URL is pre-signed and injecting auth would invalidate the signature. Read is capped at 64 MiB.
 func fetchBytes(ctx context.Context, rawURL string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, http.NoBody)
 	if err != nil {
@@ -377,9 +352,7 @@ func fetchBytes(ctx context.Context, rawURL string) ([]byte, error) {
 	return body, nil
 }
 
-// writeBytes writes b to path with mode 0644. Parent directories must
-// already exist; this is intentional — silently creating directories is a
-// surprise the caller didn't ask for.
+// Parent dirs must already exist; creating them silently would surprise the caller.
 func writeBytes(path string, b []byte) error {
 	if err := os.WriteFile(path, b, 0o644); err != nil { //nolint:gosec // tester-supplied content; not a secret
 		return fmt.Errorf("beta-feedback: write %s: %w", path, err)
@@ -387,13 +360,7 @@ func writeBytes(path string, b []byte) error {
 	return nil
 }
 
-// collectBetaFeedbackCrashes walks the paging iterator with optional
-// since-cutoff (client-side because Apple has no created-since filter).
-//
-// Apple sorts submissions newest-first when the request asks for it, so the
-// loop short-circuits as soon as a record predates the cutoff — avoiding
-// the cost of paging through years of crashes when callers want the last
-// 30 days.
+// since-cutoff is client-side (Apple has no created-since filter); newest-first sort lets the walk short-circuit at the cutoff.
 func collectBetaFeedbackCrashes(ctx context.Context, c *asc.Client, path string, query url.Values, limit int, since time.Time) ([]BetaFeedbackCrashView, error) {
 	out := make([]BetaFeedbackCrashView, 0, defaultListCap(limit))
 	for page, err := range asc.Pages[asc.BetaFeedbackCrashSubmissionAttributes](ctx, c, path, query) {
@@ -415,9 +382,6 @@ func collectBetaFeedbackCrashes(ctx context.Context, c *asc.Client, path string,
 	return out, nil
 }
 
-// collectBetaFeedbackScreenshots is the screenshot equivalent of
-// collectBetaFeedbackCrashes — same since-cutoff semantics, different
-// resource type.
 func collectBetaFeedbackScreenshots(ctx context.Context, c *asc.Client, path string, query url.Values, limit int, since time.Time) ([]BetaFeedbackScreenshotView, error) {
 	out := make([]BetaFeedbackScreenshotView, 0, defaultListCap(limit))
 	for page, err := range asc.Pages[asc.BetaFeedbackScreenshotSubmissionAttributes](ctx, c, path, query) {

@@ -133,13 +133,11 @@ func TestCategories_JSONOutputStability_List(t *testing.T) {
 	row := decoded.Categories[0]
 	for _, key := range []string{"id", "type", "attributes"} {
 		if _, ok := row[key]; !ok {
-			t.Errorf("missing per-row key %q — JSON contract drift. Got: %v", key, mapKeys(row))
+			t.Errorf("missing per-row key %q: JSON contract drift. Got: %v", key, mapKeys(row))
 		}
 	}
 }
 
-// TestCategories_JSONOutputStability_Get locks the CategoryAssignmentView
-// top-level keys for the `get` command.
 func TestCategories_JSONOutputStability_Get(t *testing.T) {
 	v := &CategoryAssignmentView{
 		BundleID:              "com.example.alpha",
@@ -159,13 +157,11 @@ func TestCategories_JSONOutputStability_Get(t *testing.T) {
 	}
 	for _, key := range []string{"bundleId", "appInfoId", "appInfoState", "primaryCategory", "primarySubcategoryOne", "secondaryCategory"} {
 		if _, ok := decoded[key]; !ok {
-			t.Errorf("missing top-level key %q — JSON contract drift. Got: %v", key, mapKeys(decoded))
+			t.Errorf("missing top-level key %q: JSON contract drift. Got: %v", key, mapKeys(decoded))
 		}
 	}
 }
 
-// TestCategories_FixtureReplay_List exercises runCategoriesList's underlying
-// pages walk: GET /v1/appCategories with the platform filter.
 func TestCategories_FixtureReplay_List(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/appCategories": {File: "categories_list"},
@@ -191,9 +187,6 @@ func TestCategories_FixtureReplay_List(t *testing.T) {
 	}
 }
 
-// TestCategories_FixtureReplay_GetAssignments exercises the full chain:
-// resolveAppID → pickEditableAppInfo → fetchCategoryRelationship across the 6
-// to-one relationships, including an unassigned slot (data: null).
 func TestCategories_FixtureReplay_GetAssignments(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps":                     {File: "apps_get_byBundleId"},
@@ -250,9 +243,6 @@ func TestCategories_FixtureReplay_GetAssignments(t *testing.T) {
 	}
 }
 
-// TestCategories_FixtureReplay_AppNotFound exercises the resolveAppID error
-// path: bundleId that doesn't exist surfaces a typed error message naming
-// the bundleId.
 func TestCategories_FixtureReplay_AppNotFound(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_notFound"},
@@ -268,7 +258,7 @@ func TestCategories_FixtureReplay_AppNotFound(t *testing.T) {
 }
 
 // TestCategoriesDiff_UnchangedYieldsZeroChanges asserts the diff returns no
-// rows when current and desired are identical — the idempotency invariant.
+// rows when current and desired are identical: the idempotency invariant.
 func TestCategoriesDiff_UnchangedYieldsZeroChanges(t *testing.T) {
 	cur := categoryRelationships{
 		primary:       "PRODUCTIVITY",
@@ -313,11 +303,7 @@ func TestCategoriesDiff_ReportsChangedFields(t *testing.T) {
 	}
 }
 
-// TestBuildAppInfoCategoriesPatch_OnlyChangedFieldsEmitted asserts the PATCH
-// body skeleton: relationships block contains exactly the fields named in
-// `changes`, with cleared slots emitted as { "data": null } and assigned
-// slots as { "data": {type, id} }. Untouched slots must NOT appear (else
-// Apple sees PATCHes for unobserved state and idempotency suffers).
+// Untouched slots must not appear in the PATCH, else Apple sees writes for unobserved state and idempotency breaks.
 func TestBuildAppInfoCategoriesPatch_OnlyChangedFieldsEmitted(t *testing.T) {
 	current := categoryRelationships{primary: "PRODUCTIVITY", secondary: "UTILITIES"}
 	desired := categoryRelationships{primary: "GAMES", secondary: ""}
@@ -396,9 +382,6 @@ func TestCategoriesSetResult_TableRows_NoChange(t *testing.T) {
 	}
 }
 
-// TestCategoriesSetResult_JSONShape locks the JSON contract for the write
-// result so consumers parsing `changed`, `changes[]`, and `result.*` aren't
-// broken later.
 func TestCategoriesSetResult_JSONShape(t *testing.T) {
 	r := &CategoriesSetResult{
 		BundleID:     "com.example.alpha",
@@ -428,10 +411,7 @@ func TestCategoriesSetResult_JSONShape(t *testing.T) {
 	}
 }
 
-// TestCategoriesSet_FixtureReplay_Idempotent walks the full read+diff path
-// against a fixture where current == desired. Asserts: no PATCH route is
-// hit (the route map deliberately omits the PATCH endpoint, so any attempt
-// would 404 and fail the test).
+// The route map omits the PATCH endpoint, so any write attempt 404s and fails the test, proving the no-op path.
 func TestCategoriesSet_FixtureReplay_Idempotent(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps":                     {File: "apps_get_byBundleId"},

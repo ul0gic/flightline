@@ -9,30 +9,22 @@ import (
 	"strings"
 )
 
-// TableRenderable is the contract a value implements to be rendered as a
-// table. Headers are the column names; rows are the cell values, in the same
-// order as headers, one slice per row.
-//
-// The interface is intentionally tiny so it composes with our own typed view
-// structs in internal/cmd; we never poke into asc.* envelopes from output code.
+// TableRenderable is implemented by values that render as a table; rows are
+// cells in header order.
 type TableRenderable interface {
 	TableRows() (headers []string, rows [][]string)
 }
 
-// Render writes v to stdout in the requested mode.
+// Render writes v to stdout in the requested mode; only data goes to stdout so it stays pipe-clean.
 //
 //	mode == "json"  → indented JSON of v
 //	mode == "table" → ASCII table (v must implement TableRenderable)
-//
-// Any other mode is an error. Diagnostics — never the data itself — go to
-// stderr; stdout stays clean for piping into jq, awk, or feeding an LLM.
 func Render(v any, mode string) error {
 	return renderTo(os.Stdout, v, mode, !isTTY(os.Stdout) || colorDisabled())
 }
 
-// renderTo is the testable inner Render. forcePlain strips any ANSI color or
-// box-drawing chrome that a future lipgloss-backed table might inject, so
-// piped output stays grep-clean.
+// renderTo is the testable inner Render; forcePlain strips ANSI/box-drawing
+// chrome so piped output stays grep-clean.
 func renderTo(w io.Writer, v any, mode string, forcePlain bool) error {
 	switch mode {
 	case "json":
@@ -62,8 +54,7 @@ func writeTable(w io.Writer, v any, _ bool) error {
 	}
 	headers, rows := t.TableRows()
 	if len(headers) == 0 {
-		// No-op for empty result sets — print nothing rather than an empty
-		// table chrome. Consumers that care can use --output json.
+		// Empty result set: print nothing rather than bare table chrome.
 		return nil
 	}
 
@@ -127,11 +118,8 @@ func dashes(widths []int) []string {
 	return out
 }
 
-// isTTY reports whether w is a terminal (not a pipe / redirect / file).
-//
-// Implemented via os.Stat character-device check rather than golang.org/x/term
-// to keep the dep graph stdlib-only — see CLAUDE.md "no new deps without
-// asking" rule.
+// isTTY reports whether w is a terminal. Uses an os.Stat char-device check
+// rather than golang.org/x/term to stay stdlib-only.
 func isTTY(w io.Writer) bool {
 	f, ok := w.(*os.File)
 	if !ok {
@@ -144,8 +132,7 @@ func isTTY(w io.Writer) bool {
 	return info.Mode()&os.ModeCharDevice != 0
 }
 
-// colorDisabled checks the no-color signals: NO_COLOR env (any value, per
-// no-color.org) and the persistent --no-color flag (later, when we wire it).
+// colorDisabled reports the NO_COLOR signal (any value, per no-color.org).
 func colorDisabled() bool {
 	return os.Getenv("NO_COLOR") != ""
 }

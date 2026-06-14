@@ -89,10 +89,11 @@ func TestRunner_PanicTrappedAsErrorDiag(t *testing.T) {
 }
 
 func TestHasErrors_HasWarnings(t *testing.T) {
-	d := []Diagnostic{
-		{RuleID: "a", Severity: SeverityInfo},
-		{RuleID: "b", Severity: SeverityWarning},
-	}
+	d := make([]Diagnostic, 0, 3)
+	d = append(d,
+		Diagnostic{RuleID: "a", Severity: SeverityInfo},
+		Diagnostic{RuleID: "b", Severity: SeverityWarning},
+	)
 	if HasErrors(d) {
 		t.Error("HasErrors with warning-only = true, want false")
 	}

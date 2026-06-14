@@ -12,8 +12,6 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// ----- versions tests -----
-
 func TestVersionView_JSONShape(t *testing.T) {
 	dl := true
 	v := VersionView{
@@ -124,8 +122,7 @@ func TestVersionsList_RenderJSONRoundtrip(t *testing.T) {
 	}
 }
 
-// TestVersions_JSONOutputStability_List asserts the VersionList JSON shape.
-// Top-level "versions" key plus per-row attribute keys are a contract.
+// The "versions" key plus per-row attribute keys are a contract.
 func TestVersions_JSONOutputStability_List(t *testing.T) {
 	dl := true
 	list := VersionList{
@@ -163,7 +160,7 @@ func TestVersions_JSONOutputStability_List(t *testing.T) {
 	row := decoded.Versions[0]
 	for _, key := range []string{"id", "type", "attributes"} {
 		if _, ok := row[key]; !ok {
-			t.Errorf("missing per-row key %q — JSON contract drift. Got keys: %v", key, mapKeys(row))
+			t.Errorf("missing per-row key %q: JSON contract drift. Got keys: %v", key, mapKeys(row))
 		}
 	}
 	attrs, ok := row["attributes"].(map[string]any)
@@ -172,12 +169,11 @@ func TestVersions_JSONOutputStability_List(t *testing.T) {
 	}
 	for _, key := range []string{"platform", "versionString", "appStoreState", "appVersionState", "releaseType", "reviewType", "copyright", "downloadable", "createdDate"} {
 		if _, ok := attrs[key]; !ok {
-			t.Errorf("missing attribute key %q — JSON contract drift. Got: %v", key, mapKeys(attrs))
+			t.Errorf("missing attribute key %q: JSON contract drift. Got: %v", key, mapKeys(attrs))
 		}
 	}
 }
 
-// TestVersionsType_StaysAppStoreVersions locks the resource type literal.
 func TestVersionsType_StaysAppStoreVersions(t *testing.T) {
 	v := VersionView{ID: "1", Type: "appStoreVersions"}
 	b, _ := json.Marshal(v)
@@ -186,9 +182,6 @@ func TestVersionsType_StaysAppStoreVersions(t *testing.T) {
 	}
 }
 
-// TestVersions_FixtureReplay_List exercises the production collectVersions
-// pipeline against a captured-shape golden fixture, hitting the path the
-// real `versions list` command takes (resolveAppID -> /v1/apps/{id}/appStoreVersions).
 func TestVersions_FixtureReplay_List(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
@@ -218,9 +211,6 @@ func TestVersions_FixtureReplay_List(t *testing.T) {
 	}
 }
 
-// TestVersions_FixtureReplay_GetNotFound asserts the user-facing error
-// message echoes the bundleId AND the missing version string when the
-// version-string filter yields zero records.
 func TestVersions_FixtureReplay_GetNotFound(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
@@ -249,8 +239,6 @@ func TestVersions_FixtureReplay_GetNotFound(t *testing.T) {
 	}
 }
 
-// TestVersions_FixtureReplay_BundleNotFound asserts that resolveAppID returns
-// a typed not-found error echoing the bundleId when no app matches.
 func TestVersions_FixtureReplay_BundleNotFound(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_notFound"},
@@ -268,8 +256,6 @@ func TestVersions_FixtureReplay_BundleNotFound(t *testing.T) {
 		}
 	}
 }
-
-// ----- versions create / update tests -----
 
 func TestVersionsCreate_RegisteredWithRequiredFlag(t *testing.T) {
 	subs := versionsCmd.Commands()
@@ -299,7 +285,6 @@ func TestVersionsCreate_RegisteredWithRequiredFlag(t *testing.T) {
 	}
 }
 
-// TestVersions_LookupVersion_Found exercises the idempotency probe.
 func TestVersions_LookupVersion_Found(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps/1234567890/appStoreVersions": {File: "versions_lookup_existing"},
@@ -334,10 +319,8 @@ func TestVersions_LookupVersion_NotFound(t *testing.T) {
 	}
 }
 
-// TestVersions_DiffAttrs_NoChangeWhenFlagsUnset locks the rule that flags the
-// user did not pass do not enter the diff. Critical for idempotency: a bare
-// `versions update --version X` against a version that already exists must
-// be a no-op.
+// Idempotency: a bare `versions update --version X` on an existing version
+// must be a no-op: unpassed flags never enter the diff.
 func TestVersions_DiffAttrs_NoChangeWhenFlagsUnset(t *testing.T) {
 	cmd := &cobra.Command{}
 	cmd.Flags().String("copyright", "", "")
@@ -355,8 +338,6 @@ func TestVersions_DiffAttrs_NoChangeWhenFlagsUnset(t *testing.T) {
 	}
 }
 
-// TestVersions_DiffAttrs_NoChangeWhenIdentical asserts that a flag whose
-// value matches the current resource produces no diff.
 func TestVersions_DiffAttrs_NoChangeWhenIdentical(t *testing.T) {
 	cmd := &cobra.Command{}
 	cmd.Flags().String("release-type", "", "")
@@ -374,8 +355,6 @@ func TestVersions_DiffAttrs_NoChangeWhenIdentical(t *testing.T) {
 	}
 }
 
-// TestVersions_DiffAttrs_ChangeWhenDiffers asserts that a Changed flag with
-// a different value produces a diff carrying that one field.
 func TestVersions_DiffAttrs_ChangeWhenDiffers(t *testing.T) {
 	cmd := &cobra.Command{}
 	cmd.Flags().String("release-type", "", "")
@@ -399,7 +378,6 @@ func TestVersions_DiffAttrs_ChangeWhenDiffers(t *testing.T) {
 	}
 }
 
-// TestVersionWriteResult_JSONShape locks the write-result envelope contract.
 func TestVersionWriteResult_JSONShape(t *testing.T) {
 	r := VersionWriteResult{
 		Action:  "updated",
@@ -432,8 +410,6 @@ func TestVersionWriteResult_JSONShape(t *testing.T) {
 	}
 }
 
-// TestVersionWriteResult_TableRows confirms the action / changed columns
-// surface in the table output.
 func TestVersionWriteResult_TableRows(t *testing.T) {
 	r := &VersionWriteResult{Action: "noop", Changed: false, Version: VersionView{ID: "8000000001"}}
 	headers, rows := r.TableRows()
@@ -448,14 +424,7 @@ func TestVersionWriteResult_TableRows(t *testing.T) {
 	}
 }
 
-// TestVersions_FixtureReplay_CreateNew exercises the create path end-to-end
-// against the fixture server: lookup misses → POST returns the created
-// resource → render emits action=created.
 func TestVersions_FixtureReplay_CreateNew(t *testing.T) {
-	// The lookup-then-POST flow goes:
-	//   GET /v1/apps           (resolveAppID)
-	//   GET /v1/apps/{id}/appStoreVersions  (lookup)
-	//   POST /v1/appStoreVersions           (create)
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
 		"GET /v1/apps/1234567890/appStoreVersions": {File: "versions_lookup_empty"},
@@ -463,8 +432,7 @@ func TestVersions_FixtureReplay_CreateNew(t *testing.T) {
 	})
 	c := fixtureASCClient(t, srv)
 
-	// Drive the wire calls directly — we can't shell `runVersionsCreate`
-	// because it reads viper. The test mirrors the runV*Create wire path.
+	// runVersionsCreate can't be shelled (it reads viper); mirror its wire path.
 	appID, err := resolveAppID(context.Background(), c, "com.example.alpha")
 	if err != nil {
 		t.Fatalf("resolveAppID: %v", err)
@@ -504,8 +472,6 @@ func TestVersions_FixtureReplay_CreateNew(t *testing.T) {
 	}
 }
 
-// TestVersions_FixtureReplay_UpdateChange exercises a PATCH that flips the
-// release type. Confirms wire path and attribute decode.
 func TestVersions_FixtureReplay_UpdateChange(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
@@ -545,10 +511,8 @@ func TestVersions_FixtureReplay_UpdateChange(t *testing.T) {
 	}
 }
 
-// TestVersions_WireBody_OmitsUnsetFields locks the JSON shape of a write
-// envelope: pointer-to-string + omitempty means flags the user didn't pass
-// stay out of the wire body. Catches accidental "" defaults that would clear
-// fields server-side.
+// pointer + omitempty keeps unpassed flags out of the body; accidental ""
+// defaults would clear fields server-side.
 func TestVersions_WireBody_OmitsUnsetFields(t *testing.T) {
 	body := versionWriteEnvelope{
 		Data: versionWriteData{

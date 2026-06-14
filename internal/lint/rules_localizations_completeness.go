@@ -5,17 +5,8 @@ import (
 	"sort"
 )
 
-// localizationsCompletenessRule fires when a locale appears in one
-// localizable surface (metadata, screenshots, IAP localizations) but is
-// missing from another. Apple may reject submissions where a locale has
-// metadata but no screenshots, or vice versa, because reviewers can't
-// preview the listing in that language.
-//
-// Severity Warning rather than Error: a locale that's only in metadata is
-// surfaced for review but doesn't always block submission. The user can
-// override (some locales legitimately exist in only one surface).
-//
-// Offline-only — every input is in the authored YAML.
+// localizationsCompletenessRule fires when a locale appears in one surface (metadata, screenshots, IAP) but not another.
+// Warning (not Error): missing a locale doesn't always block submission, but Apple may reject. Offline-only.
 type localizationsCompletenessRule struct{}
 
 func init() { Register(localizationsCompletenessRule{}) }
@@ -32,8 +23,6 @@ func (r localizationsCompletenessRule) Check(ctx CheckContext) []Diagnostic {
 	if len(surfaces) < 2 {
 		return nil // need at least two surfaces to compare
 	}
-	// Build the union of every locale across surfaces, then for each surface
-	// flag the locales it's missing.
 	union := map[string]struct{}{}
 	for _, locales := range surfaces {
 		for loc := range locales {
@@ -64,11 +53,10 @@ func (r localizationsCompletenessRule) Check(ctx CheckContext) []Diagnostic {
 				Path: surfacePath(surface, loc),
 				FixHint: "either add the locale to every localizable surface (metadata, " +
 					"screenshots, iap.localizations) or remove it everywhere.",
-				Reference: "PRD §L3 — localizations.completeness",
+				Reference: "PRD §L3: localizations.completeness",
 			})
 		}
 	}
-	// Sort the output deterministically for stable JSON output.
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].Path != out[j].Path {
 			return out[i].Path < out[j].Path
@@ -78,8 +66,7 @@ func (r localizationsCompletenessRule) Check(ctx CheckContext) []Diagnostic {
 	return out
 }
 
-// collectLocalizedSurfaces returns a map[surfaceName]map[locale]struct{}
-// for every surface that declares localizations in the state.
+// collectLocalizedSurfaces returns a map[surfaceName]set[locale] for every surface with localizations declared.
 func (localizationsCompletenessRule) collectLocalizedSurfaces(ctx CheckContext) map[string]map[string]struct{} {
 	out := map[string]map[string]struct{}{}
 	if ctx.State == nil {
@@ -100,9 +87,6 @@ func (localizationsCompletenessRule) collectLocalizedSurfaces(ctx CheckContext) 
 		out["screenshots"] = s
 	}
 	if iap := ctx.State.Spec.IAP; iap != nil && len(iap.Products) > 0 {
-		// Aggregate every locale across every IAP product. A locale that
-		// appears in one IAP but not another is a sub-rule we don't bother
-		// with here (that's authoring noise, not a rejection cause).
 		s := map[string]struct{}{}
 		for _, prod := range iap.Products {
 			for k := range prod.Localizations {
@@ -116,8 +100,7 @@ func (localizationsCompletenessRule) collectLocalizedSurfaces(ctx CheckContext) 
 	return out
 }
 
-// surfacePath returns a JSON-Pointer-style path into the state for a
-// given surface and locale.
+// surfacePath returns a JSON-Pointer-style path for a surface and locale.
 func surfacePath(surface, locale string) string {
 	switch surface {
 	case "metadata":

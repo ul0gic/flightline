@@ -1,27 +1,3 @@
-// load_corpus_test.go — Phase 4.3.1 loader corpus runner.
-//
-// Drives every YAML in testdata/{good,bad,quirks} through LoadState +
-// Validate and asserts the produced diagnostics match the sibling
-// .expected.json (or, for goods, that no diagnostics fire).
-//
-// Sidecar shape:
-//
-//	{
-//	  "diagnostics": [
-//	    { "stage": "load",   "line": 7,  "messageContains": "field foo not found" },
-//	    { "stage": "schema", "path": "/spec/iap/products/x/type", "messageContains": "must be one of" }
-//	  ]
-//	}
-//
-// stage:        "load" for KnownFields/yaml.v3 errors, "schema" for jsonschema validate
-// line:         optional line number (load only); 0 means don't check
-// path:         optional JSON-Pointer (schema only); "" means don't check
-// messageContains: substring match against Diagnostic.Message
-//
-// Each declared diagnostic must match at least one actual diagnostic;
-// extras in the actual list are tolerated (some schema rules emit
-// multiple causes — we assert presence of the named one).
-
 package config
 
 import (
@@ -56,7 +32,6 @@ func TestLoaderCorpus_Good(t *testing.T) {
 		t.Fatal("no good fixtures found; check testdata/good/")
 	}
 	for _, f := range files {
-		f := f
 		t.Run(filepath.Base(f), func(t *testing.T) {
 			t.Parallel()
 			s, err := LoadState(f)
@@ -87,7 +62,6 @@ func TestLoaderCorpus_Bad(t *testing.T) {
 		t.Fatal("no bad fixtures found; check testdata/bad/")
 	}
 	for _, f := range files {
-		f := f
 		t.Run(filepath.Base(f), func(t *testing.T) {
 			t.Parallel()
 			expected := loadExpected(t, f)
@@ -110,27 +84,20 @@ func TestLoaderCorpus_Bad(t *testing.T) {
 	}
 }
 
-// TestLoaderCorpus_Quirks documents validator gaps as regression markers.
-// Each fixture in testdata/quirks/ is currently accepted (load + schema
-// both clean) when it shouldn't be — see QA-011 for the underlying
-// jsonschema/v6 format-checks-disabled gap and the yaml.v3 yes/no
-// boolean-coercion footgun. When QA-011 lands, these tests will start
-// failing — at which point flip them into testdata/bad/ with proper
-// .expected.json sidecars.
+// TestLoaderCorpus_Quirks pins validator gaps (QA-011) as regression markers; they flip to testdata/bad/ when fixed.
 func TestLoaderCorpus_Quirks(t *testing.T) {
 	files, err := filepath.Glob(filepath.Join("testdata", "quirks", "*.yaml"))
 	if err != nil {
 		t.Fatalf("glob quirks: %v", err)
 	}
 	for _, f := range files {
-		f := f
 		t.Run(filepath.Base(f), func(t *testing.T) {
 			t.Parallel()
 			loadDiags, schemaDiags := loadAndValidate(t, f)
 			if len(loadDiags) != 0 || len(schemaDiags) != 0 {
-				t.Logf("Quirk %s now produces diagnostics — promote it from quirks/ to bad/.\nload: %s\nschema: %s",
+				t.Logf("Quirk %s now produces diagnostics: promote it from quirks/ to bad/.\nload: %s\nschema: %s",
 					filepath.Base(f), formatDiags(loadDiags), formatDiags(schemaDiags))
-				t.Fatal("quirk fixture now caught — promote to testdata/bad/ and add .expected.json (see QA-011)")
+				t.Fatal("quirk fixture now caught: promote to testdata/bad/ and add .expected.json (see QA-011)")
 			}
 		})
 	}
@@ -146,16 +113,14 @@ func loadAndValidate(t *testing.T, path string) (loadDiags, schemaDiags []Diagno
 		if errors.As(err, &le) {
 			return le.Diagnostics, nil
 		}
-		// Non-LoadError surface (e.g. open failure) — wrap as a single
+		// Non-LoadError surface (e.g. open failure): wrap as a single
 		// load-stage diagnostic so the comparator can match against it.
 		return []Diagnostic{{File: path, Severity: SeverityError, Message: err.Error()}}, nil
 	}
 	return nil, Validate(path, s)
 }
 
-// loadExpected reads the .expected.json sidecar for fixture and parses
-// it into expectedFile. Failure to parse is fatal: corpus authors must
-// keep sidecars in sync.
+// loadExpected reads a fixture's .expected.json sidecar; a parse failure is fatal.
 func loadExpected(t *testing.T, fixture string) expectedFile {
 	t.Helper()
 	side := strings.TrimSuffix(fixture, ".yaml") + ".expected.json"
@@ -187,9 +152,7 @@ func diagnosticMatches(want expectedDiagnostic, loadDiags, schemaDiags []Diagnos
 			continue
 		}
 		if want.Line > 0 {
-			// yaml.v3 errors carry the line in the message
-			// ("line N: ..."), not in Diagnostic.Line — match
-			// substring "line N:" instead.
+			// yaml.v3 carries the line in the message ("line N:"), not in Diagnostic.Line.
 			needle := lineMarker(want.Line)
 			if !strings.Contains(got.Message, needle) {
 				continue

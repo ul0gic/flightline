@@ -8,22 +8,8 @@ import (
 	yaml "go.yaml.in/yaml/v3"
 )
 
-// strictYAMLCoercionRule walks the source state YAML tree looking for raw
-// boolean-coercion footguns: `yes`, `no`, `on`, `off`, `y`, `n` (any case)
-// at any node. yaml.v3 follows YAML 1.1 core schema and silently coerces
-// these tokens to bool — even when written like `gambling: "yes"` in some
-// edge cases (string survives but the *intent* mismatch is a footgun).
-//
-// The check fires only when the surrounding context implies a boolean
-// field. We don't have type info from the parsed *State here; instead we
-// look at the raw bytes via yaml.Node and inspect Tag + Style:
-//   - Tag == "!!bool" and Style is unquoted (Plain): the user wrote `yes`,
-//     yaml.v3 coerced it to bool. This is the QA-011 footgun.
-//   - Tag == "!!str" and Style is quoted: the user wrote `"yes"`, intent
-//     preserved as string — only fire if the parent key is a known bool
-//     field (we keep this conservative).
-//
-// Offline-only.
+// strictYAMLCoercionRule fires when a known bool field carries a YAML 1.1 coercion token (yes/no/on/off/y/n).
+// yaml.v3 coerces these to bool even when quoted; the check inspects the raw AST Tag and Style. Offline-only.
 type strictYAMLCoercionRule struct{}
 
 func init() { Register(strictYAMLCoercionRule{}) }
@@ -31,11 +17,6 @@ func init() { Register(strictYAMLCoercionRule{}) }
 func (strictYAMLCoercionRule) ID() string         { return "strict.yaml-coercion" }
 func (strictYAMLCoercionRule) Severity() Severity { return SeverityError }
 func (strictYAMLCoercionRule) Mode() Mode         { return ModeOffline }
-
-// strict.yaml-coercion reads CheckContext.SourcePath — the absolute path of
-// the YAML the user is linting — and walks the raw AST. When SourcePath is
-// empty (e.g. preflight against fetched live state) the rule no-ops: no
-// source means nothing to scan.
 
 func (r strictYAMLCoercionRule) Check(ctx CheckContext) []Diagnostic {
 	if ctx.SourcePath == "" {
@@ -54,9 +35,7 @@ func (r strictYAMLCoercionRule) Check(ctx CheckContext) []Diagnostic {
 	return out
 }
 
-// boolKeys is the conservative set of state.yaml keys whose values are
-// expected to be booleans. Quoted yes/no on these keys is still a footgun
-// (the user thinks they're answering Apple's question with a string).
+// boolKeys is the set of state.yaml keys whose values must be true/false; yes/no/on/off are coercion footguns here.
 var boolKeys = map[string]struct{}{
 	"usesNonExemptEncryption":                   {},
 	"availableOnFrenchStore":                    {},
@@ -76,9 +55,7 @@ var boolKeys = map[string]struct{}{
 	"visible":                                   {},
 }
 
-// walkYAMLForCoercion descends the yaml.Node tree carrying the parent key
-// (when on a mapping value) so we can correlate the value back to a known
-// bool field.
+// walkYAMLForCoercion descends the yaml.Node tree carrying parentKey so values correlate to known bool fields.
 func walkYAMLForCoercion(n *yaml.Node, parentKey string, out *[]Diagnostic, ruleID string) {
 	if n == nil {
 		return
@@ -111,14 +88,11 @@ func checkScalar(n *yaml.Node, parentKey string, out *[]Diagnostic, ruleID strin
 		return
 	}
 	if _, isBoolField := boolKeys[parentKey]; !isBoolField {
-		// Not a known bool field; don't fire — could be a legitimate
+		// Not a known bool field; don't fire: could be a legitimate
 		// string-typed field accidentally written as `yes`.
 		return
 	}
-	// At this point: a known bool field carries a yes/no/on/off/y/n token.
-	// yaml.v3 coerces yes/no into bool when decoding into *bool — quoting
-	// does NOT suppress this. Flag both quoted and unquoted forms with a
-	// note about which the user wrote.
+	// yaml.v3 coerces yes/no/on/off into bool even when quoted: flag both forms.
 	style := "unquoted"
 	switch n.Style {
 	case yaml.DoubleQuotedStyle, yaml.SingleQuotedStyle:
@@ -128,7 +102,7 @@ func checkScalar(n *yaml.Node, parentKey string, out *[]Diagnostic, ruleID strin
 		RuleID:   ruleID,
 		Severity: SeverityError,
 		Message: fmt.Sprintf(
-			"line %d:%d — bool field %q has %s YAML 1.1 token %q (yaml.v3 coerces yes/no/on/off to bool when decoding into *bool, even when quoted)",
+			"line %d:%d: bool field %q has %s YAML 1.1 token %q (yaml.v3 coerces yes/no/on/off to bool when decoding into *bool, even when quoted)",
 			n.Line, n.Column, parentKey, style, n.Value,
 		),
 		Path: "/" + parentKey,
@@ -138,8 +112,7 @@ func checkScalar(n *yaml.Node, parentKey string, out *[]Diagnostic, ruleID strin
 	})
 }
 
-// isYAML11BoolToken returns true for the YAML 1.1 boolean spellings.
-// We check lowercase form; the caller has already lowercased.
+// isYAML11BoolToken returns true for YAML 1.1 boolean spellings (caller has already lowercased).
 func isYAML11BoolToken(v string) bool {
 	switch v {
 	case "yes", "no", "on", "off", "y", "n":

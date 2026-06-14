@@ -76,7 +76,6 @@ func TestTerritoriesCommand_RegisteredOnRoot(t *testing.T) {
 	if !subs["list"] {
 		t.Errorf("territories list subcommand missing")
 	}
-	// --no-cache flag must be present on `territories list`.
 	listCmd := ter.Commands()[0]
 	for _, sc := range ter.Commands() {
 		if sc.Name() == "list" {
@@ -88,9 +87,8 @@ func TestTerritoriesCommand_RegisteredOnRoot(t *testing.T) {
 	}
 }
 
-// TestTerritories_JSONOutputStability_List asserts the TerritoryList JSON
-// shape: top-level "territories" key plus per-row "id"/"type"/"attributes"
-// keys are a contract for downstream LLM consumers.
+// JSON contract for downstream consumers: top-level "territories" plus per-row
+// "id"/"type"/"attributes" keys.
 func TestTerritories_JSONOutputStability_List(t *testing.T) {
 	list := TerritoryList{
 		Territories: []TerritoryView{
@@ -117,7 +115,7 @@ func TestTerritories_JSONOutputStability_List(t *testing.T) {
 	row := decoded.Territories[0]
 	for _, key := range []string{"id", "type", "attributes"} {
 		if _, ok := row[key]; !ok {
-			t.Errorf("missing per-row key %q — JSON contract drift. Got keys: %v", key, mapKeys(row))
+			t.Errorf("missing per-row key %q: JSON contract drift. Got keys: %v", key, mapKeys(row))
 		}
 	}
 	attrs, ok := row["attributes"].(map[string]any)
@@ -125,12 +123,10 @@ func TestTerritories_JSONOutputStability_List(t *testing.T) {
 		t.Fatalf("attributes is not an object: %T", row["attributes"])
 	}
 	if _, ok := attrs["currency"]; !ok {
-		t.Errorf("missing attribute key %q — JSON contract drift", "currency")
+		t.Errorf("missing attribute key %q: JSON contract drift", "currency")
 	}
 }
 
-// TestTerritories_FixtureReplay exercises fetchTerritories against the golden
-// fixture. Confirms paging-iterator integration plus typed decode.
 func TestTerritories_FixtureReplay(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/territories": {File: "territories_list"},
@@ -151,14 +147,10 @@ func TestTerritories_FixtureReplay(t *testing.T) {
 	}
 }
 
-// TestTerritories_CacheMissReadFresh exercises the cache miss + write path:
-// no file -> readTerritoriesCache returns false -> a subsequent
-// writeTerritoriesCache + read round-trip recovers the same payload.
 func TestTerritories_CacheMissReadFresh(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "territories.json")
 
-	// Miss: file does not exist.
 	if _, ok := readTerritoriesCache(path); ok {
 		t.Fatalf("expected miss on absent file, got hit")
 	}
@@ -172,7 +164,6 @@ func TestTerritories_CacheMissReadFresh(t *testing.T) {
 		t.Fatalf("writeTerritoriesCache: %v", err)
 	}
 
-	// Hit after write.
 	got, ok := readTerritoriesCache(path)
 	if !ok {
 		t.Fatalf("expected hit after write, got miss")
@@ -191,8 +182,7 @@ func TestTerritories_CacheMissReadFresh(t *testing.T) {
 	}
 }
 
-// TestTerritories_CacheStaleEntryMisses asserts the 24h TTL: a payload with a
-// SavedAt timestamp older than territoriesCacheTTL is treated as a miss.
+// A SavedAt older than territoriesCacheTTL must be treated as a miss.
 func TestTerritories_CacheStaleEntryMisses(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "territories.json")
@@ -218,9 +208,8 @@ func TestTerritories_CacheStaleEntryMisses(t *testing.T) {
 	}
 }
 
-// TestTerritories_CacheVersionMismatchMisses asserts that a cache file with an
-// older version envelope is treated as a miss — guards against on-disk
-// schema drift between Flightline releases.
+// An older version envelope must miss: guards against on-disk schema drift
+// between releases.
 func TestTerritories_CacheVersionMismatchMisses(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "territories.json")
@@ -239,8 +228,7 @@ func TestTerritories_CacheVersionMismatchMisses(t *testing.T) {
 	}
 }
 
-// TestTerritories_CacheCorruptMisses asserts that an unparseable cache file
-// fails gracefully (degrades to a live fetch on the next run).
+// A corrupt cache file must miss, degrading to a live fetch rather than erroring.
 func TestTerritories_CacheCorruptMisses(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "territories.json")
@@ -252,10 +240,8 @@ func TestTerritories_CacheCorruptMisses(t *testing.T) {
 	}
 }
 
-// TestTerritoriesCachePath_ResolvesUnderXDG sets XDG_CACHE_HOME and verifies
-// the path lands under it. macOS ignores XDG_CACHE_HOME (os.UserCacheDir uses
-// $HOME/Library/Caches), so on darwin we fall back to a HOME-anchored
-// assertion. Either way the path must end in flightline/territories.json.
+// macOS ignores XDG_CACHE_HOME (os.UserCacheDir uses $HOME/Library/Caches), so
+// only the flightline/territories.json suffix is asserted across platforms.
 func TestTerritoriesCachePath_ResolvesUnderXDG(t *testing.T) {
 	t.Setenv("XDG_CACHE_HOME", filepath.Join(t.TempDir(), "xdg-cache"))
 	t.Setenv("HOME", t.TempDir())

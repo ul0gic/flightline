@@ -1,29 +1,6 @@
 package asc
 
-// Performance metrics read surface (Xcode Organizer metrics).
-//
-// Apple ships the same metrics the Xcode Organizer "Metrics" tab shows via
-// the perfPowerMetrics endpoints — battery, memory, hangs, launches,
-// disk-writes, terminations, animation hitches.
-//
-//	GET /v1/apps/{id}/perfPowerMetrics    — app-level (cross-build aggregate)
-//	GET /v1/builds/{id}/perfPowerMetrics  — build-specific
-//
-// Both endpoints return Apple's `xcodeMetrics` envelope (NOT JSON:API):
-// a `version` string, an `insights` block summarizing trending-up /
-// regressions, and a `productData` array carrying per-platform metric
-// categories. Apple's response Content-Type is
-// `application/vnd.apple.xcode-metrics+json`; standard application/json
-// decoding works against the same body.
-//
-// Source:
-//
-//	jq '.components.schemas.xcodeMetrics' openapi.oas.json
-//	jq '.components.schemas.MetricsInsight' openapi.oas.json
-//	jq '.components.schemas.MetricCategory' openapi.oas.json
-
-// Apple-defined MetricCategory values, surfaced as named constants for
-// command code that filters / compares.
+// perfPowerMetrics returns Apple's xcodeMetrics envelope (NOT JSON:API); standard JSON decoding works.
 const (
 	MetricCategoryHang        = "HANG"
 	MetricCategoryLaunch      = "LAUNCH"
@@ -84,10 +61,8 @@ type PerfPowerMetricCategory struct {
 	Metrics    []PerfPowerMetricSnapshot `json:"metrics,omitempty"`
 }
 
-// PerfPowerMetricSnapshot is one metric (e.g. memory.peak) with its goal
-// bounds, unit, and dataset payload. Datasets are kept as raw JSON-shaped
-// maps to avoid pinning the deeply-nested numeric arrays Apple revises
-// across spec versions; consumers that need them decode further on demand.
+// PerfPowerMetricSnapshot is one metric (e.g. memory.peak) with goal bounds, unit, and datasets.
+// Datasets are raw maps to avoid pinning Apple's deeply-nested numeric arrays across spec revisions.
 type PerfPowerMetricSnapshot struct {
 	Identifier string                `json:"identifier,omitempty"`
 	GoalKeys   []PerfPowerMetricGoal `json:"goalKeys,omitempty"`

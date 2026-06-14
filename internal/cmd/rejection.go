@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -12,17 +13,9 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// resolutionCenterDisclaimer is printed at the end of the rejection report
-// in table mode AND included in the JSON output (as a top-level field).
-//
-// Apple does NOT expose the resolution-center reviewer text via the public
-// App Store Connect API. Flightline can show every API-visible signal (version
-// state, submission state, item states, build links) but cannot show the
-// reviewer's prose. Documenting this loudly is the entire point of the
-// command — without it, users assume Flightline is buggy or incomplete.
+// Apple does not expose resolution-center reviewer prose via the public API; surfacing this loudly is the command's whole point.
 const resolutionCenterDisclaimer = `Apple's resolution-center reviewer text is NOT in the public API. Flightline shows the API-visible state. To read the actual reviewer message, log into App Store Connect.`
 
-// RejectionItem is one item entry in the rejection report.
 type RejectionItem struct {
 	ID            string `json:"id"`
 	State         string `json:"state"`
@@ -30,7 +23,6 @@ type RejectionItem struct {
 	ReferenceID   string `json:"referenceId,omitempty"`
 }
 
-// RejectionSubmission is the review submission slice of the rejection report.
 type RejectionSubmission struct {
 	ID            string          `json:"id"`
 	State         string          `json:"state"`
@@ -39,7 +31,6 @@ type RejectionSubmission struct {
 	Items         []RejectionItem `json:"items"`
 }
 
-// RejectionVersion is the version slice of the rejection report.
 type RejectionVersion struct {
 	ID              string `json:"id"`
 	VersionString   string `json:"versionString"`
@@ -53,8 +44,6 @@ type RejectionVersion struct {
 	BuildState      string `json:"buildState,omitempty"`
 }
 
-// RejectionReport is the composed view: version + submission + items, plus
-// the loud documentation note callers must surface to humans.
 type RejectionReport struct {
 	BundleID   string               `json:"bundleId"`
 	Version    RejectionVersion     `json:"version"`
@@ -62,11 +51,6 @@ type RejectionReport struct {
 	Note       string               `json:"note"`
 }
 
-// TableRows implements TableRenderable for the rejection report.
-//
-// We render a vertical key/value layout because the report is dense — a
-// horizontal table with one column per field would be too wide for a
-// 100-column terminal.
 func (r RejectionReport) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
 	rows = [][]string{
@@ -117,10 +101,10 @@ state.
 ` + resolutionCenterDisclaimer + `
 
 Examples:
-  fline rejection com.example.myapp --version 1.0.1
-  fline rejection com.example.myapp --version 1.0.1 --output json | jq .submission.state`,
-	Example: `  fline rejection com.example.myapp --version 1.0.1
-  fline rejection com.example.myapp --version 1.0.1 --output json`,
+  flightline rejection com.example.myapp --version 1.0.1
+  flightline rejection com.example.myapp --version 1.0.1 --output json | jq .submission.state`,
+	Example: `  flightline rejection com.example.myapp --version 1.0.1
+  flightline rejection com.example.myapp --version 1.0.1 --output json`,
 }
 
 var (
@@ -140,7 +124,7 @@ func runRejection(cmd *cobra.Command, args []string) error {
 	versionStr := strings.TrimSpace(rejectionVersion)
 	platform := strings.TrimSpace(rejectionPlatform)
 	if versionStr == "" {
-		return fmt.Errorf("rejection: --version is required")
+		return errors.New("rejection: --version is required")
 	}
 
 	c, err := newClient()
@@ -157,9 +141,7 @@ func runRejection(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// In table mode, repeat the disclaimer on stderr so it's visible even
-	// when stdout is piped. In JSON mode, the disclaimer rides in the
-	// .note field — printing it on stderr too would be noisy for scripts.
+	// Table mode repeats the disclaimer on stderr (survives a piped stdout); JSON carries it in .note instead.
 	if outputMode() == "table" {
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "NOTE: "+resolutionCenterDisclaimer)
@@ -167,8 +149,6 @@ func runRejection(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// composeRejectionReport orchestrates the multi-call read sequence. Pure
-// helper for testability — no cobra/viper coupling.
 func composeRejectionReport(ctx context.Context, c *asc.Client, bundleID, versionStr, platform string) (RejectionReport, error) {
 	report := RejectionReport{
 		BundleID: bundleID,
@@ -195,22 +175,15 @@ func composeRejectionReport(ctx context.Context, c *asc.Client, bundleID, versio
 		ReleaseType:     versionView.Attributes.ReleaseType,
 	}
 
-	// Build relationship — present when the developer has attached one.
 	if buildID := relationshipID(versionView.Relationships, "build"); buildID != "" {
 		report.Version.BuildID = buildID
+		// Build-fetch failure is non-fatal: the build ID alone is enough signal, so don't break the composite read.
 		if buildAttrs, err := fetchBuild(ctx, c, buildID); err == nil {
 			report.Version.BuildVersion = buildAttrs.Version
 			report.Version.BuildState = buildAttrs.ProcessingState
 		}
-		// A 4xx on the build fetch is non-fatal for the report — the build
-		// ID itself is enough signal that one was attached. We deliberately
-		// swallow that error to avoid one transient failure breaking the
-		// composite read; the user still sees buildId in JSON.
 	}
 
-	// Find the review submission that contains an item referencing this
-	// version. We iterate all submissions for the app — for personal-account
-	// scale this is a handful, not a problem.
 	submission, items, err := findSubmissionForVersion(ctx, c, appID, versionView.ID)
 	if err != nil {
 		return report, err
@@ -237,16 +210,11 @@ func composeRejectionReport(ctx context.Context, c *asc.Client, bundleID, versio
 	return report, nil
 }
 
-// versionFull is the read result of fetchVersion: the typed envelope plus
-// the raw relationships block (used to discover the linked build ID).
 type versionFull struct {
 	asc.Resource[asc.VersionAttributes]
 }
 
-// fetchVersion retrieves a single version by versionString+platform via the
-// app-scoped list endpoint with a limit=1 filter. Same shape as runVersionsGet
-// but returns the full Resource (with relationships) rather than the
-// flattened VersionView used by the cmd.
+// Returns the full Resource (with relationships) needed to discover the linked build ID.
 func fetchVersion(ctx context.Context, c *asc.Client, appID, versionStr, platform string) (versionFull, error) {
 	q := url.Values{
 		"filter[versionString]": {versionStr},
@@ -267,8 +235,6 @@ func fetchVersion(ctx context.Context, c *asc.Client, appID, versionStr, platfor
 	return versionFull{Resource: page.Data[0]}, nil
 }
 
-// fetchBuild retrieves a single build by ID. Returns the attributes only —
-// callers don't need relationships here.
 func fetchBuild(ctx context.Context, c *asc.Client, buildID string) (asc.BuildAttributes, error) {
 	resp, err := asc.Get[asc.Single[asc.BuildAttributes]](ctx, c, "/v1/builds/"+buildID, nil)
 	if err != nil {
@@ -277,11 +243,7 @@ func fetchBuild(ctx context.Context, c *asc.Client, buildID string) (asc.BuildAt
 	return resp.Data.Attributes, nil
 }
 
-// findSubmissionForVersion walks every review submission for the app and
-// returns the first one with an item referencing the given version ID.
-//
-// Returns (nil, nil, nil) when no submission is found — that's a valid
-// state (developer hasn't submitted this version yet).
+// Returns (nil, nil, nil) when no submission references the version: a valid not-yet-submitted state.
 func findSubmissionForVersion(ctx context.Context, c *asc.Client, appID, versionID string) (*ReviewSubmissionView, []ReviewSubmissionItemView, error) {
 	q := url.Values{"filter[app]": {appID}, "limit": {"200"}}
 	for page, err := range asc.Pages[asc.ReviewSubmissionAttributes](ctx, c, "/v1/reviewSubmissions", q) {
@@ -302,8 +264,6 @@ func findSubmissionForVersion(ctx context.Context, c *asc.Client, appID, version
 	return nil, nil, nil
 }
 
-// itemReferencesVersion reports whether any item in the slice refers to the
-// given appStoreVersion ID via its relationship.
 func itemReferencesVersion(items []ReviewSubmissionItemView, versionID string) bool {
 	for _, it := range items {
 		if it.ReferenceType == "appStoreVersions" && it.ReferenceID == versionID {
@@ -313,8 +273,6 @@ func itemReferencesVersion(items []ReviewSubmissionItemView, versionID string) b
 	return false
 }
 
-// relationshipID extracts the {type,id}.id from a named to-one relationship
-// in the relationships map. Returns empty when missing or null.
 func relationshipID(rels map[string]asc.Relationship, name string) string {
 	rel, ok := rels[name]
 	if !ok {

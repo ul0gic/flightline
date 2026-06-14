@@ -120,7 +120,6 @@ func TestExtractItemReference_NoReferenceReturnsEmpty(t *testing.T) {
 	}
 }
 
-// TestReviewSubmissions_JSONOutputStability_List asserts the contract.
 func TestReviewSubmissions_JSONOutputStability_List(t *testing.T) {
 	list := ReviewSubmissionList{Submissions: []ReviewSubmissionView{
 		{
@@ -152,7 +151,10 @@ func TestReviewSubmissions_JSONOutputStability_List(t *testing.T) {
 			t.Errorf("missing key %q. Got %v", key, mapKeys(row))
 		}
 	}
-	attrs := row["attributes"].(map[string]any)
+	attrs, ok := row["attributes"].(map[string]any)
+	if !ok {
+		t.Fatalf("attributes is %T, want object", row["attributes"])
+	}
 	for _, key := range []string{"platform", "submittedDate", "state"} {
 		if _, ok := attrs[key]; !ok {
 			t.Errorf("missing attribute key %q. Got %v", key, mapKeys(attrs))
@@ -160,8 +162,6 @@ func TestReviewSubmissions_JSONOutputStability_List(t *testing.T) {
 	}
 }
 
-// TestReviewSubmissions_JSONOutputStability_Items asserts the items contract,
-// including the flattened referenceType/referenceId fields.
 func TestReviewSubmissions_JSONOutputStability_Items(t *testing.T) {
 	list := ReviewSubmissionItemList{Items: []ReviewSubmissionItemView{
 		{

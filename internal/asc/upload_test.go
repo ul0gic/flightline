@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -16,55 +17,34 @@ import (
 	"testing"
 )
 
-// uploadTestPayload is the deterministic 16-byte body the upload tests
-// stream through reserve → 2 chunks → commit. Two chunks of 8 bytes each
-// matches the offsets/lengths in the reserve fixtures.
+// uploadTestPayload is the 16-byte body; two 8-byte chunks match the reserve fixtures.
 var uploadTestPayload = []byte("ABCDEFGH01234567")
 
-// expectedUploadMD5 is the MD5 hex of uploadTestPayload, computed once at
-// init time. Used as a golden value the test asserts on rather than re-
-// hashing in the test (which would tautologise the function under test).
+// expectedUploadMD5 is the golden MD5 hex of uploadTestPayload, computed here rather
+// than via the function under test to avoid tautology.
 var expectedUploadMD5 = func() string {
 	h := md5.New() //nolint:gosec // MD5 is the wire format under test
 	_, _ = h.Write(uploadTestPayload)
 	return hex.EncodeToString(h.Sum(nil))
 }()
 
-// uploadFixture is a minimal harness that:
-//   - Serves the reserve POST + commit PATCH for one of the asset kinds.
-//   - Serves the chunk PUTs at /chunks/<idx>, asserting that NO
-//     Authorization header arrived on inbound chunk requests.
+// uploadFixture serves reserve POST + commit PATCH and chunk PUTs, asserting no
+// Authorization header arrives on inbound chunk requests.
 type uploadFixture struct {
 	t   *testing.T
 	srv *httptest.Server
 
-	// reserveFixture is the testdata/golden/upload/<file>.json basename
-	// (sans extension) the harness loads on the reserve POST. The
-	// __SIGNED_URL_BASE__ token is replaced with srv.URL at serve time.
+	// reserveFixture is the upload/<file> basename; __SIGNED_URL_BASE__ is swapped for srv.URL.
 	reserveFixture string
 
-	// commitPath is the resource URL the commit PATCH targets, e.g.
-	// "/v1/appScreenshots/upload-asset-test-1".
-	commitPath string
-
-	// reservePath is the create endpoint, e.g. "/v1/appScreenshots".
+	commitPath  string
 	reservePath string
 
-	// failChunkIdx, when non-negative, makes /chunks/<idx> return 500
-	// instead of 200 on its first hit. Used to simulate a mid-upload
-	// failure for the resume tests.
+	// failChunkIdx, when non-negative, makes /chunks/<idx> return 500 once.
 	failChunkIdx int
 
-	// chunkBytes records the body of each PUT, keyed by chunk index, so
-	// tests can verify the right slice landed on the right chunk.
-	chunkBytes map[int][]byte
-
-	// chunkAuthSeen flips to true if any chunk PUT carried an
-	// Authorization header (a contract violation).
+	chunkBytes    map[int][]byte
 	chunkAuthSeen atomic.Bool
-
-	// chunkPutCount counts inbound chunk PUTs (used by the resume test
-	// to assert chunk 0 is NOT re-PUT after resume).
 	chunkPutCount [2]atomic.Int32
 }
 
@@ -99,7 +79,6 @@ func (f *uploadFixture) handle(w http.ResponseWriter, r *http.Request) {
 		return
 
 	case r.Method == http.MethodGet && r.URL.Path == f.commitPath:
-		// Resume path: GET /v1/<kind>/<id> to refresh upload operations.
 		body, err := readFixture("upload/" + f.reserveFixture)
 		if err != nil {
 			f.t.Errorf("load reserve fixture (refresh): %v", err)
@@ -158,8 +137,7 @@ func (f *uploadFixture) handle(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(`{"errors":[{"id":"upload-fixture-no-route","title":"no route"}]}`))
 }
 
-// readAllLimit drains up to n bytes off r. Used in tests where we know the
-// body is bounded.
+// readAllLimit drains up to n bytes off r.
 func readAllLimit(r interface{ Read([]byte) (int, error) }, n int) ([]byte, error) {
 	out := make([]byte, 0, n)
 	buf := make([]byte, 4096)
@@ -169,30 +147,30 @@ func readAllLimit(r interface{ Read([]byte) (int, error) }, n int) ([]byte, erro
 			out = append(out, buf[:nn]...)
 		}
 		if err != nil {
-			return out, nil
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return out, err
 		}
 	}
 	return out, nil
 }
 
-// uploadFixtureClient returns a Client wired to f.srv with an ephemeral
-// .p8. Mirrors fixtureClient but accepts an *uploadFixture wrapper.
+// uploadFixtureClient returns a Client wired to f.srv.
 func uploadFixtureClient(t *testing.T, f *uploadFixture) *Client {
 	t.Helper()
 	return fixtureClient(t, f.srv)
 }
 
-// withUploadCacheRoot points uploadCacheRoot() at t.TempDir() for the
-// duration of the test via the FLINE_CACHE_HOME escape hatch.
+// withUploadCacheRoot points uploadCacheRoot() at t.TempDir() via FLIGHTLINE_CACHE_HOME.
 func withUploadCacheRoot(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	t.Setenv("FLINE_CACHE_HOME", dir)
+	t.Setenv("FLIGHTLINE_CACHE_HOME", dir)
 	return dir
 }
 
-// writeUploadPayload writes uploadTestPayload to t.TempDir()/<name> and
-// returns the absolute path.
+// writeUploadPayload writes uploadTestPayload to t.TempDir()/<name> and returns the path.
 func writeUploadPayload(t *testing.T, name string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), name)
@@ -201,11 +179,6 @@ func writeUploadPayload(t *testing.T, name string) string {
 	}
 	return path
 }
-
-// ---------------------------------------------------------------------------
-// Happy-path: reserve → 2 chunks → commit, with the no-Authorization-header
-// invariant on chunk PUTs.
-// ---------------------------------------------------------------------------
 
 func TestUpload_HappyPath_AppScreenshot(t *testing.T) {
 	withUploadCacheRoot(t)
@@ -235,7 +208,7 @@ func TestUpload_HappyPath_AppScreenshot(t *testing.T) {
 		t.Errorf("Checksum = %q, want %q", got.Checksum, expectedUploadMD5)
 	}
 	if f.chunkAuthSeen.Load() {
-		t.Fatal("chunk PUT carried Authorization header — Apple's CDN would reject")
+		t.Fatal("chunk PUT carried Authorization header: Apple's CDN would reject")
 	}
 	if !bytes.Equal(f.chunkBytes[0], uploadTestPayload[0:8]) {
 		t.Errorf("chunk 0 bytes = %q, want %q", f.chunkBytes[0], uploadTestPayload[0:8])
@@ -270,14 +243,9 @@ func TestUpload_HappyPath_IAPReviewScreenshot(t *testing.T) {
 		t.Errorf("Checksum = %q, want %q", got.Checksum, expectedUploadMD5)
 	}
 	if f.chunkAuthSeen.Load() {
-		t.Fatal("chunk PUT carried Authorization header — Apple's CDN would reject")
+		t.Fatal("chunk PUT carried Authorization header: Apple's CDN would reject")
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Resume from checkpoint — pre-write a checkpoint with chunk 0 already
-// uploaded; assert only chunk 1 is PUT'd.
-// ---------------------------------------------------------------------------
 
 func TestUpload_ResumesFromCheckpoint(t *testing.T) {
 	root := withUploadCacheRoot(t)
@@ -328,10 +296,6 @@ func TestUpload_ResumesFromCheckpoint(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// File changed since checkpoint — assert typed ErrCheckpointMismatch.
-// ---------------------------------------------------------------------------
-
 func TestUpload_RejectsCheckpointWithDifferentMD5(t *testing.T) {
 	root := withUploadCacheRoot(t)
 	f := newUploadFixture(t,
@@ -376,10 +340,6 @@ func TestUpload_RejectsCheckpointWithDifferentMD5(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Successful commit removes the checkpoint.
-// ---------------------------------------------------------------------------
-
 func TestUpload_RemovesCheckpointAfterCommit(t *testing.T) {
 	root := withUploadCacheRoot(t)
 	f := newUploadFixture(t,
@@ -403,11 +363,6 @@ func TestUpload_RemovesCheckpointAfterCommit(t *testing.T) {
 		t.Errorf("checkpoint at %s persists after successful commit (err=%v)", cpPath, err)
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Mid-upload failure persists a checkpoint; the on-disk shape exposes
-// chunk 0 as already-uploaded so a resume can skip it.
-// ---------------------------------------------------------------------------
 
 func TestUpload_PersistsCheckpointOnChunkFailure(t *testing.T) {
 	root := withUploadCacheRoot(t)
@@ -451,10 +406,6 @@ func TestUpload_PersistsCheckpointOnChunkFailure(t *testing.T) {
 		t.Errorf("checkpoint UploadedChunks = %v, want [0]", cp.UploadedChunks)
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Validation paths.
-// ---------------------------------------------------------------------------
 
 func TestUpload_RejectsZeroAssetKind(t *testing.T) {
 	withUploadCacheRoot(t)
@@ -517,10 +468,6 @@ func TestUpload_RejectsMissingFile(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// MD5 computation — golden vector against a known input.
-// ---------------------------------------------------------------------------
-
 func TestComputeFileMD5_GoldenVector(t *testing.T) {
 	tmp := filepath.Join(t.TempDir(), "input.bin")
 	if err := os.WriteFile(tmp, uploadTestPayload, 0o600); err != nil {
@@ -535,12 +482,8 @@ func TestComputeFileMD5_GoldenVector(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Atomic checkpoint write — same chmod-0500 torture as AsyncState.
-// Locks the upload cache subdir read-only so CreateTemp + Rename fail; the
-// pre-existing checkpoint file must be byte-equivalent to its prior state.
-// ---------------------------------------------------------------------------
-
+// Locks the cache subdir read-only so CreateTemp + Rename fail; the prior
+// checkpoint file must stay byte-equivalent.
 func TestPersistCheckpoint_AtomicWriteFailurePreservesOriginal(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root bypasses directory permission checks")
@@ -594,10 +537,6 @@ func TestPersistCheckpoint_AtomicWriteFailurePreservesOriginal(t *testing.T) {
 		t.Fatalf("failed persist corrupted the original checkpoint\nbefore:\n%s\nafter:\n%s", before, after)
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Path-traversal rejection on asset IDs.
-// ---------------------------------------------------------------------------
 
 func TestUploadCheckpointPath_RejectsTraversal(t *testing.T) {
 	withUploadCacheRoot(t)

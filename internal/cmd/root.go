@@ -11,11 +11,11 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "fline",
-	Short: "Single-binary Go CLI for App Store Connect",
-	Long: `Flightline turns App Store Connect into a structured, declarative surface —
+	Use:   "flightline",
+	Short: "App Store as Code: a declarative CLI for App Store Connect",
+	Long: `Flightline turns App Store Connect into a structured, declarative surface:
 read the entire account state, lint a desired-state YAML against it, preflight
-every Apple rejection rule we know about, and apply changes idempotently —
+every Apple rejection rule we know about, and apply changes idempotently,
 so submissions stop being a clerical landmine.`,
 	SilenceUsage: true,
 }
@@ -43,20 +43,20 @@ func init() {
 }
 
 func initConfig() {
-	viper.SetEnvPrefix("FLINE")
+	viper.SetEnvPrefix("FLIGHTLINE")
 	viper.AutomaticEnv()
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 
 	// App Store Connect creds via the same env names as the legacy `asc` tool,
 	// so users can move to flightline without touching ~/.zshrc.
-	_ = viper.BindEnv("key_id", "APP_STORE_CONNECT_KEY_ID", "FLINE_KEY_ID")
-	_ = viper.BindEnv("issuer_id", "APP_STORE_CONNECT_ISSUER_ID", "FLINE_ISSUER_ID")
-	_ = viper.BindEnv("vendor_number", "APP_STORE_CONNECT_VENDOR_NUMBER", "FLINE_VENDOR_NUMBER")
+	_ = viper.BindEnv("key_id", "APP_STORE_CONNECT_KEY_ID", "FLIGHTLINE_KEY_ID")
+	_ = viper.BindEnv("issuer_id", "APP_STORE_CONNECT_ISSUER_ID", "FLIGHTLINE_ISSUER_ID")
+	_ = viper.BindEnv("vendor_number", "APP_STORE_CONNECT_VENDOR_NUMBER", "FLIGHTLINE_VENDOR_NUMBER")
 
 	if cfg, _ := rootCmd.PersistentFlags().GetString("config"); cfg != "" {
 		viper.SetConfigFile(cfg)
 		if err := viper.ReadInConfig(); err != nil {
-			fmt.Fprintf(os.Stderr, "fline: config file %s not readable: %v\n", cfg, err)
+			fmt.Fprintf(os.Stderr, "flightline: config file %s not readable: %v\n", cfg, err)
 			os.Exit(1)
 		}
 		return

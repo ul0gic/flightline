@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -10,24 +11,18 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// IAPView is one row of the iap list/get output.
 type IAPView struct {
 	ID         string            `json:"id"`
 	Type       string            `json:"type"`
 	Attributes asc.IAPAttributes `json:"attributes"`
-	// ReviewScreenshotURL is the templated URL of the IAP's App Store review
-	// screenshot when one is attached. Empty when not set or when the
-	// screenshot relationship was not requested (list mode skips the extra
-	// hop). Populated by `iap get` only.
+	// Populated by `iap get` only; list mode skips the extra relationship hop.
 	ReviewScreenshotURL string `json:"reviewScreenshotUrl,omitempty"`
 }
 
-// IAPList is the table-aware view for `iap list`.
 type IAPList struct {
 	IAPs []IAPView `json:"iaps"`
 }
 
-// TableRows implements TableRenderable for the iap list view.
 func (l IAPList) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"PRODUCT_ID", "NAME", "TYPE", "STATE", "ID"}
 	rows = make([][]string, 0, len(l.IAPs))
@@ -44,7 +39,6 @@ func (l IAPList) TableRows() (headers []string, rows [][]string) {
 	return headers, rows
 }
 
-// TableRows for a single IAP. Vertical layout reads better for one record.
 func (v *IAPView) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
 	rows = [][]string{
@@ -62,19 +56,16 @@ func (v *IAPView) TableRows() (headers []string, rows [][]string) {
 	return headers, rows
 }
 
-// IAPLocalizationView is one row of the iap localizations list output.
 type IAPLocalizationView struct {
 	ID         string                        `json:"id"`
 	Type       string                        `json:"type"`
 	Attributes asc.IAPLocalizationAttributes `json:"attributes"`
 }
 
-// IAPLocalizationList is the table-aware view for `iap localizations list`.
 type IAPLocalizationList struct {
 	Localizations []IAPLocalizationView `json:"localizations"`
 }
 
-// TableRows implements TableRenderable for the iap localizations list view.
 func (l IAPLocalizationList) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"LOCALE", "NAME", "STATE", "ID"}
 	rows = make([][]string, 0, len(l.Localizations))
@@ -96,7 +87,7 @@ var iapCmd = &cobra.Command{
 	Long: `iap groups read commands over the /v2/inAppPurchases resource.
 
 Auto-renewable subscriptions live under a separate /v1/subscriptionGroups
-resource and are not handled here — see ` + "`fline subscriptions`" + `.`,
+resource and are not handled here: see ` + "`flightline subscriptions`" + `.`,
 }
 
 var iapListCmd = &cobra.Command{
@@ -105,9 +96,9 @@ var iapListCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runIAPList,
-	Example: `  fline iap list com.example.myapp
-  fline iap list com.example.myapp --type CONSUMABLE
-  fline iap list com.example.myapp --output json | jq -r '.iaps[].attributes.productId'`,
+	Example: `  flightline iap list com.example.myapp
+  flightline iap list com.example.myapp --type CONSUMABLE
+  flightline iap list com.example.myapp --output json | jq -r '.iaps[].attributes.productId'`,
 }
 
 var iapGetCmd = &cobra.Command{
@@ -116,12 +107,10 @@ var iapGetCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runIAPGet,
-	Example: `  fline iap get com.example.myapp --product com.example.myapp.lifetime
-  fline iap get com.example.myapp --product com.example.myapp.lifetime --output json`,
+	Example: `  flightline iap get com.example.myapp --product com.example.myapp.lifetime
+  flightline iap get com.example.myapp --product com.example.myapp.lifetime --output json`,
 }
 
-// iapLocalizationsCmd groups localizations subcommands. Wired under iapCmd
-// so the user-facing path is `fline iap localizations list`.
 var iapLocalizationsCmd = &cobra.Command{
 	Use:   "localizations",
 	Short: "Manage and inspect IAP localizations",
@@ -133,12 +122,10 @@ var iapLocalizationsListCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runIAPLocalizationsList,
-	Example: `  fline iap localizations list com.example.myapp --product com.example.myapp.lifetime
-  fline iap localizations list com.example.myapp --product com.example.myapp.lifetime --output json`,
+	Example: `  flightline iap localizations list com.example.myapp --product com.example.myapp.lifetime
+  flightline iap localizations list com.example.myapp --product com.example.myapp.lifetime --output json`,
 }
 
-// Per-subcommand flag state. Separate variables so cobra defaults don't
-// collide between siblings.
 var (
 	iapListType                 string
 	iapListLimit                int
@@ -193,7 +180,7 @@ func runIAPGet(cmd *cobra.Command, args []string) error {
 	bundleID := args[0]
 	productID := strings.TrimSpace(iapGetProduct)
 	if productID == "" {
-		return fmt.Errorf("iap: --product is required")
+		return errors.New("iap: --product is required")
 	}
 
 	c, err := newClient()
@@ -212,10 +199,7 @@ func runIAPGet(cmd *cobra.Command, args []string) error {
 		Attributes: attrs,
 	}
 
-	// Best-effort fetch of the review screenshot URL. A missing screenshot is
-	// the common case (Apple returns 200 with empty data, or 404 for resources
-	// that have never had one); both are treated as "no screenshot" rather
-	// than fatal — the user can still see core IAP data.
+	// Missing screenshot (Apple's 200-with-empty-data or 404) is the common case, not fatal.
 	if shotURL, err := fetchIAPReviewScreenshotURL(cmd.Context(), c, id); err == nil {
 		view.ReviewScreenshotURL = shotURL
 	}
@@ -227,7 +211,7 @@ func runIAPLocalizationsList(cmd *cobra.Command, args []string) error {
 	bundleID := args[0]
 	productID := strings.TrimSpace(iapLocalizationsListProduct)
 	if productID == "" {
-		return fmt.Errorf("iap: --product is required")
+		return errors.New("iap: --product is required")
 	}
 
 	c, err := newClient()
@@ -252,10 +236,7 @@ func runIAPLocalizationsList(cmd *cobra.Command, args []string) error {
 	return Render(IAPLocalizationList{Localizations: views}, outputMode())
 }
 
-// findIAPByProductID resolves bundle → appID, then filters
-// /v1/apps/{appID}/inAppPurchasesV2?filter[productId]=<productID> and returns
-// (asc-id, attributes). Errors carry the bundleId AND productId so users see
-// what's missing.
+// Errors carry both bundleId and productId so the user sees exactly what was missing.
 func findIAPByProductID(ctx context.Context, c *asc.Client, bundleID, productID string) (string, asc.IAPAttributes, error) {
 	appID, err := resolveAppID(ctx, c, bundleID)
 	if err != nil {
@@ -277,7 +258,6 @@ func findIAPByProductID(ctx context.Context, c *asc.Client, bundleID, productID 
 	return page.Data[0].ID, page.Data[0].Attributes, nil
 }
 
-// collectIAPs walks the paging iterator and returns flattened IAPView rows.
 func collectIAPs(ctx context.Context, c *asc.Client, path string, query url.Values, limit int) ([]IAPView, error) {
 	out := make([]IAPView, 0, defaultListCap(limit))
 	for page, err := range asc.Pages[asc.IAPAttributes](ctx, c, path, query) {
@@ -294,8 +274,6 @@ func collectIAPs(ctx context.Context, c *asc.Client, path string, query url.Valu
 	return out, nil
 }
 
-// collectIAPLocalizations walks the paging iterator and returns flattened
-// IAPLocalizationView rows.
 func collectIAPLocalizations(ctx context.Context, c *asc.Client, path string, query url.Values, limit int) ([]IAPLocalizationView, error) {
 	out := make([]IAPLocalizationView, 0, defaultListCap(limit))
 	for page, err := range asc.Pages[asc.IAPLocalizationAttributes](ctx, c, path, query) {
@@ -312,11 +290,7 @@ func collectIAPLocalizations(ctx context.Context, c *asc.Client, path string, qu
 	return out, nil
 }
 
-// fetchIAPReviewScreenshotURL pulls the IAP's appStoreReviewScreenshot
-// relationship and returns the templated URL of the rendered image asset.
-// Returns empty string + nil if the relationship has no data block (no
-// screenshot uploaded). Apple's API returns 200 with `data: null` in that
-// case rather than a 404.
+// Apple returns 200 with `data: null` (not 404) when no screenshot is uploaded; that surfaces as "".
 func fetchIAPReviewScreenshotURL(ctx context.Context, c *asc.Client, iapID string) (string, error) {
 	resp, err := asc.Get[asc.Single[asc.IAPReviewScreenshotAttributes]](
 		ctx, c, "/v2/inAppPurchases/"+iapID+"/appStoreReviewScreenshot", nil,

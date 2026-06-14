@@ -92,7 +92,7 @@ func TestPerfPowerQuery(t *testing.T) {
 	if q.Get("filter[deviceType]") != "iPhone15,3" {
 		t.Errorf("filter[deviceType] = %q", q.Get("filter[deviceType]"))
 	}
-	// Empty inputs are skipped — defaults to no filter.
+	// Empty inputs are skipped: defaults to no filter.
 	q2 := perfPowerQuery("", "", "")
 	if len(q2) != 0 {
 		t.Errorf("empty inputs produced query: %v", q2)
@@ -137,7 +137,7 @@ func TestPerformance_JSONOutputStability_App(t *testing.T) {
 	}
 	for _, key := range []string{"bundleId", "version"} {
 		if _, ok := decoded[key]; !ok {
-			t.Errorf("missing top-level key %q — JSON contract drift", key)
+			t.Errorf("missing top-level key %q: JSON contract drift", key)
 		}
 	}
 }

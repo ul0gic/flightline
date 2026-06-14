@@ -7,9 +7,8 @@ import (
 	"github.com/ul0gic/flightline/internal/config"
 )
 
-// TestWriteStateYAML_HeaderPresent — every fetched state.yaml must
-// carry the yaml-language-server schema directive so editors can
-// autocomplete.
+// TestWriteStateYAML_HeaderPresent: fetched state.yaml carries the
+// yaml-language-server schema directive for editor autocomplete.
 func TestWriteStateYAML_HeaderPresent(t *testing.T) {
 	cp := "© 2026"
 	cpPtr := &cp

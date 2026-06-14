@@ -1,28 +1,6 @@
+// State persists to $XDG_STATE_HOME/flightline/<bundleId>/<reportClass>.json using atomic rename.
+// XDG_STATE_HOME is used (not cache): the OS may evict cache, and losing an in-flight poll is unrecoverable.
 package asc
-
-// State persistence for async-poll lifecycles.
-//
-// The analytics request → poll → download flow can take minutes to hours per
-// request, so an interruption (Ctrl-C, ssh disconnect, machine reboot) must
-// not lose work already done. This file owns the JSON-on-disk format and
-// the atomic-rename writer that keeps it safe.
-//
-// On-disk layout:
-//
-//   $XDG_STATE_HOME/flightline/<bundleId>/<reportClass>.json
-//
-// where <reportClass> ∈ {"analytics", "sales", "finance"} and bundleId is
-// the dotted reverse-DNS app identifier (e.g. "com.example.app"). The path
-// pattern is intentional: state is per-app and per-class, so concurrent
-// flows across multiple apps don't collide and a finance fetch can't trash
-// an in-flight analytics poll.
-//
-// XDG_STATE_HOME is the standard for "data files held to know how to restore
-// previous state of the application" (per the XDG base-dir spec). On macOS
-// and Linux, $HOME/.local/state/flightline/ is the canonical fallback. We do
-// NOT use os.UserCacheDir(): cache implies the OS may delete it, and losing
-// a multi-hour analytics request mid-poll is exactly what we're guarding
-// against.
 
 import (
 	"encoding/json"
@@ -35,47 +13,28 @@ import (
 	"time"
 )
 
-// AsyncStateSchemaVersion is the on-disk JSON schema version. Bump when the
-// shape of AsyncState changes; LoadAsyncState rejects files with an
-// unrecognised SchemaVersion (forward-incompat by design — a Flightline from
-// the future shouldn't silently misread state from an older Flightline).
+// AsyncStateSchemaVersion is the on-disk JSON schema version.
+// Bump when AsyncState's shape changes; LoadAsyncState rejects unrecognised versions (forward-incompat by design).
 const AsyncStateSchemaVersion = 1
 
-// ReportClass enumerates the three async-poll report families. Used as the
-// state-file basename so callers can't collide flows.
+// ReportClass enumerates the three async-poll report families; used as the state-file basename.
 type ReportClass string
 
-// Report-class literals. Keep in sync with the file naming convention.
 const (
 	ReportClassAnalytics ReportClass = "analytics"
 	ReportClassSales     ReportClass = "sales"
 	ReportClassFinance   ReportClass = "finance"
 )
 
-// PersistedAnalyticsReport is the on-disk shape of one report row inside
-// AsyncState. Mirrors AnalyticsReport but stays JSON-stable across versions
-// of the in-memory struct.
+// PersistedAnalyticsReport is the on-disk shape of one report row inside AsyncState.
+// Mirrors AnalyticsReport but stays JSON-stable across versions of the in-memory struct.
 type PersistedAnalyticsReport struct {
 	ID       ReportID          `json:"id"`
 	Name     string            `json:"name,omitempty"`
 	Category AnalyticsCategory `json:"category,omitempty"`
 }
 
-// AsyncState is the on-disk shape persisted between poll runs.
-//
-// Stable JSON contract:
-//   - SchemaVersion gates forward-compat.
-//   - BundleID + ReportClass identify the flow.
-//   - RequestID is the Apple-assigned analytics request ID (empty for
-//     sales/finance, which are synchronous and persist only the most-recent
-//     fetch metadata).
-//   - SubmittedAt / LastPollAt are RFC3339 UTC timestamps.
-//   - Status mirrors Apple's request state (free-form string; Apple has
-//     no public enum but the values seen are "queued", "processing",
-//     "completed", "failed", plus our own "stopped" for ONGOING-inactivity).
-//   - Reports is the de-dup list of reports observed via PollAnalyticsReport.
-//   - DownloadedSegments tracks segment IDs already downloaded so the resume
-//     path can skip them.
+// AsyncState is the on-disk shape persisted between poll runs; BundleID+ReportClass compose the file path.
 type AsyncState struct {
 	SchemaVersion      int                        `json:"schemaVersion"`
 	BundleID           string                     `json:"bundleId"`
@@ -88,22 +47,11 @@ type AsyncState struct {
 	DownloadedSegments []string                   `json:"downloadedSegments,omitempty"`
 }
 
-// ErrStateCorrupt is returned by LoadAsyncState when the file exists but
-// cannot be decoded (truncated write, JSON corruption, schema-version
-// mismatch).
+// ErrStateCorrupt is returned by LoadAsyncState when the file exists but cannot be decoded
+// (truncated write, JSON corruption, or schema-version mismatch).
 var ErrStateCorrupt = errors.New("asc: async state file is corrupt or unreadable")
 
-// PersistAsyncState writes state to disk under
-// $XDG_STATE_HOME/flightline/<bundleId>/<reportClass>.json using an atomic
-// rename. If a Ctrl-C lands mid-write, the original file is preserved
-// untouched.
-//
-// Validates that BundleID and ReportClass are present (those are the file
-// path components — empty values would write to a wrong location).
-//
-// SchemaVersion is forced to AsyncStateSchemaVersion regardless of caller
-// intent. Callers should never set it manually; PersistAsyncState owns the
-// invariant.
+// PersistAsyncState writes state atomically (tmp + rename). SchemaVersion is always forced to AsyncStateSchemaVersion.
 func PersistAsyncState(state AsyncState) error {
 	if state.BundleID == "" {
 		return errors.New("asc: PersistAsyncState: BundleID is required")
@@ -162,15 +110,8 @@ func PersistAsyncState(state AsyncState) error {
 	return nil
 }
 
-// LoadAsyncState reads the state file for (bundleID, reportClass) and
-// returns the decoded AsyncState. If no file exists, returns
-// (zero, fs.ErrNotExist) — callers should branch on errors.Is(err,
-// os.ErrNotExist) for the "no prior state" path.
-//
-// On a malformed file (truncated write, JSON syntax error, unknown schema
-// version), returns ErrStateCorrupt. Callers should NOT silently fall back
-// to a fresh state — corruption is a signal to ask the user, not to
-// pretend the prior request never happened.
+// LoadAsyncState reads state for (bundleID, reportClass). Returns os.ErrNotExist when no file exists.
+// Returns ErrStateCorrupt on malformed or schema-mismatched files; do not silently fall back to fresh state.
 func LoadAsyncState(bundleID string, reportClass ReportClass) (AsyncState, error) {
 	if bundleID == "" {
 		return AsyncState{}, errors.New("asc: LoadAsyncState: bundleID is required")
@@ -202,17 +143,12 @@ func LoadAsyncState(bundleID string, reportClass ReportClass) (AsyncState, error
 	return state, nil
 }
 
-// StateFilePath returns the absolute on-disk path where (bundleID,
-// reportClass) state would live. Exposed for tests and for diagnostic
-// commands like `fline analytics resume --where`. Validates that
-// bundleID is well-formed (no path traversal).
+// StateFilePath returns the absolute on-disk path for (bundleID, reportClass) state.
+// Exposed for tests and diagnostic commands; validates bundleID (no path traversal).
 func StateFilePath(bundleID string, reportClass ReportClass) (string, error) {
 	return stateFilePath(bundleID, reportClass)
 }
 
-// stateFilePath composes the absolute path. Returns an error when the
-// bundleID contains characters that would escape the per-app subdirectory
-// (path separators, "..").
 func stateFilePath(bundleID string, reportClass ReportClass) (string, error) {
 	if err := validateBundleIDForPath(bundleID); err != nil {
 		return "", err
@@ -227,10 +163,8 @@ func stateFilePath(bundleID string, reportClass ReportClass) (string, error) {
 	return filepath.Join(root, bundleID, string(reportClass)+".json"), nil
 }
 
-// validateBundleIDForPath rejects bundle IDs that would escape the
-// per-app subdirectory or otherwise produce surprising paths. Apple's
-// bundle IDs are dotted reverse-DNS strings; anything with a path separator
-// or ".." is hostile.
+// validateBundleIDForPath rejects bundle IDs that could escape the per-app subdirectory.
+// Apple's are dotted reverse-DNS; a path separator or ".." is hostile.
 func validateBundleIDForPath(bundleID string) error {
 	if bundleID == "" {
 		return errors.New("asc: bundleID is required")
@@ -242,7 +176,7 @@ func validateBundleIDForPath(bundleID string) error {
 		return fmt.Errorf("asc: bundleID %q contains path-traversal segments", bundleID)
 	}
 	if strings.ContainsRune(bundleID, 0) {
-		return fmt.Errorf("asc: bundleID contains NUL byte")
+		return errors.New("asc: bundleID contains NUL byte")
 	}
 	return nil
 }
@@ -258,14 +192,11 @@ func validateReportClass(c ReportClass) error {
 	}
 }
 
-// stateRoot returns $XDG_STATE_HOME/flightline, falling back to
-// $HOME/.local/state/flightline when XDG_STATE_HOME is unset (per the XDG
-// base-dir spec). Tests override via FLINE_STATE_HOME for hermetic
-// behavior; that env var is intentionally undocumented in user-facing
-// surfaces — it's a test escape hatch only.
+// stateRoot returns $XDG_STATE_HOME/flightline, or $HOME/.local/state/flightline when unset.
+// FLIGHTLINE_STATE_HOME is an undocumented test-only override.
 func stateRoot() (string, error) {
-	// Test escape hatch — first because it must override even XDG values.
-	if override := os.Getenv("FLINE_STATE_HOME"); override != "" {
+	// Checked first: must override even XDG values.
+	if override := os.Getenv("FLIGHTLINE_STATE_HOME"); override != "" {
 		return override, nil
 	}
 	if xdg := os.Getenv("XDG_STATE_HOME"); xdg != "" {
@@ -275,10 +206,7 @@ func stateRoot() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("asc: resolve home dir: %w", err)
 	}
-	// On Windows the XDG fallback isn't standard; we still write under
-	// $USERPROFILE/.local/state/flightline for consistency with the rest of
-	// Flightline's macOS/Linux-first ergonomics. Cross-platform polish is a
-	// separate concern.
+	// Windows gets the same .local/state path; Flightline is macOS/Linux-first.
 	_ = runtime.GOOS
 	return filepath.Join(home, ".local", "state", "flightline"), nil
 }

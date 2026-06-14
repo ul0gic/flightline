@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -12,9 +13,6 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// SubscriptionGroupView is one row of the subscriptions list output. It
-// embeds the count of member subscriptions so the table is glanceable
-// without a second fetch.
 type SubscriptionGroupView struct {
 	ID          string                          `json:"id"`
 	Type        string                          `json:"type"`
@@ -22,13 +20,11 @@ type SubscriptionGroupView struct {
 	MemberCount int                             `json:"memberCount"`
 }
 
-// SubscriptionGroupList is the table-aware view for `subscriptions list`.
 type SubscriptionGroupList struct {
 	BundleID string                  `json:"bundleId"`
 	Groups   []SubscriptionGroupView `json:"groups"`
 }
 
-// TableRows implements TableRenderable for the groups list view.
 func (l SubscriptionGroupList) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"REFERENCE_NAME", "MEMBERS", "ID"}
 	rows = make([][]string, 0, len(l.Groups))
@@ -43,12 +39,6 @@ func (l SubscriptionGroupList) TableRows() (headers []string, rows [][]string) {
 	return headers, rows
 }
 
-// SubscriptionDetailView is the read-side view for `subscriptions get`.
-//
-// Embeds the parent group reference, the per-locale subscription
-// localizations, the price ladder (raw — pricepoints decode separately),
-// and any introductory offers. Phase 3 writes will reuse these typed
-// structs so the JSON contract stays stable across read/write paths.
 type SubscriptionDetailView struct {
 	BundleID           string                              `json:"bundleId"`
 	ID                 string                              `json:"id"`
@@ -60,36 +50,29 @@ type SubscriptionDetailView struct {
 	Prices             []SubscriptionPriceItem             `json:"prices,omitempty"`
 }
 
-// SubscriptionGroupSummary is the parent group reference embedded on a
-// detail view.
 type SubscriptionGroupSummary struct {
 	ID         string                          `json:"id"`
 	Attributes asc.SubscriptionGroupAttributes `json:"attributes"`
 }
 
-// SubscriptionLocalizationItem wraps one localization resource.
 type SubscriptionLocalizationItem struct {
 	ID         string                                 `json:"id"`
 	Type       string                                 `json:"type"`
 	Attributes asc.SubscriptionLocalizationAttributes `json:"attributes"`
 }
 
-// SubscriptionIntroductoryOfferItem wraps one intro offer resource.
 type SubscriptionIntroductoryOfferItem struct {
 	ID         string                                      `json:"id"`
 	Type       string                                      `json:"type"`
 	Attributes asc.SubscriptionIntroductoryOfferAttributes `json:"attributes"`
 }
 
-// SubscriptionPriceItem wraps one price-record resource.
 type SubscriptionPriceItem struct {
 	ID         string                          `json:"id"`
 	Type       string                          `json:"type"`
 	Attributes asc.SubscriptionPriceAttributes `json:"attributes"`
 }
 
-// TableRows for the subscription detail view. Vertical layout reads better
-// for one product; full price ladder + locale list goes to JSON.
 func (v *SubscriptionDetailView) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"FIELD", "VALUE"}
 	rows = [][]string{
@@ -123,14 +106,14 @@ var subscriptionsCmd = &cobra.Command{
 	Long: `subscriptions groups read commands over Apple's auto-renewable
 subscription resources. Apple structures subscriptions as a tree:
 
-  - SubscriptionGroup           — competing-tier group
-    └── Subscription            — one product within the group
-        ├── Localizations       — per-locale name/description
-        ├── IntroductoryOffers  — onboarding discount tiers
-        └── Prices              — price ladder
+  - SubscriptionGroup          : competing-tier group
+    └── Subscription           : one product within the group
+        ├── Localizations      : per-locale name/description
+        ├── IntroductoryOffers : onboarding discount tiers
+        └── Prices             : price ladder
 
-  - list <bundleId>                              — list groups + member count
-  - get <bundleId> --product <productId>         — full detail for one product
+  - list <bundleId>                             : list groups + member count
+  - get <bundleId> --product <productId>        : full detail for one product
 
 v1 is read-only; full CRUD lands in Phase 3.`,
 }
@@ -141,8 +124,8 @@ var subscriptionsListCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runSubscriptionsList,
-	Example: `  fline subscriptions list com.example.myapp
-  fline subscriptions list com.example.myapp --output json | jq '.groups[].memberCount'`,
+	Example: `  flightline subscriptions list com.example.myapp
+  flightline subscriptions list com.example.myapp --output json | jq '.groups[].memberCount'`,
 }
 
 var subscriptionsGetCmd = &cobra.Command{
@@ -151,8 +134,8 @@ var subscriptionsGetCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runSubscriptionsGet,
-	Example: `  fline subscriptions get com.example.myapp --product com.example.pro.monthly
-  fline subscriptions get com.example.myapp --product com.example.pro.monthly --output json`,
+	Example: `  flightline subscriptions get com.example.myapp --product com.example.pro.monthly
+  flightline subscriptions get com.example.myapp --product com.example.pro.monthly --output json`,
 }
 
 var (
@@ -201,7 +184,7 @@ func runSubscriptionsGet(cmd *cobra.Command, args []string) error {
 	bundleID := args[0]
 	productID := strings.TrimSpace(subscriptionsGetProduct)
 	if productID == "" {
-		return fmt.Errorf("subscriptions: --product is required")
+		return errors.New("subscriptions: --product is required")
 	}
 
 	c, err := newClient()
@@ -213,11 +196,7 @@ func runSubscriptionsGet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Subscriptions live under groups, but Apple does not expose a direct
-	// "find subscription by productId across all groups" endpoint. Walk
-	// the groups, then walk each group's subscriptions until the productId
-	// matches. Most apps have <5 groups and <10 subscriptions per group;
-	// this is bounded.
+	// Apple has no cross-group "find by productId" endpoint, so walk groups then subscriptions; bounded in practice.
 	groupViews, err := collectSubscriptionGroups(
 		cmd.Context(), c,
 		"/v1/apps/"+appID+"/subscriptionGroups",
@@ -277,11 +256,7 @@ func runSubscriptionsGet(cmd *cobra.Command, args []string) error {
 	return Render(view, outputMode())
 }
 
-// collectSubscriptionGroups walks the paging iterator and returns the
-// groups with member counts. Member count is read off the included
-// subscriptions relationship's data array length when present, falling
-// back to 0 (which renders as a hint to consumers that the include was
-// dropped — Apple sometimes drops includes when a group has 0 members).
+// Member count comes from the included subscriptions relationship; Apple drops the include for empty groups, yielding 0.
 func collectSubscriptionGroups(ctx context.Context, c *asc.Client, path string, query url.Values, limit int) ([]SubscriptionGroupView, error) {
 	out := make([]SubscriptionGroupView, 0, defaultListCap(limit))
 	for page, err := range asc.Pages[asc.SubscriptionGroupAttributes](ctx, c, path, query) {
@@ -302,14 +277,10 @@ func collectSubscriptionGroups(ctx context.Context, c *asc.Client, path string, 
 	return out, nil
 }
 
-// countRelationshipRefs returns the count of {type, id} entries in a
-// to-many relationship's data array, or 0 if the data is absent / null.
 func countRelationshipRefs(rel asc.Relationship) int {
 	if len(rel.Data) == 0 || string(rel.Data) == "null" {
 		return 0
 	}
-	// To-many relationships serialize as a JSON array. Decode as a slice
-	// of empty structs — only the count matters here.
 	var arr []struct{}
 	if err := json.Unmarshal(rel.Data, &arr); err != nil {
 		return 0
@@ -317,7 +288,6 @@ func countRelationshipRefs(rel asc.Relationship) int {
 	return len(arr)
 }
 
-// loadSubscriptionLocalizations populates view.Localizations.
 func loadSubscriptionLocalizations(ctx context.Context, c *asc.Client, subID string, view *SubscriptionDetailView) error {
 	for page, err := range asc.Pages[asc.SubscriptionLocalizationAttributes](
 		ctx, c, "/v1/subscriptions/"+subID+"/subscriptionLocalizations", url.Values{"limit": {"200"}},
@@ -334,7 +304,6 @@ func loadSubscriptionLocalizations(ctx context.Context, c *asc.Client, subID str
 	return nil
 }
 
-// loadSubscriptionIntroOffers populates view.IntroductoryOffers.
 func loadSubscriptionIntroOffers(ctx context.Context, c *asc.Client, subID string, view *SubscriptionDetailView) error {
 	for page, err := range asc.Pages[asc.SubscriptionIntroductoryOfferAttributes](
 		ctx, c, "/v1/subscriptions/"+subID+"/introductoryOffers", url.Values{"limit": {"200"}},
@@ -351,7 +320,6 @@ func loadSubscriptionIntroOffers(ctx context.Context, c *asc.Client, subID strin
 	return nil
 }
 
-// loadSubscriptionPrices populates view.Prices.
 func loadSubscriptionPrices(ctx context.Context, c *asc.Client, subID string, view *SubscriptionDetailView) error {
 	for page, err := range asc.Pages[asc.SubscriptionPriceAttributes](
 		ctx, c, "/v1/subscriptions/"+subID+"/prices", url.Values{"limit": {"200"}},

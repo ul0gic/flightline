@@ -3,7 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"net/url"
 	"strings"
 
@@ -11,19 +11,16 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// ReviewSubmissionView is one row of the review-submissions list output.
 type ReviewSubmissionView struct {
 	ID         string                         `json:"id"`
 	Type       string                         `json:"type"`
 	Attributes asc.ReviewSubmissionAttributes `json:"attributes"`
 }
 
-// ReviewSubmissionList is the table-aware view for `review-submissions list`.
 type ReviewSubmissionList struct {
 	Submissions []ReviewSubmissionView `json:"submissions"`
 }
 
-// TableRows implements TableRenderable for the submissions list view.
 func (l ReviewSubmissionList) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"STATE", "PLATFORM", "SUBMITTED", "ID"}
 	rows = make([][]string, 0, len(l.Submissions))
@@ -38,9 +35,8 @@ func (l ReviewSubmissionList) TableRows() (headers []string, rows [][]string) {
 	return headers, rows
 }
 
-// ReviewSubmissionItemView is one item attached to a submission. The
-// referenced resource type+id come from the JSON:API relationship; we
-// flatten them so consumers don't have to parse the relationships block.
+// ReviewSubmissionItemView flattens the referenced resource type+id out of the
+// JSON:API relationships block.
 type ReviewSubmissionItemView struct {
 	ID            string                             `json:"id"`
 	Type          string                             `json:"type"`
@@ -49,12 +45,10 @@ type ReviewSubmissionItemView struct {
 	ReferenceID   string                             `json:"referenceId,omitempty"`
 }
 
-// ReviewSubmissionItemList is the table-aware view for items.
 type ReviewSubmissionItemList struct {
 	Items []ReviewSubmissionItemView `json:"items"`
 }
 
-// TableRows implements TableRenderable for the items view.
 func (l ReviewSubmissionItemList) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"STATE", "REFERENCE_TYPE", "REFERENCE_ID", "ITEM_ID"}
 	rows = make([][]string, 0, len(l.Items))
@@ -83,8 +77,8 @@ var reviewSubmissionsListCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runReviewSubmissionsList,
-	Example: `  fline review-submissions list com.example.myapp
-  fline review-submissions list com.example.myapp --output json | jq -r '.submissions[].attributes.state'`,
+	Example: `  flightline review-submissions list com.example.myapp
+  flightline review-submissions list com.example.myapp --output json | jq -r '.submissions[].attributes.state'`,
 }
 
 var reviewSubmissionsItemsCmd = &cobra.Command{
@@ -93,8 +87,8 @@ var reviewSubmissionsItemsCmd = &cobra.Command{
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runReviewSubmissionsItems,
-	Example: `  fline review-submissions items com.example.myapp --submission abc123
-  fline review-submissions items com.example.myapp --submission abc123 --output json`,
+	Example: `  flightline review-submissions items com.example.myapp --submission abc123
+  flightline review-submissions items com.example.myapp --submission abc123 --output json`,
 }
 
 var reviewSubmissionsItemsID string
@@ -126,15 +120,14 @@ func runReviewSubmissionsItems(cmd *cobra.Command, args []string) error {
 	bundleID := args[0]
 	submissionID := strings.TrimSpace(reviewSubmissionsItemsID)
 	if submissionID == "" {
-		return fmt.Errorf("review-submissions: --submission is required")
+		return errors.New("review-submissions: --submission is required")
 	}
 
 	c, err := newClient()
 	if err != nil {
 		return err
 	}
-	// Resolve bundleId so we surface a useful error if the bundle is unknown
-	// before hitting the items endpoint with a possibly-stale submission ID.
+	// Surface an unknown-bundle error before hitting the items endpoint.
 	if _, err := resolveAppID(cmd.Context(), c, bundleID); err != nil {
 		return err
 	}
@@ -146,10 +139,8 @@ func runReviewSubmissionsItems(cmd *cobra.Command, args []string) error {
 	return Render(ReviewSubmissionItemList{Items: views}, outputMode())
 }
 
-// listReviewSubmissions fetches every review submission for the app
-// identified by bundleId. The /v1/reviewSubmissions endpoint requires
-// filter[app] (per spec: required=true), so we resolve bundleId → appId
-// before querying.
+// listReviewSubmissions fetches every review submission for the app.
+// /v1/reviewSubmissions requires filter[app], so bundleId is resolved first.
 func listReviewSubmissions(ctx context.Context, c *asc.Client, bundleID string) ([]ReviewSubmissionView, error) {
 	appID, err := resolveAppID(ctx, c, bundleID)
 	if err != nil {
@@ -172,10 +163,8 @@ func listReviewSubmissions(ctx context.Context, c *asc.Client, bundleID string) 
 	return out, nil
 }
 
-// listReviewSubmissionItems fetches the items in a given review submission.
-// We hit /v1/reviewSubmissions/{id}/items directly — Apple's documented
-// to-many-related endpoint — and parse the JSON:API relationships block on
-// each item to flatten the (type, id) reference for table display.
+// listReviewSubmissionItems fetches a submission's items and flattens each
+// item's (type, id) reference out of its relationships block.
 func listReviewSubmissionItems(ctx context.Context, c *asc.Client, submissionID string) ([]ReviewSubmissionItemView, error) {
 	q := url.Values{"limit": {"200"}}
 	path := "/v1/reviewSubmissions/" + submissionID + "/items"
@@ -199,12 +188,8 @@ func listReviewSubmissionItems(ctx context.Context, c *asc.Client, submissionID 
 	return out, nil
 }
 
-// extractItemReference walks the relationships map looking for the first
-// to-one relationship with a non-null data block, which is the resource
-// the item is requesting review for (one of: appStoreVersion,
-// appCustomProductPageVersion, appStoreVersionExperiment, appEvent, etc.).
-//
-// Apple guarantees an item has exactly one such reference.
+// extractItemReference returns the item's single non-null to-one reference:
+// the resource it requests review for (appStoreVersion, appEvent, etc.).
 func extractItemReference(rels map[string]asc.Relationship) (refType, refID string) {
 	for _, rel := range rels {
 		if len(rel.Data) == 0 || string(rel.Data) == "null" {
