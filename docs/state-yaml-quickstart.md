@@ -20,7 +20,7 @@ flightline --version
 **ASC API key:**
 
 1. In App Store Connect, go to Users and Access → Integrations → App Store Connect API.
-2. Generate a key with Developer role or higher. Download the `.p8` file.
+2. Generate a key with App Manager role (or Admin for sales and finance reports). Download the `.p8` file.
 3. Place it at `~/.appstoreconnect/AuthKey_<KEY_ID>.p8` with mode 600:
 
 ```bash
@@ -250,7 +250,7 @@ Flightline fetched the live state, compared it to your file, and found no differ
 3. Plan       flightline plan state.yaml           # read-only diff, no writes
 4. Apply      flightline apply state.yaml --confirm
 5. Preflight  flightline preflight <bundleId> -v <v>  # Phase 5, live rule check
-6. Submit     flightline submit <bundleId> -v <v>  # triggers Apple Review
+6. Submit     flightline testflight beta-review submit <bundleId> --build <n>  # triggers Apple Review
 ```
 
 Steps 1–5 are reversible. Step 6 is the only point of no return.
@@ -266,8 +266,8 @@ Steps 1–5 are reversible. Step 6 is the only point of no return.
 ```bash
 # Upload screenshots directly via L1
 flightline screenshots upload com.under5.passdmv \
-  --version 1.0.1 --locale en-US --device APP_IPHONE_69 \
-  ./screenshots/iphone69-1.png
+  --version 1.0.1 --locale en-US --device-set APP_IPHONE_67 \
+  ./screenshots/iphone67-1.png
 
 # Then re-run apply for everything else
 flightline apply state.yaml --confirm
@@ -302,7 +302,7 @@ JWTs are minted per-request and expire after 20 minutes, there's no token cache 
 
 **`asc: HTTP 403 Forbidden`**
 
-Your key exists but lacks permission for this operation. Check the role on your API key in App Store Connect (Users and Access → Integrations). Admin or Developer roles are required for most write operations.
+Your key exists but lacks permission for this operation. Check the role on your API key in App Store Connect (Users and Access → Integrations). App Manager or Admin roles are required for most write operations.
 
 **`config: chmod 600 ~/.appstoreconnect/AuthKey_<id>.p8`**
 

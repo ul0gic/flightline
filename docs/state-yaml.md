@@ -505,7 +505,7 @@ Manage privacy labels in the App Store Connect web UI. See [ISSUE-002](../.proje
 The `flightline apply` orchestrator does not yet drive multipart binary uploads. The sections for `spec.screenshots`, `spec.iap.products[*].reviewScreenshot`, and `spec.customProductPages.<name>.localizations.<locale>.screenshots` are fully supported in `flightline fetch` and `flightline plan` (the diff engine compares checksums), but `flightline apply` returns a typed error for these change paths and directs you to the L1 upload verbs:
 
 ```
-flightline screenshots upload <bundleId> --version <v> --locale <l> --device <d> <path>
+flightline screenshots upload <bundleId> --version <v> --locale <l> --device-set <d> <path>
 flightline iap update <productId> --review-screenshot <path>
 ```
 

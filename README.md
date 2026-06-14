@@ -330,11 +330,11 @@ flightline metadata set com.under5.passdmv --version 1.1 \
 
 # Screenshots
 flightline screenshots upload com.under5.passdmv --version 1.1 \
-  --display-type APP_IPHONE_69 --file ./screenshots/iphone.png
+  --locale en-US --device-set APP_IPHONE_67 ./screenshots/iphone.png
 
 # IAPs
 flightline iap list com.under5.passdmv
-flightline iap create com.under5.passdmv --reference-name "Lifetime" \
+flightline iap create com.under5.passdmv --name "Lifetime" \
   --product-id com.under5.passdmv.lifetime --type NON_CONSUMABLE
 
 # Age rating and compliance
@@ -368,8 +368,8 @@ flightline subscriptions reports com.under5.passdmv --type summary --range P30D
 
 # Analytics (async: request, poll, download)
 flightline analytics request com.under5.passdmv --access-type ONE_TIME_SNAPSHOT --wait
-flightline analytics list-instances --report-id <id>
-flightline analytics download --instance <id> --out report.csv
+flightline analytics list-instances com.under5.passdmv --report-id <id>
+flightline analytics download com.under5.passdmv --instance <id> --out report.csv
 
 # TestFlight feedback and crash diagnostics
 flightline beta-feedback crash com.under5.passdmv
