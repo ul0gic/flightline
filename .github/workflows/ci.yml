@@ -48,6 +48,11 @@ jobs:
           version: "v2.12.1"
           args: --timeout=5m
 
+      - name: docs drift
+        run: |
+          make gen-docs
+          git diff --exit-code docs/reference/cli.md docs/reference/preflight-rules.md
+
   vuln:
     runs-on: ubuntu-24.04
     permissions:
