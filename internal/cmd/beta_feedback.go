@@ -354,7 +354,7 @@ func fetchBytes(ctx context.Context, rawURL string) ([]byte, error) {
 
 // Parent dirs must already exist; creating them silently would surprise the caller.
 func writeBytes(path string, b []byte) error {
-	if err := os.WriteFile(path, b, 0o644); err != nil { //nolint:gosec // tester-supplied content; not a secret
+	if err := os.WriteFile(path, b, 0o600); err != nil {
 		return fmt.Errorf("beta-feedback: write %s: %w", path, err)
 	}
 	return nil

@@ -32,8 +32,10 @@ vet:
 lint:
 	golangci-lint run
 
+# G501/G401: MD5 is mandated by Apple's asset-upload checksum protocol, not a security choice.
+# G304: this CLI opens user-specified paths (uploads, config, screenshots, state) by design.
 sec:
-	gosec -exclude-generated -severity low -confidence low ./...
+	gosec -exclude-generated -severity low -confidence low -exclude=G501,G401,G304 ./...
 
 fmt:
 	gofmt -s -w .
