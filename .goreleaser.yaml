@@ -15,7 +15,6 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      # Injects into main.version/commit/date — those vars do not exist yet; Lead must add them or -X no-ops.
       - -s -w
       - -X main.version={{ .Version }}
       - -X main.commit={{ .Commit }}

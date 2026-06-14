@@ -30,6 +30,13 @@ func Root() *cobra.Command {
 	return rootCmd
 }
 
+// SetBuildInfo wires release metadata (injected via -ldflags at build time) into
+// the --version output. Values are placeholders under `go run`/`go build` without ldflags.
+func SetBuildInfo(version, commit, date string) {
+	rootCmd.Version = version
+	rootCmd.SetVersionTemplate(fmt.Sprintf("flightline %s (commit %s, built %s)\n", version, commit, date))
+}
+
 func init() {
 	cobra.OnInitialize(initConfig)
 
