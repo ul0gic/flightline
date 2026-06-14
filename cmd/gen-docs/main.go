@@ -35,8 +35,8 @@ func run(args []string) error {
 	}
 	for name, content := range files {
 		path := filepath.Join(outDir, name)
-		//nolint:gosec // committed reference docs are world-readable by design, not secrets
-		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		err := os.WriteFile(path, []byte(content), 0o644) // #nosec G306 G703 -- committed reference docs are world-readable; outDir is a trusted build-time argument
+		if err != nil {
 			return fmt.Errorf("writing %s: %w", path, err)
 		}
 	}
