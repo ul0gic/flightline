@@ -47,13 +47,11 @@ sboms:
 signs:
   - id: cosign-keyless
     cmd: cosign
-    signature: "${artifact}.sig"
-    certificate: "${artifact}.pem"
+    signature: "${artifact}.sigstore.json"
     args:
       - sign-blob
+      - "--bundle=${signature}"
       - "--yes"
-      - "--output-signature=${signature}"
-      - "--output-certificate=${certificate}"
       - "${artifact}"
     artifacts: all
     output: true
