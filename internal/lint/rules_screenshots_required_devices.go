@@ -17,6 +17,11 @@ func init() { Register(screenshotsRequiredDevicesRule{}) }
 func (screenshotsRequiredDevicesRule) ID() string         { return "screenshots.required-devices" }
 func (screenshotsRequiredDevicesRule) Severity() Severity { return SeverityError }
 func (screenshotsRequiredDevicesRule) Mode() Mode         { return ModeBoth }
+func (screenshotsRequiredDevicesRule) Doc() string {
+	return "Checks that every locale has screenshots for the device classes Apple currently requires for new iPhone submissions: 6.9 inch and 6.7 inch. " +
+		"Apple's submission flow hard-blocks Submit for Review until both are present per locale, and it never surfaces as a reviewer rejection; the UI simply will not let you proceed. " +
+		"Fix it by uploading screenshots for the missing device class in each affected locale."
+}
 
 // requiredDevices is conservative: Apple rotates this list with device launches; update when required classes change.
 var requiredDevices = []string{"APP_IPHONE_69", "APP_IPHONE_67"}

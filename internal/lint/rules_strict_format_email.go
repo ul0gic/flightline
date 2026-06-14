@@ -16,6 +16,11 @@ func init() { Register(strictFormatEmailRule{}) }
 func (strictFormatEmailRule) ID() string         { return "strict.format-email" }
 func (strictFormatEmailRule) Severity() Severity { return SeverityWarning }
 func (strictFormatEmailRule) Mode() Mode         { return ModeOffline }
+func (strictFormatEmailRule) Doc() string {
+	return "Checks that the reviewer-demo contact email and TestFlight tester emails look like real addresses. " +
+		"The JSON Schema declares these fields as format email, but the validator does not enforce format keywords, so a value like joe at example dot com passes schema validation silently and only fails later at Apple's wire layer. " +
+		"Fix it by writing each address in standard local@domain.tld form."
+}
 
 // permissiveEmailRE requires local@domain.tld: rejects "joe at example dot com", accepts plus-aliases and subdomains.
 // Full RFC 5322 is impractical; Apple's own validator is the final authority.

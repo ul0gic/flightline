@@ -15,6 +15,11 @@ func init() { Register(versionExportComplianceAnsweredRule{}) }
 func (versionExportComplianceAnsweredRule) ID() string         { return "version.export-compliance-answered" }
 func (versionExportComplianceAnsweredRule) Severity() Severity { return SeverityError }
 func (versionExportComplianceAnsweredRule) Mode() Mode         { return ModeBoth }
+func (versionExportComplianceAnsweredRule) Doc() string {
+	return "Checks that the export-compliance encryption question (usesNonExemptEncryption) has an answer on record. " +
+		"Apple blocks submission until this declaration is set, either per-version in App Store Connect or via ITSAppUsesNonExemptEncryption in the build's Info.plist, and forgetting it is one of the most common blocks for a new build. " +
+		"Fix it by setting usesNonExemptEncryption to false (correct for most apps, since standard HTTPS is exempt) or to true with the supplemental declaration."
+}
 
 func (r versionExportComplianceAnsweredRule) Check(ctx CheckContext) []Diagnostic {
 	if ctx.Live {

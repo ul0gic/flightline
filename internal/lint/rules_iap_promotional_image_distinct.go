@@ -17,6 +17,11 @@ func init() { Register(iapPromotionalImageDistinctRule{}) }
 func (iapPromotionalImageDistinctRule) ID() string         { return "iap.promotional-image-distinct" }
 func (iapPromotionalImageDistinctRule) Severity() Severity { return SeverityError }
 func (iapPromotionalImageDistinctRule) Mode() Mode         { return ModeLive }
+func (iapPromotionalImageDistinctRule) Doc() string {
+	return "Checks that an IAP review screenshot does not reuse one of the app's store screenshots, comparing source file checksums. " +
+		"Apple Guideline 2.3.2 hard-rejects reusing a store screenshot as IAP promotional art, and developers who drag the same image into both fields to save time hit this. " +
+		"Fix it by supplying a distinct image that specifically represents the IAP purchase rather than the app in general."
+}
 
 func (r iapPromotionalImageDistinctRule) Check(ctx CheckContext) []Diagnostic {
 	if !ctx.Live || ctx.Client == nil || ctx.BundleID == "" {

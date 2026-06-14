@@ -16,6 +16,11 @@ func init() { Register(buildAttachedAndValidRule{}) }
 func (buildAttachedAndValidRule) ID() string         { return "build.attached-and-valid" }
 func (buildAttachedAndValidRule) Severity() Severity { return SeverityError }
 func (buildAttachedAndValidRule) Mode() Mode         { return ModeLive }
+func (buildAttachedAndValidRule) Doc() string {
+	return "Checks that the App Store version has a build attached and that the build's processingState is VALID. " +
+		"Apple's submission flow hard-blocks Submit for Review until both hold, but the block only surfaces at submit time after you have confirmed the dialog, so the gap is easy to miss until the worst moment. " +
+		"Fix it by uploading the build, waiting for processing to reach VALID, then attaching it to the version."
+}
 
 func (r buildAttachedAndValidRule) Check(ctx CheckContext) []Diagnostic {
 	if !ctx.Live || ctx.Client == nil || ctx.BundleID == "" {

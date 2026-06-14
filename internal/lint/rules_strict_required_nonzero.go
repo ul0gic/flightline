@@ -16,6 +16,11 @@ func init() { Register(strictRequiredNonzeroRule{}) }
 func (strictRequiredNonzeroRule) ID() string         { return "strict.required-nonzero" }
 func (strictRequiredNonzeroRule) Severity() Severity { return SeverityError }
 func (strictRequiredNonzeroRule) Mode() Mode         { return ModeOffline }
+func (strictRequiredNonzeroRule) Doc() string {
+	return "Checks that schema-required string fields, notably each TestFlight tester email, are present and non-empty in the authored YAML. " +
+		"Go marshals a missing string field as an empty string, which satisfies the schema's required constraint (the key is present) even though the value is blank, so the row is silently dropped at apply time because there is no address to invite. " +
+		"Fix it by giving every required field a real non-empty value."
+}
 
 func (r strictRequiredNonzeroRule) Check(ctx CheckContext) []Diagnostic {
 	if ctx.SourcePath == "" {

@@ -14,6 +14,11 @@ func init() { Register(localizationsCompletenessRule{}) }
 func (localizationsCompletenessRule) ID() string         { return "localizations.completeness" }
 func (localizationsCompletenessRule) Severity() Severity { return SeverityWarning }
 func (localizationsCompletenessRule) Mode() Mode         { return ModeOffline }
+func (localizationsCompletenessRule) Doc() string {
+	return "Checks that every locale appearing in one localizable surface (metadata, screenshots, or IAP localizations) also appears in the others. " +
+		"Apple may reject a listing where a locale has metadata but no screenshots because reviewers cannot preview it in that language, and the gap is often the sign of a half-applied edit. " +
+		"Fix it by adding the locale to every surface or removing it everywhere; this rule is advisory, so a deliberately single-surface locale can be left as-is."
+}
 
 func (r localizationsCompletenessRule) Check(ctx CheckContext) []Diagnostic {
 	if ctx.State == nil {

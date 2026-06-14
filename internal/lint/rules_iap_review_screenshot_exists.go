@@ -17,6 +17,11 @@ func init() { Register(iapReviewScreenshotExistsRule{}) }
 func (iapReviewScreenshotExistsRule) ID() string         { return "iap.review-screenshot-exists" }
 func (iapReviewScreenshotExistsRule) Severity() Severity { return SeverityError }
 func (iapReviewScreenshotExistsRule) Mode() Mode         { return ModeLive }
+func (iapReviewScreenshotExistsRule) Doc() string {
+	return "Checks that every IAP in a state where Apple will imminently review it has an App Store review screenshot attached. " +
+		"The screenshot field is buried several tabs deep in App Store Connect and is easy to skip, but Apple requires it and returns the submission immediately when it is missing. " +
+		"Fix it by uploading a review screenshot that shows the IAP purchase within the app context."
+}
 
 func (r iapReviewScreenshotExistsRule) Check(ctx CheckContext) []Diagnostic {
 	if !ctx.Live || ctx.Client == nil || ctx.BundleID == "" {

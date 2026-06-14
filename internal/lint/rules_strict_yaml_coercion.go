@@ -17,6 +17,11 @@ func init() { Register(strictYAMLCoercionRule{}) }
 func (strictYAMLCoercionRule) ID() string         { return "strict.yaml-coercion" }
 func (strictYAMLCoercionRule) Severity() Severity { return SeverityError }
 func (strictYAMLCoercionRule) Mode() Mode         { return ModeOffline }
+func (strictYAMLCoercionRule) Doc() string {
+	return "Checks that boolean fields use true or false rather than the YAML 1.1 tokens yes, no, on, or off. " +
+		"The YAML library implements the 1.1 core schema and coerces those tokens to booleans even when they are quoted, so gambling: \"yes\" decodes to true and is applied to App Store Connect without warning. " +
+		"Fix it by replacing every such token with a real true or false."
+}
 
 func (r strictYAMLCoercionRule) Check(ctx CheckContext) []Diagnostic {
 	if ctx.SourcePath == "" {

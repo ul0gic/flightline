@@ -105,6 +105,8 @@ type Rule interface {
 	ID() string
 	Severity() Severity
 	Mode() Mode
+	// Doc is a one-line, plain-language description of the rejection this rule catches; it feeds the generated catalog.
+	Doc() string
 	Check(ctx CheckContext) []Diagnostic
 }
 

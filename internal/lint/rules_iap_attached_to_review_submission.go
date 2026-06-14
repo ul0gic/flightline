@@ -18,6 +18,11 @@ func init() { Register(iapAttachedToReviewSubmissionRule{}) }
 func (iapAttachedToReviewSubmissionRule) ID() string         { return "iap.attached-to-review-submission" }
 func (iapAttachedToReviewSubmissionRule) Severity() Severity { return SeverityError }
 func (iapAttachedToReviewSubmissionRule) Mode() Mode         { return ModeLive }
+func (iapAttachedToReviewSubmissionRule) Doc() string {
+	return "Checks that every in-app purchase marked READY_TO_SUBMIT also appears in the app's open review submission. " +
+		"This is the most common IAP rejection cause: developers mark an IAP ready and assume that means submitted, so the app goes through review without it and the IAP never goes live. " +
+		"Fix it by attaching the IAP to the review submission, or by creating a submission first if none is open."
+}
 
 func (r iapAttachedToReviewSubmissionRule) Check(ctx CheckContext) []Diagnostic {
 	if !ctx.Live || ctx.Client == nil || ctx.BundleID == "" {

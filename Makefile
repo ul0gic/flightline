@@ -1,4 +1,4 @@
-.PHONY: build install test vet lint sec fmt gen verify clean help sync-schema
+.PHONY: build install test vet lint sec fmt gen gen-docs verify clean help sync-schema
 
 GO ?= go
 BIN := ./bin/flightline
@@ -51,6 +51,9 @@ gen:
 	@echo "flightline: spec is authoritative reference. Query via jq:"
 	@echo "  jq '.paths | keys[]' openapi.oas.json | grep -i <resource>"
 	@echo "  jq '.components.schemas.<Name>' openapi.oas.json"
+
+gen-docs:
+	go run ./cmd/gen-docs
 
 verify: sync-schema vet test lint
 

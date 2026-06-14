@@ -21,6 +21,7 @@ type stubRule struct {
 func (s *stubRule) ID() string         { return s.id }
 func (s *stubRule) Severity() Severity { return s.sev }
 func (s *stubRule) Mode() Mode         { return s.mode }
+func (s *stubRule) Doc() string        { return "stub rule" }
 func (s *stubRule) Check(_ CheckContext) []Diagnostic {
 	if s.panic != nil {
 		panic(s.panic)

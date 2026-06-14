@@ -25,6 +25,11 @@ func Execute() error {
 	return rootCmd.Execute()
 }
 
+// Root returns the fully-wired root command so generators can walk the command tree.
+func Root() *cobra.Command {
+	return rootCmd
+}
+
 func init() {
 	cobra.OnInitialize(initConfig)
 
