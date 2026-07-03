@@ -76,12 +76,7 @@ func TestRunLint_GoodStateNoErrors(t *testing.T) {
 	out := captureStdout(t, func() {
 		err := runLint(lintCmd, []string{p})
 		if err != nil {
-			var le lintFailedError
-			if errors.As(err, &le) {
-				t.Errorf("got lint errors on good state: %d", le.count)
-			} else {
-				t.Errorf("unexpected error: %v", err)
-			}
+			t.Errorf("unexpected error on good state: %v", err)
 		}
 	})
 	var res LintResult
@@ -111,9 +106,8 @@ spec:
 	viper.Set("output", "json")
 	out := captureStdout(t, func() {
 		err := runLint(lintCmd, []string{p})
-		var le lintFailedError
-		if !errors.As(err, &le) {
-			t.Errorf("expected lintFailedError, got %v", err)
+		if ExitCode(err) != 1 {
+			t.Errorf("ExitCode = %d, want 1; err = %v", ExitCode(err), err)
 		}
 	})
 	var res LintResult
@@ -184,9 +178,9 @@ func TestLint_LoaderErrorPropagates(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error from the loader")
 	}
-	var le lintFailedError
-	if errors.As(err, &le) {
-		t.Errorf("expected loader error, got lintFailedError")
+	var exitErr *ExitError
+	if errors.As(err, &exitErr) {
+		t.Errorf("expected loader error, got ExitError with code %d", exitErr.Code)
 	}
 	msg := err.Error()
 	if msg == "" {

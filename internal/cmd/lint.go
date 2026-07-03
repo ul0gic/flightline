@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 
@@ -108,24 +107,7 @@ func runLint(cmd *cobra.Command, args []string) error {
 	if err := Render(out, outputMode()); err != nil {
 		return err
 	}
-
-	if lint.HasErrors(merged) {
-		return lintFailedError{count: out.Summary.Error}
-	}
-	if lint.HasWarnings(merged) {
-		fmt.Fprintf(os.Stderr, "lint: %d warning(s): review diagnostics above\n", out.Summary.Warning)
-	}
-	return nil
-}
-
-// lintFailedError is returned when lint finds error-severity diagnostics.
-type lintFailedError struct{ count int }
-
-func (e lintFailedError) Error() string {
-	if e.count == 1 {
-		return "lint: 1 error-severity diagnostic: see output above"
-	}
-	return fmt.Sprintf("lint: %d error-severity diagnostics: see output above", e.count)
+	return diagnosticsExit(out.Mode, out.Summary)
 }
 
 // mergeSchemaIntoLint converts schema diagnostics into lint.Diagnostic so the

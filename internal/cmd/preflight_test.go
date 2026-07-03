@@ -138,6 +138,31 @@ func TestRunPreflight_NoBuildSurfacesError(t *testing.T) {
 	}
 }
 
+// TestRunPreflight_WarningsOnlyExitsTwo pairs a clean live state with a
+// state file whose only defect is warning-severity: the contract is exit 2.
+func TestRunPreflight_WarningsOnlyExitsTwo(t *testing.T) {
+	srv := happyPathServer(t)
+	c := fixtureASCClient(t, srv)
+
+	prev := preflightStateFile
+	t.Cleanup(func() { preflightStateFile = prev })
+	preflightStateFile = writeTempState(t, goodStateYAML+`  reviewerDemo:
+    contactEmail: "joe at example dot com"
+`)
+
+	res := preflightFor(t, c, "com.example.x", "1.0.1")
+	if res.Summary.Error != 0 {
+		t.Fatalf("Summary.Error = %d, want 0; diagnostics: %+v", res.Summary.Error, res.Diagnostics)
+	}
+	if res.Summary.Warning == 0 {
+		t.Fatalf("Summary.Warning = 0, want >0; diagnostics: %+v", res.Diagnostics)
+	}
+	err := diagnosticsExit(res.Mode, res.Summary)
+	if got := ExitCode(err); got != 2 {
+		t.Errorf("ExitCode = %d, want 2; err = %v", got, err)
+	}
+}
+
 // TestPreflightResult_JSONShapeStable freezes the preflight JSON envelope
 // (shared shape with lint).
 func TestPreflightResult_JSONShapeStable(t *testing.T) {

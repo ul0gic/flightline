@@ -17,9 +17,13 @@ var (
 
 func main() {
 	cmd.SetBuildInfo(version, commit, date)
-	if err := cmd.Execute(); err != nil {
-		// Redact at the outermost printer so every error path is cred-stripped before stderr (SEC-002).
-		fmt.Fprintf(os.Stderr, "flightline: %s\n", asc.Redact(err.Error()))
-		os.Exit(1)
+	err := cmd.Execute()
+	if err == nil {
+		return
 	}
+	// Redact at the outermost printer so every error path is cred-stripped before stderr (SEC-002).
+	if msg := err.Error(); msg != "" {
+		fmt.Fprintf(os.Stderr, "flightline: %s\n", asc.Redact(msg))
+	}
+	os.Exit(cmd.ExitCode(err))
 }

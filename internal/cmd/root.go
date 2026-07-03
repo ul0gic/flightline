@@ -18,6 +18,8 @@ read the entire account state, lint a desired-state YAML against it, preflight
 every Apple rejection rule we know about, and apply changes idempotently,
 so submissions stop being a clerical landmine.`,
 	SilenceUsage: true,
+	// main is the single printer: it redacts creds and maps ExitError to the exit code.
+	SilenceErrors: true,
 }
 
 // Execute runs the root command and returns any error from the command tree.
@@ -40,7 +42,7 @@ func SetBuildInfo(version, commit, date string) {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	rootCmd.PersistentFlags().String("output", "table", "output format: table | json")
+	rootCmd.PersistentFlags().String("output", "table", "output format: table | json (report commands also accept tsv)")
 	rootCmd.PersistentFlags().String("config", "", "config file (default $HOME/.config/flightline/config.yaml)")
 	rootCmd.PersistentFlags().String("log-level", "info", "log level: debug | info | warn | error")
 	rootCmd.PersistentFlags().Bool("no-color", false, "disable color output")

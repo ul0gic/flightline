@@ -98,10 +98,7 @@ func runPreflight(cmd *cobra.Command, args []string) error {
 	if err := Render(out, outputMode()); err != nil {
 		return err
 	}
-	if lint.HasErrors(merged) {
-		return lintFailedError{count: out.Summary.Error}
-	}
-	return nil
+	return diagnosticsExit(out.Mode, out.Summary)
 }
 
 // With --state-file: load + schema-validate the YAML. Without: fetch live

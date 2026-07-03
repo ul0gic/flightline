@@ -117,9 +117,7 @@ func runPlan(cmd *cobra.Command, args []string) error {
 
 	exitOnChanges, _ := cmd.Flags().GetBool("exit-on-changes")
 	if exitOnChanges && len(changes) > 0 {
-		// cobra's RunE can't carry an exit code; os.Exit is the only path to 2.
-		fmt.Fprintf(os.Stderr, "flightline: %d change(s): exiting 2 per --exit-on-changes\n", len(changes))
-		os.Exit(2)
+		return &ExitError{Code: 2, Message: fmt.Sprintf("%d change(s): exiting 2 per --exit-on-changes", len(changes))}
 	}
 	return nil
 }
