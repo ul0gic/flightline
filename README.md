@@ -14,67 +14,166 @@ The first declarative tool for App Store Connect: fetch live state, edit YAML, l
 
 </div>
 
-Like Terraform for cloud infrastructure or Pulumi for Kubernetes, Flightline manages your App Store presence as declarative state. A single Go binary that fetches live App Store Connect state into YAML, runs preflight checks against Apple's rejection rules, and applies changes idempotently. The same tool reads sales, analytics, reviews, subscription state, beta feedback, and performance metrics from the terminal. The ASC web UI becomes optional.
+Like Terraform for cloud infrastructure, Flightline manages your App Store presence as declarative state. A single Go binary fetches live App Store Connect state into YAML, runs preflight checks against Apple's rejection rules, and applies changes idempotently. The same tool reads sales, analytics, reviews, subscription state, beta feedback, and performance metrics from the terminal. The ASC web UI becomes optional.
 
-Open source under MIT, and contributions are welcome (see [CONTRIBUTING.md](CONTRIBUTING.md)). No SaaS layer, no telemetry, no accounts. Just a binary that talks to Apple's API.
+MIT licensed, contributions welcome ([CONTRIBUTING.md](CONTRIBUTING.md)). No SaaS layer, no telemetry, no accounts. Just a binary that talks to Apple's API.
 
 ---
 
 ## Table of Contents
 
-- [Why Flightline](#why-flightline)
-- [Position](#position)
-- [What it does today](#what-it-does-today-v001-pre)
-- [Architecture](#architecture)
-- [The lifecycle](#the-lifecycle)
 - [Install](#install)
 - [Setup](#setup)
 - [Quickstart](#quickstart)
+- [Why Flightline](#why-flightline)
+- [The lifecycle](#the-lifecycle)
+- [What it does today](#what-it-does-today-v001-pre)
+- [Architecture](#architecture)
 - [Commands by category](#commands-by-category)
 - [Output](#output)
 - [Configuration precedence](#configuration-precedence)
 - [What it doesn't do](#what-it-doesnt-do)
 - [Documentation](#documentation)
-- [Building from source](#building-from-source)
 - [Development](#development)
 - [Status](#status)
 - [License](#license)
 
 ---
 
-## Why Flightline
+## Install
 
-Every other modern platform has "as Code" tooling: Terraform for cloud, Pulumi for Kubernetes, Crossplane for control planes, Helm for releases. The App Store doesn't. Until now.
+```bash
+go install github.com/ul0gic/flightline@latest
+```
 
-Apple's App Store Connect has two failure modes that cost real time.
+Requires Go 1.26+. App Store Connect work requires a Mac, so that's where Flightline is meant to run (Apple Silicon and Intel both supported); the binary itself builds anywhere Go does.
 
-**Authoring failures.** Hundreds of fields scattered across a dozen surfaces: version metadata, IAPs, IAP review screenshots, age rating, export compliance, content rights, privacy nutrition labels, review notes, contact info, demo credentials, screenshot dimensions per device, per-locale localizations, build attachment, review submission item composition. Forget any one and the release gets bounced. Every rejection is a lost release cycle.
+Verify:
 
-**Observation friction.** Sales, downloads, conversion, reviews, subscription churn, beta crashes, performance metrics, each on a different ASC web surface, none piped, none scriptable, none LLM-readable. You spend hours per week clicking through screens to answer "how is my app doing."
+```bash
+flightline --version
+```
 
-Flightline addresses both. The authoring half lets you declare release state in YAML next to your app source, diff it against live ASC state, and apply changes idempotently. The observation half gives you composable terminal commands you can pipe to `jq`, feed to LLM prompts, or cron-schedule as snapshots. Neither half is bonus. Both are first-class.
+To compile from a checkout instead:
+
+```bash
+git clone https://github.com/ul0gic/flightline.git
+cd flightline
+make build
+./bin/flightline --version
+```
+
+A Homebrew tap will follow once the project is released. Full details in [docs/getting-started/install.md](docs/getting-started/install.md).
 
 ---
 
-## Position
+## Setup
 
-Flightline slots into the established "as Code" lineage. Same shape: declarative state, idempotent reconciliation, drift detection, version control as the source of truth.
+Flightline authenticates with an App Store Connect API key (a `.p8` private key it signs an ES256 JWT with), not your Apple ID. One-time setup:
+
+1. **Generate a key.** App Store Connect > Users and Access > Integrations > App Store Connect API > **+**. Grant role **App Manager** (or **Admin** for finance reports). Click **Generate**, then **Download API Key**: the `.p8` downloads only once. Note the **Key ID** and **Issuer ID**.
+2. **Place the key.** Move it to `~/.appstoreconnect/AuthKey_<KEY_ID>.p8` and `chmod 600` it. Flightline refuses a `.p8` with wider permissions and prints the exact fix.
+3. **Export credentials.** In `~/.zshrc` (or `~/.bashrc`):
+
+   ```bash
+   export APP_STORE_CONNECT_KEY_ID="ABCD1234EF"
+   export APP_STORE_CONNECT_ISSUER_ID="12345678-90ab-cdef-1234-567890abcdef"
+   export APP_STORE_CONNECT_VENDOR_NUMBER="12345678"   # sales/finance only
+   ```
+
+4. **Verify.** Run `flightline whoami`; `AUTHORIZED true` means you are set.
+
+Full walkthrough (roles, 401/403 troubleshooting, flag and config-file alternatives): [docs/getting-started/apple-api-key.md](docs/getting-started/apple-api-key.md).
+
+---
+
+## Quickstart
+
+```bash
+# Verify auth
+flightline whoami
+
+# List your apps
+flightline apps list
+
+# Inspect a version
+flightline versions get com.under5.passdmv --version 1.0
+
+# Diagnose a rejection (if the version is in REJECTED state)
+flightline rejection com.under5.passdmv --version 1.0
+
+# Run offline preflight against a state file
+flightline lint state.yaml
+```
+
+Replace `com.under5.passdmv` with your bundle ID. For the full fetch, edit, plan, apply walkthrough, see [docs/guides/state-as-code.md](docs/guides/state-as-code.md).
+
+---
+
+## Why Flightline
+
+Every other modern platform has "as Code" tooling. The App Store doesn't. Until now.
 
 | Tool | Domain | "as Code" for |
 |---|---|---|
 | Terraform | AWS, GCP, Azure, on-prem | Infrastructure |
-| Pulumi | Cloud + Kubernetes (general-purpose languages) | Infrastructure |
-| Crossplane | Multi-cloud control planes | Resources |
+| Pulumi | Cloud + Kubernetes | Infrastructure |
 | Helm | Kubernetes | Releases |
 | **Flightline** | **App Store Connect** | **App Store** |
 
-If you've used any of those, the workflow rhymes: `fetch` to capture live state, `plan` to diff, `apply` to converge. The substrate is different (Apple's API instead of a cloud), and the failure mode being prevented is App Store rejection rather than a bad cloud rollout, but the discipline is the same.
+App Store Connect has two failure modes that cost real time.
+
+**Authoring failures.** Hundreds of fields scattered across a dozen surfaces: version metadata, IAPs, review screenshots, age rating, export compliance, privacy labels, demo credentials, per-locale localizations, build attachment. Forget any one and the release gets bounced. Every rejection is a lost release cycle.
+
+**Observation friction.** Sales, reviews, subscription churn, beta crashes, performance metrics, each on a different ASC web surface, none piped, none scriptable.
+
+Flightline addresses both. The authoring half lets you declare release state in YAML next to your app source, diff it against live ASC state, and apply changes idempotently. The observation half gives you composable terminal commands you can pipe to `jq`, feed to LLM prompts, or cron-schedule as snapshots.
+
+---
+
+## The lifecycle
+
+### Authoring (stop getting rejected)
+
+```mermaid
+flowchart LR
+    A["1. fetch\nread live state"] --> B["2. edit\nstate.yaml"]
+    B --> C["3. lint\noffline check"]
+    C --> D["4. plan\ndiff vs live"]
+    D --> E["5. preflight\nlive rule check"]
+    E --> F["6. apply --confirm\nidempotent writes"]
+    F --> G["7. submit\ntestflight beta-review submit"]
+    G --> H["8. rejection\ndiagnose if bounced"]
+
+    classDef readonly fill:#e8f5e9,stroke:#388e3c,color:#1b5e20
+    classDef write fill:#fff8e1,stroke:#f9a825,color:#3e2723
+    classDef commit fill:#fce4ec,stroke:#c62828,color:#b71c1c
+
+    class A,C,D,E,H readonly
+    class B write
+    class F,G commit
+```
+
+Steps 1 to 5 are read-only and reversible. Step 6 patches ASC but does not submit for review. Step 7 (beta-review submit) is the only action that triggers Apple Review, and it requires explicit confirmation.
+
+### Observation (stop opening the web UI)
+
+```bash
+flightline sales com.under5.passdmv --days 30
+flightline finance com.under5.passdmv --month 2026-04
+flightline reviews summary com.under5.passdmv
+flightline analytics request com.under5.passdmv --wait
+flightline beta-feedback crash com.under5.passdmv
+flightline performance app com.under5.passdmv
+```
+
+All observation commands support `--output json` for piping to `jq` or feeding to LLM prompts.
 
 ---
 
 ## What it does today (v0.0.1-pre)
 
-All three layers are complete: L1 (API CLI), L2 (state-as-code), and L3 (preflight rules). The columns below split the management surface (L1 read/write CLI verbs) from the as-Code surface (L2 fetch/plan/apply) so you can see what's drivable from a `state.yaml` versus what's CLI-only.
+All three layers are complete: L1 (API CLI), L2 (state-as-code), and L3 (preflight rules).
 
 | Surface | L1 read | L1 write | L2 state-as-code | L3 preflight rule |
 |---|:---:|:---:|:---:|:---:|
@@ -103,15 +202,16 @@ All three layers are complete: L1 (API CLI), L2 (state-as-code), and L3 (preflig
 | Analytics reports | ✅ | - | - | - |
 | Privacy nutrition labels | portal-only ⁵ | - | - | - |
 
-¹ Asset uploads (screenshots, IAP review screenshots, CPP screenshots) flow through L1 verbs by design: `flightline screenshots upload`, `flightline iap review-screenshot upload`, `flightline custom-product-pages screenshots upload`. Apple's multipart upload API (reserve → PUT → commit, often via a separate signed-URL host) is structurally distinct from JSON PATCH on a config field, so `apply` deliberately doesn't drive uploads. Config fields converge through `apply`, asset bytes flow through the upload verbs. The two-command flow (`upload`, then `apply`) is the intended workflow.
+¹ Asset uploads flow through L1 verbs by design (`screenshots upload`, `iap review-screenshot upload`, `custom-product-pages screenshots upload`). Apple's multipart upload API is structurally distinct from JSON PATCH, so `apply` converges config fields and the upload verbs move asset bytes. See [docs/guides/uploading-assets.md](docs/guides/uploading-assets.md).
 
-² Subscriptions are read-only for now (`flightline subscriptions list/get/reports`). Subscription writes (groups, products, prices, intro offers, promotional offers) are deferred, with no near-term plan.
+² Subscriptions are read-only for now. Subscription writes are deferred, with no near-term plan.
 
-³ App Store Review submission (the actual "ship this version" verb) is **intentionally manual**. `flightline review-submissions list` and `flightline review-submissions items` show submission state read-only; the create-and-submit flow happens in the ASC web portal. Rationale: review submission is a high-stakes, non-reversible action where double-checking in the portal is the safer default while the rest of the toolchain matures.
+³ App Store Review submission is intentionally manual; see [What it doesn't do](#what-it-doesnt-do).
 
-⁴ `flightline reviews list/get/summary` is read-only. Replying to reviews is not implemented.
+⁴ Replying to reviews is not implemented.
 
-⁵ `appPrivacyDetails` is absent from ASC API v4.3. `flightline privacy-labels get` returns a typed `supported: false` diagnostic explaining the gap rather than silently failing. Flightline will wire this when Apple adds the endpoint to the spec.
+⁵ `appPrivacyDetails` is absent from ASC API v4.3. `flightline privacy-labels get` returns a typed `supported: false` diagnostic rather than silently failing.
+
 ---
 
 ## Architecture
@@ -149,121 +249,12 @@ flowchart TB
 **Layer stack:**
 
 ```
-L3: preflight rules (internal/lint/) ─── catches clerical rejection causes
-L2: state-as-code  (internal/state/) ─── declare → diff → apply
-L1: API CLI        (internal/asc/)   ─── every ASC surface as a terminal command
+L3: preflight rules (internal/lint/)  ... catches clerical rejection causes
+L2: state-as-code   (internal/state/) ... declare, diff, apply
+L1: API CLI         (internal/asc/)   ... every ASC surface as a terminal command
 ```
 
-Each layer is useful standalone. You can use `flightline sales` and `flightline reviews` without ever touching a `state.yaml`. You can use L2 without running preflight. L3 preflight can catch issues even if you manage writes manually.
-
----
-
-## The lifecycle
-
-### Authoring (stop getting rejected)
-
-```mermaid
-flowchart LR
-    A["1. fetch\nread live state"] --> B["2. edit\nstate.yaml"]
-    B --> C["3. lint\noffline check"]
-    C --> D["4. plan\ndiff vs live"]
-    D --> E["5. preflight\nlive rule check"]
-    E --> F["6. apply --confirm\nidempotent writes"]
-    F --> G["7. submit\ntestflight beta-review submit"]
-    G --> H["8. rejection\ndiagnose if bounced"]
-
-    classDef readonly fill:#e8f5e9,stroke:#388e3c,color:#1b5e20
-    classDef write fill:#fff8e1,stroke:#f9a825,color:#3e2723
-    classDef commit fill:#fce4ec,stroke:#c62828,color:#b71c1c
-
-    class A,C,D,E,H readonly
-    class B write
-    class F,G commit
-```
-
-Steps 1 to 5 are read-only and reversible. Step 6 patches ASC but does not submit for review. Step 7 (the beta-review submit) is the only action that triggers Apple Review, and it requires explicit confirmation.
-
-### Observation (stop opening the web UI)
-
-```bash
-flightline sales com.under5.passdmv --days 30
-flightline finance com.under5.passdmv --month 2026-04
-flightline subscriptions list com.under5.passdmv
-flightline reviews list com.under5.passdmv --rating 1 --rating 2 --rating 3
-flightline reviews summary com.under5.passdmv
-flightline analytics request com.under5.passdmv --wait
-flightline beta-feedback crash com.under5.passdmv
-flightline diagnostics list com.under5.passdmv
-flightline performance app com.under5.passdmv
-```
-
-All observation commands support `--output json` for piping to `jq` or feeding to LLM prompts.
-
----
-
-## Install
-
-```bash
-go install github.com/ul0gic/flightline@latest
-```
-
-Requires Go 1.26+. App Store Connect work requires a Mac, so that's where Flightline is meant to run (Apple Silicon and Intel both supported); the binary itself builds anywhere Go does.
-
-Verify the install:
-
-```bash
-flightline --version
-flightline --help
-```
-
-`go install` is the supported install method for now. To compile from a checkout, see [Building from source](#building-from-source). A Homebrew tap may follow once the project is released.
-
----
-
-## Setup
-
-Flightline authenticates with an App Store Connect API key (a `.p8` private key it signs an ES256 JWT with), not your Apple ID. One-time setup:
-
-1. **Generate a key.** App Store Connect > Users and Access > Integrations > App Store Connect API > **+**. Grant role **App Manager** (or **Admin** for finance reports). Click **Generate**, then **Download API Key**: the `.p8` downloads only once. Note the **Key ID** and **Issuer ID**.
-2. **Place the key.** Move it to `~/.appstoreconnect/AuthKey_<KEY_ID>.p8` and `chmod 600` it. Flightline refuses a `.p8` with permissions wider than `600` and prints the exact fix.
-3. **Export credentials.** In `~/.zshrc` (or `~/.bashrc`):
-
-   ```bash
-   export APP_STORE_CONNECT_KEY_ID="ABCD1234EF"
-   export APP_STORE_CONNECT_ISSUER_ID="12345678-90ab-cdef-1234-567890abcdef"
-   export APP_STORE_CONNECT_VENDOR_NUMBER="12345678"   # sales/finance only
-   ```
-
-4. **Verify.** Run `flightline whoami`; `AUTHORIZED true` means you are set.
-
-For the full walkthrough (roles, troubleshooting 401/403/chmod, alternative config paths), see [docs/getting-started/apple-api-key.md](docs/getting-started/apple-api-key.md).
-
-**Alternative configuration paths** (lower precedence than env vars): CLI flags (`--key-id`, `--issuer-id`) on every command, or a config file at `~/.config/flightline/config.yaml`. See [Configuration precedence](#configuration-precedence) for the resolution order.
-
----
-
-## Quickstart
-
-Five commands that verify the install works and cover both pillars:
-
-```bash
-# Verify auth
-flightline whoami
-
-# List your apps
-flightline apps list
-
-# Inspect a version
-flightline versions get com.under5.passdmv --version 1.0
-
-# Diagnose a rejection (if the version is in REJECTED state)
-flightline rejection com.under5.passdmv --version 1.0
-
-# Run offline preflight against a state file
-flightline lint state.yaml
-```
-
-Replace `com.under5.passdmv` with your bundle ID. For the full state-as-code walkthrough (fetch → edit → plan → apply), see [docs/guides/state-as-code.md](docs/guides/state-as-code.md).
+Each layer is useful standalone. You can use `flightline sales` and `flightline reviews` without ever touching a `state.yaml`, and L3 preflight catches issues even if you manage writes manually.
 
 ---
 
@@ -274,7 +265,6 @@ Replace `com.under5.passdmv` with your bundle ID. For the full state-as-code wal
 ```bash
 # Versions
 flightline versions list com.under5.passdmv
-flightline versions get com.under5.passdmv --version 1.1
 flightline versions create com.under5.passdmv --version 1.1 --copyright "2026 ..."
 flightline versions update com.under5.passdmv --version 1.1 --release-type MANUAL
 
@@ -287,7 +277,6 @@ flightline screenshots upload com.under5.passdmv --version 1.1 \
   --locale en-US --device-set APP_IPHONE_67 ./screenshots/iphone.png
 
 # IAPs
-flightline iap list com.under5.passdmv
 flightline iap create com.under5.passdmv --name "Lifetime" \
   --product-id com.under5.passdmv.lifetime --type NON_CONSUMABLE
 
@@ -296,11 +285,8 @@ flightline age-rating set com.under5.passdmv --version 1.1 --from-file rating.js
 flightline export-compliance set com.under5.passdmv --version 1.1 \
   --uses-non-exempt-encryption false
 
-# Review submissions
-flightline review-submissions list com.under5.passdmv
+# Review submissions (read-only) and rejection diagnosis
 flightline review-submissions items com.under5.passdmv --submission <id>
-
-# Diagnose a rejection
 flightline rejection com.under5.passdmv --version 1.1
 ```
 
@@ -311,29 +297,19 @@ flightline rejection com.under5.passdmv --version 1.1
 flightline reviews list com.under5.passdmv --rating 1 --rating 2
 flightline reviews summary com.under5.passdmv
 
-# Sales and finance reports
+# Sales, finance, and subscription reports
 flightline sales com.under5.passdmv --days 30
-flightline sales com.under5.passdmv --month 2026-04 --output json
 flightline finance com.under5.passdmv --month 2026-04
-
-# Subscription reports
-flightline subscriptions list com.under5.passdmv
 flightline subscriptions reports com.under5.passdmv --type summary --range P30D
 
 # Analytics (async: request, poll, download)
 flightline analytics request com.under5.passdmv --access-type ONE_TIME_SNAPSHOT --wait
-flightline analytics list-instances com.under5.passdmv --report-id <id>
 flightline analytics download com.under5.passdmv --instance <id> --out report.csv
 
-# TestFlight feedback and crash diagnostics
+# TestFlight feedback, crash diagnostics, performance
 flightline beta-feedback crash com.under5.passdmv
-flightline beta-feedback screenshot com.under5.passdmv
 flightline diagnostics list com.under5.passdmv
-flightline diagnostics get com.under5.passdmv --signature <id>
-
-# Performance metrics
 flightline performance app com.under5.passdmv
-flightline performance build com.under5.passdmv --build <id>
 ```
 
 ### State as Code: declare, diff, apply
@@ -352,7 +328,7 @@ flightline apply state.yaml --confirm
 flightline apply state.yaml --confirm --resume
 ```
 
-See [docs/reference/state-yaml.md](docs/reference/state-yaml.md) for the full v1alpha1 schema reference and [docs/guides/state-as-code.md](docs/guides/state-as-code.md) for a step-by-step walkthrough.
+Schema reference: [docs/reference/state-yaml.md](docs/reference/state-yaml.md). Walkthrough: [docs/guides/state-as-code.md](docs/guides/state-as-code.md).
 
 ### Preflight: catch rejections before they happen
 
@@ -370,7 +346,7 @@ flightline preflight com.under5.passdmv --version 1.1 --state-file state.yaml
 flightline preflight com.under5.passdmv --version 1.1 --output json | jq '.diagnostics'
 ```
 
-See [docs/reference/preflight-rules.md](docs/reference/preflight-rules.md) for every rule with mode, severity, fix hints, and examples.
+Every rule with mode, severity, and fix hints: [docs/reference/preflight-rules.md](docs/reference/preflight-rules.md).
 
 ---
 
@@ -428,83 +404,34 @@ output: table
 
 ## What it doesn't do
 
-**Not Fastlane.** No pipeline DSL, no build orchestration. Flightline is the ASC config and reporting layer. `xcodebuild`, Xcode Cloud, and Fastlane still own compilation, signing, and binary upload.
+**Not Fastlane.** No pipeline DSL, no build orchestration. `xcodebuild`, Xcode Cloud, and Fastlane still own compilation, signing, and binary upload. You point a build at a version with `builds attach`; Flightline handles everything from that point forward.
 
-**Not a build tool.** Flightline doesn't compile, archive, or upload `.ipa` files. You point a build at a version with `builds attach`; Flightline handles everything from that point forward.
-
-**Not a screenshot generator.** Flightline uploads screenshots you provide via `screenshots upload`.
+**Not a screenshot generator.** Flightline uploads screenshots you provide.
 
 **Not a SaaS.** No backend, no telemetry, no accounts. The binary talks directly to Apple's API using your credentials.
 
-**Not the App Store Review submit button, by design.** Flightline preps everything that goes into a submission (build attach, metadata, screenshots, IAPs, age rating, export compliance, demo creds), and `flightline preflight` will tell you whether the version is submission-ready, but the final "Submit for Review" click happens in the ASC web portal. Review submission is high-stakes and non-reversible; keeping the human-in-the-loop step in the portal where you can also see the full submission summary is the safer default for now. May be wired as `flightline review-submissions submit` in a later version once the rest of the toolchain has more real-world miles on it.
+**Not the App Store Review submit button, by design.** Flightline preps everything that goes into a submission, and `flightline preflight` tells you whether the version is submission-ready, but the final "Submit for Review" click happens in the ASC web portal. Review submission is high-stakes and non-reversible; keeping that one step human-in-the-loop is the safer default while the toolchain accumulates real-world miles. May be wired as `flightline review-submissions submit` later.
 
-**Three portal-only surfaces.** Apple's public API does not expose these. Flightline tells you explicitly when you hit them rather than silently failing:
+**Two portal-only surfaces.** Apple's public API does not expose these, and Flightline tells you explicitly when you hit them:
 
 - **Resolution-center reviewer messages:** the rejection text written by Apple's reviewers is not in the v4.3 API. `flightline rejection` reports every API-visible state field and tells you to check the portal for the actual message.
-- **Privacy nutrition labels** (`appPrivacyDetails`): entirely absent from ASC API v4.3. `flightline privacy-labels get` returns a typed `supported: false` diagnostic. Flightline will wire this when Apple adds the endpoint to the spec.
-- **App Store Review submission** (covered above): wired as a deliberate human-in-the-loop step, not an API gap.
+- **Privacy nutrition labels** (`appPrivacyDetails`): entirely absent from ASC API v4.3. `flightline privacy-labels get` returns a typed `supported: false` diagnostic.
 
 ---
 
 ## Documentation
 
-**Getting started**
-
 | Document | What it covers |
 |---|---|
 | [docs/getting-started/install.md](docs/getting-started/install.md) | Install via `go install` or from source |
-| [docs/getting-started/apple-api-key.md](docs/getting-started/apple-api-key.md) | Full App Store Connect API key setup: generate, place the `.p8`, export env vars, verify |
+| [docs/getting-started/apple-api-key.md](docs/getting-started/apple-api-key.md) | Full API key setup: generate, place the `.p8`, export env vars, verify |
 | [docs/getting-started/first-run.md](docs/getting-started/first-run.md) | The first five read-only commands |
-
-**Guides**
-
-| Document | What it covers |
-|---|---|
-| [docs/guides/state-as-code.md](docs/guides/state-as-code.md) | Fetch → edit → plan → apply walkthrough using passdmv |
-| [docs/guides/uploading-assets.md](docs/guides/uploading-assets.md) | Uploading screenshots and IAP review screenshots via the L1 verbs |
-
-**Reference**
-
-| Document | What it covers |
-|---|---|
-| [docs/reference/state-yaml.md](docs/reference/state-yaml.md) | Full v1alpha1 reference: every field, type, constraint, and gotcha |
-| [docs/reference/preflight-rules.md](docs/reference/preflight-rules.md) | All 11 preflight rules + submission-checklist items Apple's API doesn't expose |
-| [docs/reference/cli.md](docs/reference/cli.md) | Command-group index pointing at `flightline <group> --help` |
-
-**Concepts**
-
-| Document | What it covers |
-|---|---|
-| [docs/concepts/three-layer-model.md](docs/concepts/three-layer-model.md) | How L1 (API CLI), L2 (state-as-code), and L3 (preflight) fit together |
-
----
-
-## Building from source
-
-Requires Go 1.26 or later.
-
-### Clone and build
-
-```bash
-git clone https://github.com/ul0gic/flightline.git
-cd flightline
-make build
-./bin/flightline --version
-```
-
-The binary is at `./bin/flightline`. Move it onto your `PATH` if you want it system-wide:
-
-```bash
-sudo mv ./bin/flightline /usr/local/bin/flightline
-```
-
-### Or via `go install`
-
-```bash
-go install github.com/ul0gic/flightline@latest
-```
-
-The binary lands in `$GOBIN` (typically `~/go/bin`). Make sure `~/go/bin` is on your `PATH`.
+| [docs/guides/state-as-code.md](docs/guides/state-as-code.md) | Fetch, edit, plan, apply walkthrough |
+| [docs/guides/uploading-assets.md](docs/guides/uploading-assets.md) | Uploading screenshots and IAP review screenshots |
+| [docs/reference/state-yaml.md](docs/reference/state-yaml.md) | Full v1alpha1 schema reference |
+| [docs/reference/preflight-rules.md](docs/reference/preflight-rules.md) | All 11 preflight rules + submission-checklist items |
+| [docs/reference/cli.md](docs/reference/cli.md) | Command-group index |
+| [docs/concepts/three-layer-model.md](docs/concepts/three-layer-model.md) | How L1, L2, and L3 fit together |
 
 ---
 
@@ -513,28 +440,22 @@ The binary lands in `$GOBIN` (typically `~/go/bin`). Make sure `~/go/bin` is on 
 ```bash
 make build    # produces ./bin/flightline
 make test     # go test ./... -race
-make vet      # go vet ./...
 make lint     # golangci-lint run
 make verify   # vet + test + lint (the gate)
 make fmt      # gofmt -s -w . && goimports -w .
-make clean    # remove ./bin and coverage artifacts
 ```
 
-**Architecture decisions** live in `.project/` (gitignored, internal scaffolding). The design rationale for the hand-rolled API client instead of codegen, the JWT IEEE P1363 requirement, the async-poll state persistence model, and every other non-obvious choice are documented there.
+**Adding a command:** query `openapi.oas.json` with `jq` for the endpoint shape, add a client function under `internal/asc/`, a cobra command under `internal/cmd/`, and a golden fixture under `internal/asc/testdata/golden/`. The pattern is consistent throughout.
 
-**Adding a command:** query `openapi.oas.json` with `jq` for the endpoint shape, add a file under `internal/asc/` for the client function, add a file under `internal/cmd/` for the cobra command, add a golden fixture under `internal/asc/testdata/golden/`. See existing files for the pattern. It is consistent throughout.
-
-**Tests:** unit tests for all command logic, HTTP fixture replay tests for the client (captured Apple responses replayed via a local server), integration tests behind `//go:build integration`. Run `make test` before any commit.
+**Tests:** unit tests for command logic, HTTP fixture replay tests for the client, integration tests behind `//go:build integration`. Run `make test` before any commit.
 
 ---
 
 ## Status
 
-v0.0.1-pre, not yet released. L1 (full API CLI, both authoring and observation pillars), L2 (state-as-code with fetch/plan/apply), and L3 (11 preflight rules) are all complete.
+v0.0.1-pre, not yet released. L1 (full API CLI), L2 (state-as-code), and L3 (11 preflight rules) are complete. Planned next: release binaries, a Homebrew tap, and retiring the legacy Node CLI.
 
-Planned next: GoReleaser-built release binaries, a Homebrew tap, and retiring the legacy Node CLI.
-
-Open-sourced under MIT and maintained by [ul0gic](https://github.com/ul0gic). Contributions are welcome: read [CONTRIBUTING.md](CONTRIBUTING.md) first. Cadence is evenings and weekends, not a funded project, so reviews may take a few days.
+Maintained by [ul0gic](https://github.com/ul0gic). Contributions welcome: read [CONTRIBUTING.md](CONTRIBUTING.md) first. Cadence is evenings and weekends, so reviews may take a few days.
 
 ---
 
