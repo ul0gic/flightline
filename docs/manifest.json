@@ -3,33 +3,81 @@
     {
       "label": "Getting Started",
       "items": [
-        { "file": "getting-started/install.md", "label": "Install" },
-        { "file": "getting-started/apple-api-key.md", "label": "Apple API key" },
-        { "file": "getting-started/first-run.md", "label": "First run" }
+        {
+          "file": "getting-started/install.md",
+          "label": "Install",
+          "description": "go install or a source build, and how to verify the binary."
+        },
+        {
+          "file": "getting-started/apple-api-key.md",
+          "label": "Apple API key",
+          "description": "Generate the key, place the .p8, export credentials, verify with whoami."
+        },
+        {
+          "file": "getting-started/first-run.md",
+          "label": "First run",
+          "description": "Five read-only commands to prove the setup against your real account."
+        }
       ]
     },
     {
       "label": "Guides",
       "items": [
-        { "file": "guides/state-as-code.md", "label": "State as Code" },
-        { "file": "guides/uploading-assets.md", "label": "Uploading assets" },
-        { "file": "guides/preflight-in-ci.md", "label": "Preflight in CI" },
-        { "file": "guides/observability.md", "label": "Observability" }
+        {
+          "file": "guides/state-as-code.md",
+          "label": "State as Code",
+          "description": "Fetch live state to YAML, edit, plan the diff, apply it idempotently."
+        },
+        {
+          "file": "guides/uploading-assets.md",
+          "label": "Uploading assets",
+          "description": "Screenshots and IAP review screenshots through the upload verbs."
+        },
+        {
+          "file": "guides/preflight-in-ci.md",
+          "label": "Preflight in CI",
+          "description": "Lint offline, preflight live, and gate CI on exit codes."
+        },
+        {
+          "file": "guides/observability.md",
+          "label": "Observability",
+          "description": "Sales, finance, reviews, analytics, crashes, and metrics, all pipeable."
+        }
       ]
     },
     {
       "label": "Reference",
       "items": [
-        { "file": "reference/state-yaml.md", "label": "state.yaml schema" },
-        { "file": "reference/preflight-rules.md", "label": "Preflight rules" },
-        { "file": "reference/cli.md", "label": "CLI reference" },
-        { "file": "reference/json-output.md", "label": "JSON output" }
+        {
+          "file": "reference/state-yaml.md",
+          "label": "state.yaml schema",
+          "description": "Every field, type, and constraint in the v1alpha1 schema."
+        },
+        {
+          "file": "reference/preflight-rules.md",
+          "label": "Preflight rules",
+          "description": "All 11 rules with mode, severity, and fix hints."
+        },
+        {
+          "file": "reference/cli.md",
+          "label": "CLI reference",
+          "description": "Every command group and flag, generated from source."
+        },
+        {
+          "file": "reference/json-output.md",
+          "label": "JSON output",
+          "description": "The stable JSON contract and patterns for jq and LLM consumers."
+        }
       ]
     },
     {
       "label": "Concepts",
       "items": [
-        { "file": "concepts/three-layer-model.md", "label": "Three-layer model" }
+        {
+          "file": "concepts/three-layer-model.md",
+          "label": "Three-layer model",
+          "description": "How the API CLI, state as code, and preflight fit together."
+        }
       ]
     }
   ]
