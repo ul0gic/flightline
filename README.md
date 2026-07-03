@@ -27,7 +27,7 @@ MIT licensed, contributions welcome ([CONTRIBUTING.md](CONTRIBUTING.md)). No Saa
 - [Quickstart](#quickstart)
 - [Why Flightline](#why-flightline)
 - [The lifecycle](#the-lifecycle)
-- [What it does today](#what-it-does-today-v001-pre)
+- [What it does today](#what-it-does-today)
 - [Architecture](#architecture)
 - [Commands by category](#commands-by-category)
 - [Output](#output)
@@ -63,7 +63,7 @@ make build
 ./bin/flightline --version
 ```
 
-A Homebrew tap will follow once the project is released. Full details in [docs/getting-started/install.md](docs/getting-started/install.md).
+`go install` is the install method — a single static binary, no package manager needed. Full details in [docs/getting-started/install.md](docs/getting-started/install.md).
 
 ---
 
@@ -97,16 +97,16 @@ flightline whoami
 flightline apps list
 
 # Inspect a version
-flightline versions get com.under5.passdmv --version 1.0
+flightline versions get app.tideterm.ios --version 1.0
 
 # Diagnose a rejection (if the version is in REJECTED state)
-flightline rejection com.under5.passdmv --version 1.0
+flightline rejection app.tideterm.ios --version 1.0
 
 # Run offline preflight against a state file
 flightline lint state.yaml
 ```
 
-Replace `com.under5.passdmv` with your bundle ID. For the full fetch, edit, plan, apply walkthrough, see [docs/guides/state-as-code.md](docs/guides/state-as-code.md).
+Replace `app.tideterm.ios` with your bundle ID. For the full fetch, edit, plan, apply walkthrough, see [docs/guides/state-as-code.md](docs/guides/state-as-code.md).
 
 ---
 
@@ -159,19 +159,19 @@ Steps 1 to 5 are read-only and reversible. Step 6 patches ASC but does not submi
 ### Observation (stop opening the web UI)
 
 ```bash
-flightline sales com.under5.passdmv --days 30
-flightline finance com.under5.passdmv --month 2026-04
-flightline reviews summary com.under5.passdmv
-flightline analytics request com.under5.passdmv --wait
-flightline beta-feedback crash com.under5.passdmv
-flightline performance app com.under5.passdmv
+flightline sales app.tideterm.ios --days 30
+flightline finance app.tideterm.ios --month 2026-04
+flightline reviews summary app.tideterm.ios
+flightline analytics request app.tideterm.ios --wait
+flightline beta-feedback crash app.tideterm.ios
+flightline performance app app.tideterm.ios
 ```
 
 All observation commands support `--output json` for piping to `jq` or feeding to LLM prompts.
 
 ---
 
-## What it does today (v0.0.1-pre)
+## What it does today
 
 All three layers are complete: L1 (API CLI), L2 (state-as-code), and L3 (preflight rules).
 
@@ -264,59 +264,59 @@ Each layer is useful standalone. You can use `flightline sales` and `flightline 
 
 ```bash
 # Versions
-flightline versions list com.under5.passdmv
-flightline versions create com.under5.passdmv --version 1.1 --copyright "2026 ..."
-flightline versions update com.under5.passdmv --version 1.1 --release-type MANUAL
+flightline versions list app.tideterm.ios
+flightline versions create app.tideterm.ios --version 1.1 --copyright "2026 ..."
+flightline versions update app.tideterm.ios --version 1.1 --release-type MANUAL
 
 # Metadata and localizations
-flightline metadata set com.under5.passdmv --version 1.1 \
+flightline metadata set app.tideterm.ios --version 1.1 \
   --locale en-US --name "PassDMV" --subtitle "..."
 
 # Screenshots
-flightline screenshots upload com.under5.passdmv --version 1.1 \
+flightline screenshots upload app.tideterm.ios --version 1.1 \
   --locale en-US --device-set APP_IPHONE_67 ./screenshots/iphone.png
 
 # IAPs
-flightline iap create com.under5.passdmv --name "Lifetime" \
-  --product-id com.under5.passdmv.lifetime --type NON_CONSUMABLE
+flightline iap create app.tideterm.ios --name "Lifetime" \
+  --product-id app.tideterm.ios.lifetime --type NON_CONSUMABLE
 
 # Age rating and compliance
-flightline age-rating set com.under5.passdmv --version 1.1 --from-file rating.json
-flightline export-compliance set com.under5.passdmv --version 1.1 \
+flightline age-rating set app.tideterm.ios --version 1.1 --from-file rating.json
+flightline export-compliance set app.tideterm.ios --version 1.1 \
   --uses-non-exempt-encryption false
 
 # Review submissions (read-only) and rejection diagnosis
-flightline review-submissions items com.under5.passdmv --submission <id>
-flightline rejection com.under5.passdmv --version 1.1
+flightline review-submissions items app.tideterm.ios --submission <id>
+flightline rejection app.tideterm.ios --version 1.1
 ```
 
 ### Observation: read account state
 
 ```bash
 # Customer reviews
-flightline reviews list com.under5.passdmv --rating 1..2
-flightline reviews summary com.under5.passdmv
+flightline reviews list app.tideterm.ios --rating 1..2
+flightline reviews summary app.tideterm.ios
 
 # Sales, finance, and subscription reports
-flightline sales com.under5.passdmv --days 30
-flightline finance com.under5.passdmv --month 2026-04
-flightline subscriptions reports com.under5.passdmv --type summary --range P30D
+flightline sales app.tideterm.ios --days 30
+flightline finance app.tideterm.ios --month 2026-04
+flightline subscriptions reports app.tideterm.ios --type summary --range P30D
 
 # Analytics (async: request, poll, download)
-flightline analytics request com.under5.passdmv --access-type ONE_TIME_SNAPSHOT --wait
-flightline analytics download com.under5.passdmv --instance <id> --out ./reports
+flightline analytics request app.tideterm.ios --access-type ONE_TIME_SNAPSHOT --wait
+flightline analytics download app.tideterm.ios --instance <id> --out ./reports
 
 # TestFlight feedback, crash diagnostics, performance
-flightline beta-feedback crash com.under5.passdmv
-flightline diagnostics list com.under5.passdmv
-flightline performance app com.under5.passdmv
+flightline beta-feedback crash app.tideterm.ios
+flightline diagnostics list app.tideterm.ios
+flightline performance app app.tideterm.ios
 ```
 
 ### State as Code: declare, diff, apply
 
 ```bash
 # Snapshot live ASC state into a YAML file
-flightline fetch com.under5.passdmv > state.yaml
+flightline fetch app.tideterm.ios > state.yaml
 
 # Preview what would change (no writes)
 flightline plan state.yaml
@@ -337,13 +337,13 @@ Schema reference: [docs/reference/state-yaml.md](docs/reference/state-yaml.md). 
 flightline lint state.yaml
 
 # Live: reads ASC state, runs all 11 rules, reports pass/fail
-flightline preflight com.under5.passdmv --version 1.1
+flightline preflight app.tideterm.ios --version 1.1
 
 # Cross-check live state against a state file
-flightline preflight com.under5.passdmv --version 1.1 --state-file state.yaml
+flightline preflight app.tideterm.ios --version 1.1 --state-file state.yaml
 
 # JSON output for CI integration
-flightline preflight com.under5.passdmv --version 1.1 --output json | jq '.diagnostics'
+flightline preflight app.tideterm.ios --version 1.1 --output json | jq '.diagnostics'
 ```
 
 Every rule with mode, severity, and fix hints: [docs/reference/preflight-rules.md](docs/reference/preflight-rules.md).
@@ -360,7 +360,7 @@ flightline apps list --output table
 
 ```
 BUNDLE ID                  NAME         STATUS
-com.under5.passdmv         PassDMV      READY_FOR_SALE
+app.tideterm.ios         PassDMV      READY_FOR_SALE
 ```
 
 ```bash
@@ -370,9 +370,9 @@ flightline apps list --output json
 ```json
 [
   {
-    "bundleId": "com.under5.passdmv",
+    "bundleId": "app.tideterm.ios",
     "name": "PassDMV",
-    "sku": "passdmv",
+    "sku": "tideterm",
     "primaryLocale": "en-US"
   }
 ]
@@ -453,7 +453,9 @@ make fmt      # gofmt -s -w . && goimports -w .
 
 ## Status
 
-v0.0.1-pre, not yet released. L1 (full API CLI), L2 (state-as-code), and L3 (11 preflight rules) are complete. Planned next: release binaries, a Homebrew tap, and retiring the legacy Node CLI.
+All three layers are complete and verified against live App Store Connect: L1 (full API CLI), L2 (state-as-code), and L3 (11 preflight rules). Releases are cut by tagging `v*` on GitHub — the release pipeline builds, signs, and publishes binaries with an SBOM automatically.
+
+**Versioning policy (pre-1.0):** breaking changes to flags, JSON output, or exit codes can happen between minor versions (0.5 → 0.6), are always flagged in a `### Breaking` section of the release notes, and never happen in patch releases. 1.0 locks the contract.
 
 Maintained by [ul0gic](https://github.com/ul0gic). Contributions welcome: read [CONTRIBUTING.md](CONTRIBUTING.md) first. Cadence is evenings and weekends, so reviews may take a few days.
 

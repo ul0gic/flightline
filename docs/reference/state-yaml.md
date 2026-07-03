@@ -52,7 +52,7 @@ Identifies the app and the version being described. These three fields are also 
 
 ```yaml
 metadata:
-  bundleId: com.under5.passdmv
+  bundleId: app.tideterm.ios
   version: "1.0.1"
   platform: IOS
 ```
@@ -75,7 +75,7 @@ Controls how and when the version releases once approved by Apple Review.
 spec:
   version:
     releaseType: AFTER_APPROVAL
-    copyright: "© 2026 CoreLift LLC"
+    copyright: "© 2026 Tideterm Labs"
 ```
 
 | Field | Type | Required | Default | Constraint | Gotcha |
@@ -123,9 +123,9 @@ spec:
         keywords: "DMV,driver,test,license,California,permit,practice"
         whatsNew: "v1.0.1, bug fixes, faster question loading."
         promotionalText: "Free updates as the DMV question bank evolves."
-        marketingUrl: "https://under5.com/passdmv"
-        supportUrl: "https://under5.com/passdmv/support"
-        privacyPolicyUrl: "https://under5.com/passdmv/privacy"
+        marketingUrl: "https://tideterm.app"
+        supportUrl: "https://tideterm.app/support"
+        privacyPolicyUrl: "https://tideterm.app/privacy"
       es-MX:
         name: ".PassDMV: California"
         subtitle: "Aprueba a la primera"
@@ -209,7 +209,7 @@ In-app purchases keyed by `productId`. This section covers consumable, non-consu
 spec:
   iap:
     products:
-      com.under5.passdmv.lifetime:
+      app.tideterm.ios.lifetime:
         type: NON_CONSUMABLE
         name: "Lifetime Access"
         familySharable: false
@@ -347,7 +347,7 @@ Login credentials for App Review. Apple requires demo credentials for any app th
 ```yaml
 spec:
   reviewerDemo:
-    username: "demo@under5.com"
+    username: "demo@tideterm.app"
     passwordRef: env:PASSDMV_DEMO_PASSWORD
     notes: |
       Tap any practice test to start. The IAP unlock screen appears

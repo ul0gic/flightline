@@ -2,7 +2,7 @@
 
 ## What you'll do
 
-In about 5 minutes: fetch the live App Store Connect state of an existing app into a YAML file, edit one field, preview the diff, and apply it. The example uses passdmv (`com.under5.passdmv`) throughout, but every command takes a bundle ID, substitute your own.
+In about 5 minutes: fetch the live App Store Connect state of an existing app into a YAML file, edit one field, preview the diff, and apply it. The example uses tideterm (`app.tideterm.ios`) throughout, but every command takes a bundle ID, substitute your own.
 
 When you finish, you'll have a `state.yaml` that is the authoritative source of truth for your app's ASC configuration, diffable in git, and applicable idempotently.
 
@@ -44,13 +44,13 @@ Add these to your shell profile or a `.envrc` (gitignored). Flightline reads the
 Pull the current ASC state for your app into a file:
 
 ```bash
-flightline fetch com.under5.passdmv -o state.yaml
+flightline fetch app.tideterm.ios -o state.yaml
 ```
 
 Or capture to stdout and redirect:
 
 ```bash
-flightline fetch com.under5.passdmv > state.yaml
+flightline fetch app.tideterm.ios > state.yaml
 ```
 
 Flightline writes to stderr when using `-o`:
@@ -71,14 +71,14 @@ apiVersion: flightline.dev/v1alpha1
 kind: AppState
 
 metadata:
-  bundleId: com.under5.passdmv
+  bundleId: app.tideterm.ios
   version: "1.0.1"
   platform: IOS
 
 spec:
   version:
     releaseType: AFTER_APPROVAL
-    copyright: © 2026 CoreLift LLC
+    copyright: © 2026 Tideterm Labs
 
   build:
     number: "42"
@@ -93,9 +93,9 @@ spec:
           Track your progress, focus on weak areas, and pass with confidence.
         keywords: DMV,driver,test,license,California,permit,practice
         promotionalText: Free updates as the DMV question bank evolves.
-        marketingUrl: https://under5.com/passdmv
-        supportUrl: https://under5.com/passdmv/support
-        privacyPolicyUrl: https://under5.com/passdmv/privacy
+        marketingUrl: https://tideterm.app
+        supportUrl: https://tideterm.app/support
+        privacyPolicyUrl: https://tideterm.app/privacy
   ...
 ```
 
@@ -148,7 +148,7 @@ flightline plan state.yaml --output json
 
 ```json
 {
-  "bundleId": "com.under5.passdmv",
+  "bundleId": "app.tideterm.ios",
   "version": "1.0.1",
   "changes": [
     {
@@ -264,7 +264,7 @@ Steps 1 to 5 are reversible. Step 6 is the only point of no return.
 `flightline apply` cannot yet drive binary asset uploads (screenshots, IAP review screenshots, Custom Product Page screenshots). The diff engine compares checksums correctly, and `flightline plan` shows what would change, but `flightline apply` returns a typed error for these paths and directs you to the L1 upload verbs. Upload the assets first, then run `apply` for everything else:
 
 ```bash
-flightline screenshots upload com.under5.passdmv \
+flightline screenshots upload app.tideterm.ios \
   --version 1.0.1 --locale en-US --device-set APP_IPHONE_67 \
   ./screenshots/iphone67-1.png
 

@@ -9,7 +9,7 @@ This guide covers the upload workflow. For the state-file fields that describe t
 When `flightline plan` shows a screenshot or review-screenshot change, `flightline apply` returns a typed error for that path and points you at the upload verb. The intended flow is two commands: upload the asset, then run `apply` for everything else.
 
 ```bash
-flightline screenshots upload com.under5.passdmv \
+flightline screenshots upload app.tideterm.ios \
   --version 1.0.1 --locale en-US --device-set APP_IPHONE_67 \
   ./screenshots/iphone67-1.png
 
@@ -30,12 +30,12 @@ Files are positional arguments; you can pass a glob or several paths. Required f
 
 ```bash
 # A whole device set with a glob
-flightline screenshots upload com.under5.passdmv \
+flightline screenshots upload app.tideterm.ios \
   --version 1.0.1 --locale en-US --device-set APP_IPHONE_67 \
   ./shots/iphone-67/*.png
 
 # Explicit files for an iPad set
-flightline screenshots upload com.under5.passdmv \
+flightline screenshots upload app.tideterm.ios \
   --version 1.0.1 --locale en-US --device-set APP_IPAD_PRO_3GEN_129 \
   ./shots/ipad/01.png ./shots/ipad/02.png
 ```
@@ -51,7 +51,7 @@ Each device slot uploads 1 to 10 screenshots. Flightline computes an MD5 of each
 If an upload is interrupted (Ctrl-C, network drop), re-run with `--resume` to pick up from the on-disk checkpoint instead of restarting:
 
 ```bash
-flightline screenshots upload com.under5.passdmv \
+flightline screenshots upload app.tideterm.ios \
   --version 1.0.1 --locale en-US --device-set APP_IPHONE_67 --resume \
   ./shots/01.png
 ```
@@ -66,8 +66,8 @@ flightline iap review-screenshot upload <bundleId> \
 ```
 
 ```bash
-flightline iap review-screenshot upload com.under5.passdmv \
-  --product com.under5.passdmv.lifetime \
+flightline iap review-screenshot upload app.tideterm.ios \
+  --product app.tideterm.ios.lifetime \
   --file ./review/lifetime.png
 ```
 

@@ -28,9 +28,9 @@ the diff engine treats absence as "not managed" so Flightline leaves them
 alone on subsequent applies.
 
 Examples:
-  flightline fetch com.under5.passdmv > state.yaml
-  flightline fetch com.under5.passdmv -o state.yaml --version 1.0.1
-  flightline fetch com.under5.passdmv --output json | jq '.spec.version'`,
+  flightline fetch app.tideterm.ios > state.yaml
+  flightline fetch app.tideterm.ios -o state.yaml --version 1.0.1
+  flightline fetch app.tideterm.ios --output json | jq '.spec.version'`,
 		Args: cobra.ExactArgs(1),
 		RunE: runFetch,
 	}

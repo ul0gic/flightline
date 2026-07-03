@@ -18,20 +18,20 @@ Authoring examples:
 
 ```bash
 flightline apps list
-flightline versions create com.under5.passdmv --version 1.1 --copyright "..."
-flightline builds attach com.under5.passdmv --version 1.1 --build <id>
-flightline iap list com.under5.passdmv
-flightline rejection com.under5.passdmv --version 1.0
+flightline versions create app.tideterm.ios --version 1.1 --copyright "..."
+flightline builds attach app.tideterm.ios --version 1.1 --build <id>
+flightline iap list app.tideterm.ios
+flightline rejection app.tideterm.ios --version 1.0
 ```
 
 Observation examples:
 
 ```bash
-flightline sales com.under5.passdmv --days 30
-flightline finance com.under5.passdmv --month 2026-04
-flightline reviews list com.under5.passdmv --rating 1 --rating 2
-flightline analytics request com.under5.passdmv --access-type ONE_TIME_SNAPSHOT --wait
-flightline performance app com.under5.passdmv
+flightline sales app.tideterm.ios --days 30
+flightline finance app.tideterm.ios --month 2026-04
+flightline reviews list app.tideterm.ios --rating 1 --rating 2
+flightline analytics request app.tideterm.ios --access-type ONE_TIME_SNAPSHOT --wait
+flightline performance app app.tideterm.ios
 ```
 
 Every command supports `--output table|json`. The JSON shape is a stable contract, so you can pipe to `jq`, feed it to an LLM, or cron-schedule snapshots.
@@ -41,7 +41,7 @@ Every command supports `--output table|json`. The JSON shape is a stable contrac
 A single declarative YAML file per app describes the desired state across every authoring surface. Three commands drive it:
 
 ```bash
-flightline fetch com.under5.passdmv > state.yaml   # snapshot live ASC state into YAML
+flightline fetch app.tideterm.ios > state.yaml   # snapshot live ASC state into YAML
 flightline plan state.yaml                         # read-only diff, no writes
 flightline apply state.yaml --confirm              # idempotent writes, checkpointed
 ```
@@ -58,7 +58,7 @@ A growing rule set that captures the clerical reasons Apple rejects releases. Ev
 
 ```bash
 flightline lint state.yaml                          # offline; YAML correctness plus Apple format rules
-flightline preflight com.under5.passdmv --version 1.1   # live; reads ASC state, runs all rules
+flightline preflight app.tideterm.ios --version 1.1   # live; reads ASC state, runs all rules
 ```
 
 Sample rules:

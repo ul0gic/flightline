@@ -107,7 +107,7 @@ Flags, arguments, and defaults: `flightline export-compliance --help`.
 
 ## `fetch`
 
-Pulls every L2 surface Flightline supports for the given bundleId and writes the result as a Flightline state file. Default output is YAML with a yaml-language-server schema directive prepended for editor autocomplete. Surfaces not yet implemented (see QA-009) appear absent from the output; the diff engine treats absence as "not managed" so Flightline leaves them alone on subsequent applies. Examples: flightline fetch com.under5.passdmv > state.yaml flightline fetch com.under5.passdmv -o state.yaml --version 1.0.1 flightline fetch com.under5.passdmv --output json | jq '.spec.version'
+Pulls every L2 surface Flightline supports for the given bundleId and writes the result as a Flightline state file. Default output is YAML with a yaml-language-server schema directive prepended for editor autocomplete. Surfaces not yet implemented (see QA-009) appear absent from the output; the diff engine treats absence as "not managed" so Flightline leaves them alone on subsequent applies. Examples: flightline fetch app.tideterm.ios > state.yaml flightline fetch app.tideterm.ios -o state.yaml --version 1.0.1 flightline fetch app.tideterm.ios --output json | jq '.spec.version'
 
 Flags, arguments, and defaults: `flightline fetch --help`.
 

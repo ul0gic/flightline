@@ -10,16 +10,16 @@ flightline whoami
 flightline apps list
 
 # Inspect a version
-flightline versions get com.under5.passdmv --version 1.0
+flightline versions get app.tideterm.ios --version 1.0
 
 # Diagnose a rejection (if the version is in REJECTED state)
-flightline rejection com.under5.passdmv --version 1.0
+flightline rejection app.tideterm.ios --version 1.0
 
 # Run offline preflight against a state file
 flightline lint state.yaml
 ```
 
-Replace `com.under5.passdmv` with your own bundle ID.
+Replace `app.tideterm.ios` with your own bundle ID.
 
 ## What each command does
 

@@ -73,18 +73,3 @@ release:
     name: flightline
   draft: true
   prerelease: auto
-
-# Homebrew tap — DISABLED. Uncomment this block and set HOMEBREW_TAP_TOKEN in release.yml to enable.
-# brews:
-#   - name: flightline
-#     repository:
-#       owner: ul0gic
-#       name: homebrew-flightline
-#       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-#     homepage: "https://flightline.dev"
-#     description: "Single-binary CLI for App Store Connect"
-#     license: "MIT"
-#     install: |
-#       bin.install "flightline"
-#     test: |
-#       system "#{bin}/flightline", "--help"

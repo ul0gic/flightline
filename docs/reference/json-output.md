@@ -3,7 +3,7 @@
 Every Flightline command supports `--output json`. The JSON shape is a stable contract:
 
 - **Adding fields is backward-compatible.** New keys can appear in any release; consumers must tolerate unknown keys.
-- **Removing or renaming fields is a breaking change**, tracked by a major version bump. The same applies to rule IDs in diagnostics and to enum-like string values documented here.
+- **Removing or renaming fields is a breaking change.** The same applies to rule IDs in diagnostics and to enum-like string values documented here. Pre-1.0, breaking changes can land in minor releases (0.5 → 0.6) and are always flagged in a `### Breaking` section of the release notes; they never land in patch releases. 1.0 locks the contract behind a major version bump.
 - **Table output is not a contract.** Column layout, truncation, and formatting can change any time. If a script parses Flightline output, it parses `--output json`.
 
 Only data goes to stdout; progress and warnings go to stderr, so JSON output is always pipe-clean.

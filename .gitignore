@@ -3,16 +3,10 @@
 .project/
 .playwright-mcp/
 
-# Marketing site — moves to its own repo before go-live
-web/
-
 # Build output
 /bin/
 /dist/
 *.exe
-
-# pnpm store (leaks to repo root when pnpm runs in web/)
-.pnpm-store/
 
 # Coverage
 coverage.out

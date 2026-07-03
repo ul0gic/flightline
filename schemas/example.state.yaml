@@ -8,14 +8,14 @@ apiVersion: flightline.dev/v1alpha1
 kind: AppState
 
 metadata:
-  bundleId: com.under5.passdmv
+  bundleId: app.tideterm.ios
   version: "1.0.1"
   platform: IOS
 
 spec:
   version:
     releaseType: AFTER_APPROVAL
-    copyright: "© 2026 CoreLift LLC"
+    copyright: "© 2026 Tideterm Labs"
 
   build:
     number: "42"
@@ -32,9 +32,9 @@ spec:
         whatsNew: |
           v1.0.1 — bug fixes, improved test coverage, faster question loading.
         promotionalText: "Free updates as the DMV question bank evolves."
-        marketingUrl: "https://under5.com/passdmv"
-        supportUrl: "https://under5.com/passdmv/support"
-        privacyPolicyUrl: "https://under5.com/passdmv/privacy"
+        marketingUrl: "https://tideterm.app"
+        supportUrl: "https://tideterm.app/support"
+        privacyPolicyUrl: "https://tideterm.app/privacy"
 
   screenshots:
     locales:
@@ -49,7 +49,7 @@ spec:
 
   iap:
     products:
-      com.under5.passdmv.lifetime:
+      app.tideterm.ios.lifetime:
         type: NON_CONSUMABLE
         name: "Lifetime Access"
         familySharable: false
@@ -83,7 +83,7 @@ spec:
     usesNonExemptEncryption: false
 
   reviewerDemo:
-    username: "demo@under5.com"
+    username: "demo@tideterm.app"
     passwordRef: env:PASSDMV_DEMO_PASSWORD
     notes: |
       Tap any practice test to start. The Lifetime Access IAP unlock screen

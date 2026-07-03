@@ -25,7 +25,7 @@
       "required": ["bundleId", "version"],
       "properties": {
         "bundleId": {
-          "description": "App bundle identifier (e.g. com.under5.passdmv). Must already exist in App Store Connect; Flightline does not create apps.",
+          "description": "App bundle identifier (e.g. app.tideterm.ios). Must already exist in App Store Connect; Flightline does not create apps.",
           "type": "string",
           "pattern": "^[a-zA-Z0-9._-]+$",
           "minLength": 3

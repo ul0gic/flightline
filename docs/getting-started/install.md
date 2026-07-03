@@ -17,7 +17,7 @@ flightline --version
 flightline --help
 ```
 
-`go install` is the supported install method for now. A Homebrew tap may follow once the project is released.
+`go install` is the supported install method — a single static binary, no package manager needed.
 
 ## Build from source
 

@@ -135,7 +135,7 @@ func TestVersions_JSONOutputStability_List(t *testing.T) {
 					VersionString:   "1.0.1",
 					AppStoreState:   "PREPARE_FOR_SUBMISSION",
 					AppVersionState: "PREPARE_FOR_SUBMISSION",
-					Copyright:       "(c) 2025 CoreLift LLC",
+					Copyright:       "(c) 2025 Tideterm Labs",
 					ReviewType:      "APP_STORE",
 					ReleaseType:     "MANUAL",
 					Downloadable:    &dl,

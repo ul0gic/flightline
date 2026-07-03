@@ -30,7 +30,7 @@ func TestLoadState_Example(t *testing.T) {
 	if s.Kind != "AppState" {
 		t.Errorf("kind = %q, want AppState", s.Kind)
 	}
-	if s.Metadata.BundleID != "com.under5.passdmv" {
+	if s.Metadata.BundleID != "app.tideterm.ios" {
 		t.Errorf("bundleId = %q", s.Metadata.BundleID)
 	}
 	if s.Spec.Version == nil || s.Spec.Version.Copyright == nil || *s.Spec.Version.Copyright == "" {
