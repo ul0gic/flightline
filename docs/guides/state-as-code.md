@@ -253,7 +253,7 @@ Flightline fetched the live state, compared it to your file, and found no differ
 6. Submit     flightline testflight beta-review submit <bundleId> --build <n>  # triggers Apple Review
 ```
 
-Steps 1–5 are reversible. Step 6 is the only point of no return.
+Steps 1 to 5 are reversible. Step 6 is the only point of no return.
 
 ---
 

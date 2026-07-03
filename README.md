@@ -294,7 +294,7 @@ flightline rejection com.under5.passdmv --version 1.1
 
 ```bash
 # Customer reviews
-flightline reviews list com.under5.passdmv --rating 1 --rating 2
+flightline reviews list com.under5.passdmv --rating 1..2
 flightline reviews summary com.under5.passdmv
 
 # Sales, finance, and subscription reports
@@ -304,7 +304,7 @@ flightline subscriptions reports com.under5.passdmv --type summary --range P30D
 
 # Analytics (async: request, poll, download)
 flightline analytics request com.under5.passdmv --access-type ONE_TIME_SNAPSHOT --wait
-flightline analytics download com.under5.passdmv --instance <id> --out report.csv
+flightline analytics download com.under5.passdmv --instance <id> --out ./reports
 
 # TestFlight feedback, crash diagnostics, performance
 flightline beta-feedback crash com.under5.passdmv

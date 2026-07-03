@@ -1,0 +1,36 @@
+{
+  "groups": [
+    {
+      "label": "Getting Started",
+      "items": [
+        { "file": "getting-started/install.md", "label": "Install" },
+        { "file": "getting-started/apple-api-key.md", "label": "Apple API key" },
+        { "file": "getting-started/first-run.md", "label": "First run" }
+      ]
+    },
+    {
+      "label": "Guides",
+      "items": [
+        { "file": "guides/state-as-code.md", "label": "State as Code" },
+        { "file": "guides/uploading-assets.md", "label": "Uploading assets" },
+        { "file": "guides/preflight-in-ci.md", "label": "Preflight in CI" },
+        { "file": "guides/observability.md", "label": "Observability" }
+      ]
+    },
+    {
+      "label": "Reference",
+      "items": [
+        { "file": "reference/state-yaml.md", "label": "state.yaml schema" },
+        { "file": "reference/preflight-rules.md", "label": "Preflight rules" },
+        { "file": "reference/cli.md", "label": "CLI reference" },
+        { "file": "reference/json-output.md", "label": "JSON output" }
+      ]
+    },
+    {
+      "label": "Concepts",
+      "items": [
+        { "file": "concepts/three-layer-model.md", "label": "Three-layer model" }
+      ]
+    }
+  ]
+}

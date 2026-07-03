@@ -193,7 +193,7 @@ spec:
 | `path` | string | yes | Relative paths resolve against the directory containing the state file. PNG or JPG. |
 | `alt` | string | no | Reserved. Apple does not currently surface alt text on the store listing. |
 
-Each device slot accepts 1–10 screenshots (`minItems: 1`, `maxItems: 10`).
+Each device slot accepts 1 to 10 screenshots (`minItems: 1`, `maxItems: 10`).
 
 **Required devices for new submissions.** Apple requires at least 6.9" and 6.7" screenshots for new iOS app submissions. The L3 preflight rule `screenshots.requiredDevices` (Phase 5) catches this offline.
 
@@ -440,7 +440,7 @@ Group keys match `^[A-Za-z0-9 _-]+$`. They are the human-readable names you assi
 |-------|------|----------|------------|--------|
 | `isInternal` | boolean | no |, | Internal groups are your App Store Connect team members. External groups are outside testers. |
 | `publicLink` | boolean | no |, | Enables Apple's public invite link for this group. Valid only for external groups. |
-| `publicLinkLimit` | integer | no | 1–10000 | Maximum testers via the public link. Requires `publicLink: true`. |
+| `publicLinkLimit` | integer | no | 1 to 10000 | Maximum testers via the public link. Requires `publicLink: true`. |
 | `testers` | array | no |, | Explicit tester list. Each entry requires at least `email`. |
 
 ### testflightTester fields
