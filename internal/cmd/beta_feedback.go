@@ -145,11 +145,11 @@ var (
 )
 
 func init() {
-	betaFeedbackCrashCmd.Flags().StringVar(&betaFeedbackCrashBuild, "build", "", "filter by build id (Apple's build resource id; not the build number)")
+	betaFeedbackCrashCmd.Flags().StringVar(&betaFeedbackCrashBuild, "build", "", "filter by build number (CFBundleVersion, e.g. 42)")
 	betaFeedbackCrashCmd.Flags().StringVar(&betaFeedbackCrashSince, "since", "", "only submissions newer than this duration (e.g. 30d) or ISO date (2026-04-01)")
 	betaFeedbackCrashCmd.Flags().IntVar(&betaFeedbackCrashLimit, "limit", 0, "max submissions to emit (0 = no cap)")
 
-	betaFeedbackScreenshotCmd.Flags().StringVar(&betaFeedbackScreenshotBuild, "build", "", "filter by build id (Apple's build resource id; not the build number)")
+	betaFeedbackScreenshotCmd.Flags().StringVar(&betaFeedbackScreenshotBuild, "build", "", "filter by build number (CFBundleVersion, e.g. 42)")
 	betaFeedbackScreenshotCmd.Flags().StringVar(&betaFeedbackScreenshotSince, "since", "", "only submissions newer than this duration (e.g. 30d) or ISO date (2026-04-01)")
 	betaFeedbackScreenshotCmd.Flags().IntVar(&betaFeedbackScreenshotLimit, "limit", 0, "max submissions to emit (0 = no cap)")
 
@@ -175,7 +175,11 @@ func runBetaFeedbackCrash(cmd *cobra.Command, args []string) error {
 
 	q := url.Values{"limit": {"200"}}
 	if b := strings.TrimSpace(betaFeedbackCrashBuild); b != "" {
-		q.Set("filter[build]", b)
+		buildID, err := resolveBuildID(cmd.Context(), c, appID, bundleID, b)
+		if err != nil {
+			return fmt.Errorf("beta-feedback: %w", err)
+		}
+		q.Set("filter[build]", buildID)
 	}
 	if q.Get("sort") == "" {
 		q.Set("sort", "-createdDate")
@@ -210,7 +214,11 @@ func runBetaFeedbackScreenshot(cmd *cobra.Command, args []string) error {
 
 	q := url.Values{"limit": {"200"}}
 	if b := strings.TrimSpace(betaFeedbackScreenshotBuild); b != "" {
-		q.Set("filter[build]", b)
+		buildID, err := resolveBuildID(cmd.Context(), c, appID, bundleID, b)
+		if err != nil {
+			return fmt.Errorf("beta-feedback: %w", err)
+		}
+		q.Set("filter[build]", buildID)
 	}
 	if q.Get("sort") == "" {
 		q.Set("sort", "-createdDate")

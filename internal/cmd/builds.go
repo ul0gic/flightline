@@ -333,6 +333,33 @@ func lookupBuild(ctx context.Context, c *asc.Client, appID, buildNum string) (*B
 	}, nil
 }
 
+// resolveBuildID maps a build number (CFBundleVersion) to Apple's build
+// resource id; an ambiguous number errors with the candidates instead of guessing.
+func resolveBuildID(ctx context.Context, c *asc.Client, appID, bundleID, buildNum string) (string, error) {
+	q := url.Values{
+		"filter[version]": {buildNum},
+		"limit":           {"2"},
+	}
+	page, err := asc.Get[asc.Collection[asc.BuildAttributes]](
+		ctx, c, "/v1/apps/"+appID+"/builds", q,
+	)
+	if err != nil {
+		return "", err
+	}
+	switch len(page.Data) {
+	case 0:
+		return "", fmt.Errorf("no build %q found for %q: run `flightline builds list %s` to see uploaded builds", buildNum, bundleID, bundleID)
+	case 1:
+		return page.Data[0].ID, nil
+	default:
+		a, b := &page.Data[0], &page.Data[1]
+		return "", fmt.Errorf(
+			"build number %q is ambiguous for %q: matches build %s (uploaded %s) and build %s (uploaded %s); run `flightline builds list %s` to inspect them",
+			buildNum, bundleID, a.ID, a.Attributes.UploadedDate, b.ID, b.Attributes.UploadedDate, bundleID,
+		)
+	}
+}
+
 // getAttachedBuild returns nil when Apple's response is data:null (none attached).
 func getAttachedBuild(ctx context.Context, c *asc.Client, versionID string) (*buildLinkageRef, error) {
 	path := "/v1/appStoreVersions/" + url.PathEscape(versionID) + "/relationships/build"

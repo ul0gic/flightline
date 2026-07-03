@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -271,6 +273,80 @@ func TestBetaFeedback_DownloadInvalidType(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "--type") {
 		t.Errorf("error %q does not mention --type", err.Error())
+	}
+}
+
+// resolveBuildID backs beta-feedback's --build: number in, resource id out.
+func TestResolveBuildID(t *testing.T) {
+	tests := []struct {
+		name        string
+		fixture     string
+		buildNum    string
+		wantID      string
+		wantErrSubs []string
+	}{
+		{name: "single match resolves", fixture: "builds_lookup_byVersion", buildNum: "42", wantID: "9000000042"},
+		{name: "no match is actionable", fixture: "builds_lookup_empty", buildNum: "999", wantErrSubs: []string{`no build "999"`, "flightline builds list com.example.alpha"}},
+		{name: "ambiguous match lists candidates", fixture: "builds_lookup_ambiguous", buildNum: "42", wantErrSubs: []string{"ambiguous", "9000000042", "9000000099"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := startFixtureServer(t, map[string]fixtureRoute{
+				"GET /v1/apps/app-1/builds": {File: tt.fixture},
+			})
+			c := fixtureASCClient(t, srv)
+			id, err := resolveBuildID(context.Background(), c, "app-1", "com.example.alpha", tt.buildNum)
+			if len(tt.wantErrSubs) == 0 {
+				if err != nil {
+					t.Fatalf("resolveBuildID: %v", err)
+				}
+				if id != tt.wantID {
+					t.Errorf("id = %q, want %q", id, tt.wantID)
+				}
+				return
+			}
+			assertErrContains(t, err, tt.wantErrSubs)
+		})
+	}
+}
+
+func assertErrContains(t *testing.T, err error, subs []string) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	for _, sub := range subs {
+		if !strings.Contains(err.Error(), sub) {
+			t.Errorf("error %q missing %q", err.Error(), sub)
+		}
+	}
+}
+
+// The resolver must query by CFBundleVersion with limit=2 so ambiguity is detectable.
+func TestResolveBuildID_QueryShape(t *testing.T) {
+	var gotQuery url.Values
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.Query()
+		w.Header().Set("Content-Type", "application/json")
+		body, err := readGoldenFixture("builds_lookup_byVersion")
+		if err != nil {
+			t.Errorf("fixture: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		_, _ = w.Write(body)
+	}))
+	t.Cleanup(srv.Close)
+
+	c := fixtureASCClient(t, srv)
+	if _, err := resolveBuildID(context.Background(), c, "app-1", "com.example.alpha", "42"); err != nil {
+		t.Fatalf("resolveBuildID: %v", err)
+	}
+	if got := gotQuery.Get("filter[version]"); got != "42" {
+		t.Errorf("filter[version] = %q, want 42", got)
+	}
+	if got := gotQuery.Get("limit"); got != "2" {
+		t.Errorf("limit = %q, want 2", got)
 	}
 }
 
