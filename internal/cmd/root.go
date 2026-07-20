@@ -24,7 +24,24 @@ so submissions stop being a clerical landmine.`,
 
 // Execute runs the root command and returns any error from the command tree.
 func Execute() error {
+	rejectUnknownSubcommands(rootCmd)
 	return rootCmd.Execute()
+}
+
+// rejectUnknownSubcommands makes bare group commands fail on unmatched args.
+// Without a RunE, cobra swallows a typo'd subcommand into help output and exits 0.
+func rejectUnknownSubcommands(cmd *cobra.Command) {
+	if cmd.HasSubCommands() && cmd.Run == nil && cmd.RunE == nil {
+		cmd.RunE = func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return cmd.Help()
+			}
+			return fmt.Errorf("unknown subcommand %q for %q — run '%s --help'", args[0], cmd.CommandPath(), cmd.CommandPath())
+		}
+	}
+	for _, child := range cmd.Commands() {
+		rejectUnknownSubcommands(child)
+	}
 }
 
 // Root returns the fully-wired root command so generators can walk the command tree.
