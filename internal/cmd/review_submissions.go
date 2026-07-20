@@ -166,7 +166,12 @@ func listReviewSubmissions(ctx context.Context, c *asc.Client, bundleID string) 
 // listReviewSubmissionItems fetches a submission's items and flattens each
 // item's (type, id) reference out of its relationships block.
 func listReviewSubmissionItems(ctx context.Context, c *asc.Client, submissionID string) ([]ReviewSubmissionItemView, error) {
-	q := url.Values{"limit": {"200"}}
+	// Relationship data blocks are only populated when the target is included; without this the reference is invisible.
+	q := url.Values{
+		"limit": {"200"},
+		// appStoreVersionExperiment (v1) is omitted: Apple 400s when both experiment generations are included together.
+		"include": {"appStoreVersion,appCustomProductPageVersion,appStoreVersionExperimentV2,appEvent,backgroundAssetVersion"},
+	}
 	path := "/v1/reviewSubmissions/" + submissionID + "/items"
 
 	out := make([]ReviewSubmissionItemView, 0, 8)
