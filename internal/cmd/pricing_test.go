@@ -236,7 +236,8 @@ func TestPricing_FixtureReplay_ScheduleAndPricePoint(t *testing.T) {
 func TestPricing_FixtureReplay_Availability(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
-		"GET /v1/apps/1234567890/appAvailabilityV2": {File: "pricing_availability"},
+		"GET /v1/apps/1234567890/appAvailabilityV2":                          {File: "pricing_availability"},
+		"GET /v2/appAvailabilities/AVAIL-1234567890/territoryAvailabilities": {File: "pricing_territory_availabilities"},
 	})
 	c := fixtureASCClient(t, srv)
 	ctx := context.Background()

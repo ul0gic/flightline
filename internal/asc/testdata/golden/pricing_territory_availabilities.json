@@ -1,0 +1,46 @@
+{
+  "data": [
+    {
+      "type": "territoryAvailabilities",
+      "id": "AVAIL-USA",
+      "attributes": {
+        "available": true,
+        "releaseDate": "2020-01-01",
+        "preOrderEnabled": false,
+        "contentStatuses": ["AVAILABLE"]
+      }
+    },
+    {
+      "type": "territoryAvailabilities",
+      "id": "AVAIL-GBR",
+      "attributes": {
+        "available": true,
+        "releaseDate": "2020-01-01",
+        "preOrderEnabled": false,
+        "contentStatuses": ["AVAILABLE"]
+      }
+    },
+    {
+      "type": "territoryAvailabilities",
+      "id": "AVAIL-DEU",
+      "attributes": {
+        "available": true,
+        "releaseDate": "2020-01-01",
+        "preOrderEnabled": false,
+        "contentStatuses": ["AVAILABLE"]
+      }
+    },
+    {
+      "type": "territoryAvailabilities",
+      "id": "AVAIL-NOT",
+      "attributes": {
+        "available": false,
+        "contentStatuses": ["MISSING_RATING"]
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v2/appAvailabilities/AVAIL-1234567890/territoryAvailabilities"
+  },
+  "meta": { "paging": { "total": 4, "limit": 200 } }
+}

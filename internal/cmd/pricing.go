@@ -301,10 +301,7 @@ func windowCovers(today, start, end string) bool {
 // available=true against the total.
 func fetchAppAvailability(ctx context.Context, c *asc.Client, appID string) (AvailabilitySummary, error) {
 	q := url.Values{
-		"include":                         {"territoryAvailabilities"},
-		"fields[appAvailabilities]":       {"availableInNewTerritories,territoryAvailabilities"},
-		"fields[territoryAvailabilities]": {"available,releaseDate,preOrderEnabled,preOrderPublishDate,contentStatuses,territory"},
-		"limit[territoryAvailabilities]":  {"200"},
+		"fields[appAvailabilities]": {"availableInNewTerritories"},
 	}
 	resp, err := asc.Get[availabilitySingle](ctx, c, "/v1/apps/"+appID+"/appAvailabilityV2", q)
 	if err != nil {
@@ -314,20 +311,20 @@ func fetchAppAvailability(ctx context.Context, c *asc.Client, appID string) (Ava
 		ID:                        resp.Data.ID,
 		AvailableInNewTerritories: resp.Data.Attributes.AvailableInNewTerritories,
 	}
-	for _, raw := range resp.Included {
-		var probe struct {
-			Type       string                              `json:"type"`
-			Attributes asc.TerritoryAvailabilityAttributes `json:"attributes"`
+	tq := url.Values{
+		"fields[territoryAvailabilities]": {"available,releaseDate,preOrderEnabled,preOrderPublishDate,contentStatuses"},
+		"limit":                           {"200"},
+	}
+	path := "/v2/appAvailabilities/" + resp.Data.ID + "/territoryAvailabilities"
+	for page, err := range asc.Pages[asc.TerritoryAvailabilityAttributes](ctx, c, path, tq) {
+		if err != nil {
+			return AvailabilitySummary{}, err
 		}
-		if err := json.Unmarshal(raw, &probe); err != nil {
-			continue
-		}
-		if probe.Type != "territoryAvailabilities" {
-			continue
-		}
-		out.AvailableTotal++
-		if probe.Attributes.Available != nil && *probe.Attributes.Available {
-			out.AvailableCount++
+		for _, ta := range page.Data {
+			out.AvailableTotal++
+			if ta.Attributes.Available != nil && *ta.Attributes.Available {
+				out.AvailableCount++
+			}
 		}
 	}
 	return out, nil
