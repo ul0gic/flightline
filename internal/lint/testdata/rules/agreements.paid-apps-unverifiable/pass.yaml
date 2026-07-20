@@ -1,0 +1,6 @@
+apiVersion: flightline.dev/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.noiap
+  version: "1.0"
+spec: {}

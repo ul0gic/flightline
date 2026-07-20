@@ -1,0 +1,6 @@
+{
+  "routes": {
+    "/v1/apps": "{\"data\":[{\"id\":\"app-1\",\"type\":\"apps\",\"attributes\":{\"bundleId\":\"com.example.iap\"}}]}",
+    "/inAppPurchasesV2": "{\"data\":[{\"id\":\"iap-A\",\"type\":\"inAppPurchases\",\"attributes\":{\"productId\":\"com.example.iap.lifetime\",\"state\":\"DEVELOPER_ACTION_NEEDED\"}},{\"id\":\"iap-B\",\"type\":\"inAppPurchases\",\"attributes\":{\"productId\":\"com.example.iap.pro\",\"state\":\"MISSING_METADATA\"}}]}"
+  }
+}

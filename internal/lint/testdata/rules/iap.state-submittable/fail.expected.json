@@ -1,0 +1,16 @@
+{
+  "diagnostics": [
+    {
+      "ruleId": "iap.state-submittable",
+      "severity": "error",
+      "messageSubstring": "DEVELOPER_ACTION_NEEDED",
+      "path": "/spec/iap/products/com.example.iap.lifetime"
+    },
+    {
+      "ruleId": "iap.state-submittable",
+      "severity": "error",
+      "messageSubstring": "MISSING_METADATA",
+      "path": "/spec/iap/products/com.example.iap.pro"
+    }
+  ]
+}

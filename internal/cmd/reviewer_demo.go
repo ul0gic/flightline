@@ -271,7 +271,7 @@ func splitContactName(full string) (firstName, lastName string) {
 }
 
 // fetchAppStoreReviewDetail returns the existing detail, or zero values when Apple 404s (not yet created).
-func fetchAppStoreReviewDetail(ctx context.Context, c *asc.Client, versionID string) (string, AppStoreReviewDetailAttributes, error) {
+func fetchAppStoreReviewDetail(ctx context.Context, c *asc.Client, versionID string) (id string, attrs AppStoreReviewDetailAttributes, err error) {
 	resp, err := asc.Get[asc.Single[AppStoreReviewDetailAttributes]](
 		ctx, c, "/v1/appStoreVersions/"+versionID+"/appStoreReviewDetail", nil,
 	)

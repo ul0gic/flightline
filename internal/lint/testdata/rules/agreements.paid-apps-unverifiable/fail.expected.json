@@ -1,0 +1,10 @@
+{
+  "diagnostics": [
+    {
+      "ruleId": "agreements.paid-apps-unverifiable",
+      "severity": "info",
+      "messageSubstring": "Paid Apps Agreement",
+      "path": "/spec/iap"
+    }
+  ]
+}

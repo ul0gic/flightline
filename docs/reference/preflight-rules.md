@@ -20,11 +20,14 @@ When both errors and warnings are present, exit code is `1`.
 
 | Rule ID | Mode | Severity |
 |---------|------|----------|
+| [`agreements.paid-apps-unverifiable`](#agreementspaid-apps-unverifiable) | Live | Info |
 | [`build.attached-and-valid`](#buildattached-and-valid) | Live | Error |
 | [`iap.attached-to-review-submission`](#iapattached-to-review-submission) | Live | Error |
 | [`iap.promotional-image-distinct`](#iappromotional-image-distinct) | Live | Error |
 | [`iap.review-screenshot-exists`](#iapreview-screenshot-exists) | Live | Error |
+| [`iap.state-submittable`](#iapstate-submittable) | Live | Error |
 | [`localizations.completeness`](#localizationscompleteness) | Offline | Warning |
+| [`review-details.completeness`](#review-detailscompleteness) | Live | Warning |
 | [`screenshots.required-devices`](#screenshotsrequired-devices) | Both | Error |
 | [`strict.format-email`](#strictformat-email) | Offline | Warning |
 | [`strict.required-nonzero`](#strictrequired-nonzero) | Offline | Error |
@@ -35,6 +38,13 @@ When both errors and warnings are present, exit code is `1`.
 Rules are sorted alphabetically by ID, the same order the runner executes them in.
 
 ## Rule reference
+
+### `agreements.paid-apps-unverifiable`
+
+- **Mode:** Live
+- **Severity:** Info
+
+Reminds you to confirm the Paid Apps Agreement whenever the app sells in-app purchases. Apple exposes no API for agreement status, and a lapsed or re-issued agreement makes every IAP silently invisible to the reviewer's sandbox — the rejection reads "IAP product not found" with nothing wrong in ASC. Confirm the agreement is Active under Business in App Store Connect before submitting; this diagnostic is informational and never fails preflight.
 
 ### `build.attached-and-valid`
 
@@ -64,12 +74,26 @@ Checks that an IAP review screenshot does not reuse one of the app's store scree
 
 Checks that every IAP in a state where Apple will imminently review it has an App Store review screenshot attached. The screenshot field is buried several tabs deep in App Store Connect and is easy to skip, but Apple requires it and returns the submission immediately when it is missing. Fix it by uploading a review screenshot that shows the IAP purchase within the app context.
 
+### `iap.state-submittable`
+
+- **Mode:** Live
+- **Severity:** Error
+
+Errors when any in-app purchase is in DEVELOPER_ACTION_NEEDED, MISSING_METADATA, or REJECTED state at preflight time. Resubmitting the app without fixing these guarantees another rejection loop: the reviewer cannot find or approve a product Apple has flagged back to you. Fix it by resolving the flagged action or completing the metadata in App Store Connect, then re-running preflight.
+
 ### `localizations.completeness`
 
 - **Mode:** Offline
 - **Severity:** Warning
 
 Checks that every locale appearing in one localizable surface (metadata, screenshots, or IAP localizations) also appears in the others. Apple may reject a listing where a locale has metadata but no screenshots because reviewers cannot preview it in that language, and the gap is often the sign of a half-applied edit. Fix it by adding the locale to every surface or removing it everywhere; this rule is advisory, so a deliberately single-surface locale can be left as-is.
+
+### `review-details.completeness`
+
+- **Mode:** Live
+- **Severity:** Warning
+
+Warns when an app that sells in-app purchases submits a version whose App Review notes are empty. Reviewers who cannot see the purchase flow respond with an Information Needed rejection asking for it — and for demo credentials the app may not even have. Fix it by writing notes that describe the purchase flow, any trial mechanics, and state explicitly when the app has no accounts or sign-in.
 
 ### `screenshots.required-devices`
 

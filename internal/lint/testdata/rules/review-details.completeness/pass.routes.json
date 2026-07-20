@@ -1,0 +1,8 @@
+{
+  "routes": {
+    "/v1/apps": "{\"data\":[{\"id\":\"app-1\",\"type\":\"apps\",\"attributes\":{\"bundleId\":\"com.example.iap\"}}]}",
+    "/inAppPurchasesV2": "{\"data\":[{\"id\":\"iap-A\",\"type\":\"inAppPurchases\",\"attributes\":{\"productId\":\"com.example.iap.lifetime\",\"state\":\"APPROVED\"}}]}",
+    "/appStoreVersions": "{\"data\":[{\"id\":\"ver-1\",\"type\":\"appStoreVersions\",\"attributes\":{\"versionString\":\"1.0\",\"platform\":\"IOS\"}}]}",
+    "/appStoreReviewDetail": "{\"data\":{\"id\":\"rd-1\",\"type\":\"appStoreReviewDetails\",\"attributes\":{\"notes\":\"One-time lifetime unlock via StoreKit. 7-day trial starts on first launch. No accounts or sign-in.\"}}}"
+  }
+}

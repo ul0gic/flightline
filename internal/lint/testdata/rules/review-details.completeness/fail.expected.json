@@ -1,0 +1,10 @@
+{
+  "diagnostics": [
+    {
+      "ruleId": "review-details.completeness",
+      "severity": "warning",
+      "messageSubstring": "App Review notes are empty",
+      "path": "/spec/review-details/notes"
+    }
+  ]
+}

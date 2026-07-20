@@ -1,0 +1,6 @@
+{
+  "routes": {
+    "/v1/apps": "{\"data\":[{\"id\":\"app-1\",\"type\":\"apps\",\"attributes\":{\"bundleId\":\"com.example.noiap\"}}]}",
+    "/inAppPurchasesV2": "{\"data\":[]}"
+  }
+}
