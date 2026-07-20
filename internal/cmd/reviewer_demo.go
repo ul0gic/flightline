@@ -14,18 +14,8 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// AppStoreReviewDetailAttributes mirrors Apple's AppStoreReviewDetail.attributes.
-// Pointers distinguish "leave alone" from "clear", since Apple's PATCH treats null as clear.
-type AppStoreReviewDetailAttributes struct {
-	ContactFirstName    *string `json:"contactFirstName,omitempty"`
-	ContactLastName     *string `json:"contactLastName,omitempty"`
-	ContactPhone        *string `json:"contactPhone,omitempty"`
-	ContactEmail        *string `json:"contactEmail,omitempty"`
-	DemoAccountName     *string `json:"demoAccountName,omitempty"`
-	DemoAccountPassword *string `json:"demoAccountPassword,omitempty"`
-	DemoAccountRequired *bool   `json:"demoAccountRequired,omitempty"`
-	Notes               *string `json:"notes,omitempty"`
-}
+// AppStoreReviewDetailAttributes lives in asc so the lint package can share it.
+type AppStoreReviewDetailAttributes = asc.AppStoreReviewDetailAttributes
 
 // reviewDetailCreateRequest is the wire body for POST /v1/appStoreReviewDetails.
 type reviewDetailCreateRequest struct {
