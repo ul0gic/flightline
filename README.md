@@ -223,7 +223,7 @@ flowchart TB
     User["You\n(or LLM / cron)"]
     YAML["state.yaml"]
     CLI["flightline CLI\nmain.go"]
-    Lint["internal/lint\n11 preflight rules"]
+    Lint["internal/lint\n14 preflight rules"]
     Plan["internal/plan\ndiff engine"]
     State["internal/state\nfetch / apply"]
     ASC["internal/asc\nhand-rolled HTTP+JSON client"]
@@ -336,7 +336,7 @@ Schema reference: [docs/reference/state-yaml.md](docs/reference/state-yaml.md). 
 # Offline: validates state.yaml against JSON Schema + format rules
 flightline lint state.yaml
 
-# Live: reads ASC state, runs all 11 rules, reports pass/fail
+# Live: reads ASC state, runs all 14 rules, reports pass/fail
 flightline preflight app.tideterm.ios --version 1.1
 
 # Cross-check live state against a state file
@@ -429,7 +429,7 @@ output: table
 | [docs/guides/state-as-code.md](docs/guides/state-as-code.md) | Fetch, edit, plan, apply walkthrough |
 | [docs/guides/uploading-assets.md](docs/guides/uploading-assets.md) | Uploading screenshots and IAP review screenshots |
 | [docs/reference/state-yaml.md](docs/reference/state-yaml.md) | Full v1alpha1 schema reference |
-| [docs/reference/preflight-rules.md](docs/reference/preflight-rules.md) | All 11 preflight rules + submission-checklist items |
+| [docs/reference/preflight-rules.md](docs/reference/preflight-rules.md) | All 14 preflight rules + submission-checklist items |
 | [docs/reference/cli.md](docs/reference/cli.md) | Command-group index |
 | [docs/concepts/three-layer-model.md](docs/concepts/three-layer-model.md) | How L1, L2, and L3 fit together |
 
@@ -453,7 +453,7 @@ make fmt      # gofmt -s -w . && goimports -w .
 
 ## Status
 
-All three layers are complete and verified against live App Store Connect: L1 (full API CLI), L2 (state-as-code), and L3 (11 preflight rules). Releases are cut by tagging `v*` on GitHub — the release pipeline builds, signs, and publishes binaries with an SBOM automatically.
+All three layers are complete and verified against live App Store Connect: L1 (full API CLI), L2 (state-as-code), and L3 (14 preflight rules). Releases are cut by tagging `v*` on GitHub — the release pipeline builds, signs, and publishes binaries with an SBOM automatically.
 
 **Versioning policy (pre-1.0):** breaking changes to flags, JSON output, or exit codes can happen between minor versions (0.5 → 0.6), are always flagged in a `### Breaking` section of the release notes, and never happen in patch releases. 1.0 locks the contract.
 
