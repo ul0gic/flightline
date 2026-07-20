@@ -74,7 +74,7 @@ func (r strictRequiredNonzeroRule) scanTestFlightTesters(root *yaml.Node, out *[
 				Path: fmt.Sprintf("/spec/testflight/groups/%s/testers/%d/email", groupName, idx),
 				FixHint: "every tester row must have a non-empty `email` field. " +
 					"Empty strings satisfy the schema's `required` (because the JSON key is present) but cannot be invited.",
-				Reference: "QA-011 (resolved via this rule)",
+				Reference: publicRuleReference(r.ID()),
 			})
 		}
 	}

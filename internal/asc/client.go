@@ -4,6 +4,8 @@ package asc
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -177,9 +179,21 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 
 	resp, err := c.http.Do(req)
 	if err != nil {
+		if isCertError(err) {
+			return nil, fmt.Errorf("asc: %s %s: %w\nhint: the TLS certificate is not trusted — likely a corporate proxy or sandbox intercepting HTTPS; export SSL_CERT_FILE with the proxy's CA bundle or run outside the intercepting environment", method, redactPath(path), err)
+		}
 		return nil, fmt.Errorf("asc: %s %s: %w", method, redactPath(path), err)
 	}
 	return resp, nil
+}
+
+func isCertError(err error) bool {
+	var certErr *tls.CertificateVerificationError
+	var unknownAuth x509.UnknownAuthorityError
+	var sysRoots x509.SystemRootsError
+	var hostErr x509.HostnameError
+	return errors.As(err, &certErr) || errors.As(err, &unknownAuth) ||
+		errors.As(err, &sysRoots) || errors.As(err, &hostErr)
 }
 
 // buildURL composes base+path+query; an absolute path is host-locked against the configured base.

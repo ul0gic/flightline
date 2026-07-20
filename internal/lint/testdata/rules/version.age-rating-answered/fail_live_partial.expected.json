@@ -5,7 +5,8 @@
       "ruleId": "version.age-rating-answered",
       "severity": "error",
       "messageSubstring": "live age-rating field \"realisticViolence\"",
-      "path": "/spec/ageRating/realisticViolence"
+      "path": "/spec/ageRating/realisticViolence",
+      "fixHintSubstring": "flightline age-rating set com.example.agerating --version 1.0.1 --from age.yaml"
     },
     {
       "ruleId": "version.age-rating-answered",

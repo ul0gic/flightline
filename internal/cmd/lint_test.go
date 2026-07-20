@@ -32,6 +32,7 @@ spec:
     sexualContentOrNudity: NONE
     sexualContentGraphicAndNudity: NONE
     gambling: false
+    socialMedia: false
     unrestrictedWebAccess: false
     kidsAgeBand: SIX_TO_EIGHT
     seventeenPlus: false

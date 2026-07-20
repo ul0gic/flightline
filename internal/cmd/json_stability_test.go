@@ -274,7 +274,7 @@ func TestJSONStability_AllCommands(t *testing.T) {
 			view: CustomProductPageList{
 				Pages: []CustomProductPageView{{ID: "cpp-1", Type: "appCustomProductPages"}},
 			},
-			wantTopLevel: []string{"pages"},
+			wantTopLevel: []string{"pages", "complete", "enrichedCount", "totalCount"},
 			nestedPath:   []string{"pages", "0"},
 			nestedKeys:   []string{"id", "type", "attributes"},
 		},

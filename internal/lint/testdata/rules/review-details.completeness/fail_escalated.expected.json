@@ -1,0 +1,10 @@
+{
+  "diagnostics": [
+    {
+      "ruleId": "review-details.completeness",
+      "severity": "error",
+      "messageSubstring": "exact steps to reach the purchase",
+      "path": "/spec/review-details/notes"
+    }
+  ]
+}

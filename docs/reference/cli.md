@@ -59,7 +59,7 @@ Flags, arguments, and defaults: `flightline analytics --help`.
 
 ## `apply`
 
-Loads <state.yaml>, validates it against the schema, fetches live state, computes the diff, and writes the changes back to ASC. Without --confirm, apply prints the plan and refuses to write: same guardrail as terraform plan. With --confirm, every leaf-level change dispatches to its L1 writer, with a checkpoint persisted after every success so a Ctrl-C / crash mid-apply resumes cleanly via --resume. --dry-run computes the dispatch path but never hits the wire; useful for preview without --confirm. Examples: flightline apply state.yaml # plan only, refuses to write flightline apply state.yaml --confirm # write changes flightline apply state.yaml --confirm --resume # continue after Ctrl-C flightline apply state.yaml --dry-run --output json
+Loads <state.yaml>, validates it against the schema, fetches live state, computes the diff, and writes the changes back to ASC. Without --confirm, apply prints the plan and refuses to write: same guardrail as terraform plan. With --confirm, every leaf-level change dispatches to its L1 writer, with a checkpoint persisted after every success so a Ctrl-C / crash mid-apply resumes cleanly via --resume. --dry-run fetches live state and computes the dispatch path, but sends no mutating API requests. It requires credentials and network access. Examples: flightline apply state.yaml # plan only, refuses to write flightline apply state.yaml --confirm # write changes flightline apply state.yaml --confirm --resume # continue after Ctrl-C flightline apply state.yaml --dry-run --output json
 
 Flags, arguments, and defaults: `flightline apply --help`.
 
@@ -71,7 +71,7 @@ Flags, arguments, and defaults: `flightline apps --help`.
 
 ## `beta-feedback`
 
-beta-feedback groups read commands over Apple's TestFlight feedback resources: - crash <bundleId> : list crash submissions, optionally filtered by build - screenshot <bundleId> : list screenshot submissions, optionally filtered by build - download <feedbackId> : download the crash log or screenshot to disk Phase 3 has no write surface here: feedback is tester-authored.
+beta-feedback groups read commands over Apple's TestFlight feedback resources: - crash <bundleId> : list crash submissions, optionally filtered by build - screenshot <bundleId> : list screenshot submissions, optionally filtered by build - download <feedbackId> : download the crash log or screenshot to disk Feedback is tester-authored, so this command group is read-only.
 
 Flags, arguments, and defaults: `flightline beta-feedback --help`.
 
@@ -107,7 +107,7 @@ Flags, arguments, and defaults: `flightline export-compliance --help`.
 
 ## `fetch`
 
-Pulls every L2 surface Flightline supports for the given bundleId and writes the result as a Flightline state file. Default output is YAML with a yaml-language-server schema directive prepended for editor autocomplete. Surfaces not yet implemented (see QA-009) appear absent from the output; the diff engine treats absence as "not managed" so Flightline leaves them alone on subsequent applies. Examples: flightline fetch app.tideterm.ios > state.yaml flightline fetch app.tideterm.ios -o state.yaml --version 1.0.1 flightline fetch app.tideterm.ios --output json | jq '.spec.version'
+Pulls every L2 surface Flightline supports for the given bundleId and writes the result as a Flightline state file. Default output is YAML with a yaml-language-server schema directive prepended for editor autocomplete. Surfaces absent from the state file are not managed. The diff engine leaves those surfaces untouched on subsequent applies. Examples: flightline fetch app.tideterm.ios > state.yaml flightline fetch app.tideterm.ios -o state.yaml --version 1.0.1 flightline fetch app.tideterm.ios --output json | jq '.spec.version'
 
 Flags, arguments, and defaults: `flightline fetch --help`.
 
@@ -149,7 +149,7 @@ Flags, arguments, and defaults: `flightline plan --help`.
 
 ## `preflight`
 
-preflight runs every Flightline rejection-prevention rule against a live App Store version. Live rules query the ASC API for IAP attachment, build state, age-rating completeness, and screenshot device coverage. Offline rules run too when --state-file is provided so authoring mistakes are caught alongside live ones. Without --state-file the live state is fetched and used as the rule input: useful for "is the version actually submittable right now?" checks against any app you have credentials for. With --state-file the user-authored YAML is the input for offline rules and the live ASC state is consulted for live rules. Exit codes: 0 clean (no diagnostics, or info-only) 1 at least one error-severity diagnostic 2 only warnings (no errors)
+preflight runs every Flightline rejection-prevention rule against a live App Store version. Live rules query the ASC API for IAP attachment, build state, age-rating completeness, and screenshot device coverage. Offline rules run too when --state-file is provided so authoring mistakes are caught alongside live ones. Without --state-file the live state is fetched and used as the rule input: useful for "is the version actually submittable right now?" checks against any app you have credentials for. With --state-file the user-authored YAML is the input for offline rules and the live ASC state is consulted for live rules. When --state-file is used, its bundleId, version, and platform must match the command coordinates. An omitted state-file platform inherits the command platform (IOS by default); mismatches fail before rules run. Exit codes: 0 clean (no diagnostics, or info-only) 1 at least one error-severity diagnostic 2 only warnings (no errors)
 
 Flags, arguments, and defaults: `flightline preflight --help`.
 
@@ -161,7 +161,7 @@ Flags, arguments, and defaults: `flightline pricing --help`.
 
 ## `privacy-labels`
 
-privacy-labels would read Apple's App Privacy Details (nutrition labels) for an app. Apple's App Store Connect API v4.3 does not expose this surface: labels are authored exclusively in App Store Connect's web UI. This command returns a typed diagnostic so callers can detect the unsupported state programmatically. When Apple ships an API endpoint, the command will be wired without changing the JSON contract. See ISSUE-002 in .project/issues/.
+privacy-labels would read Apple's App Privacy Details (nutrition labels) for an app. Apple's App Store Connect API v4.3 does not expose this surface: labels are authored exclusively in App Store Connect's web UI. This command returns a typed diagnostic so callers can detect the unsupported state programmatically. When Apple ships an API endpoint, the command can be wired without changing the JSON contract.
 
 Flags, arguments, and defaults: `flightline privacy-labels --help`.
 
@@ -203,7 +203,7 @@ Flags, arguments, and defaults: `flightline screenshots --help`.
 
 ## `subscriptions`
 
-subscriptions groups read commands over Apple's auto-renewable subscription resources. Apple structures subscriptions as a tree: - SubscriptionGroup : competing-tier group └── Subscription : one product within the group ├── Localizations : per-locale name/description ├── IntroductoryOffers : onboarding discount tiers └── Prices : price ladder - list <bundleId> : list groups + member count - get <bundleId> --product <productId> : full detail for one product v1 is read-only; full CRUD lands in Phase 3.
+subscriptions groups read commands over Apple's auto-renewable subscription resources. Apple structures subscriptions as a tree: - SubscriptionGroup : competing-tier group └── Subscription : one product within the group ├── Localizations : per-locale name/description ├── IntroductoryOffers : onboarding discount tiers └── Prices : price ladder - list <bundleId> : list groups + member count - get <bundleId> --product <productId> : full detail for one product This command group is read-only.
 
 Flags, arguments, and defaults: `flightline subscriptions --help`.
 
@@ -215,7 +215,7 @@ Flags, arguments, and defaults: `flightline territories --help`.
 
 ## `testflight`
 
-testflight groups read commands over Apple's TestFlight resources: - groups list <bundleId> : list internal + external beta groups - testers list <bundleId> : list testers in the app or a group - beta-review get <bundleId> --build <n> : show beta-review state for a build Phase 3 will add invite/manage write verbs; v1 is read-only.
+testflight groups read commands over Apple's TestFlight resources: - groups list <bundleId> : list internal + external beta groups - testers list <bundleId> : list testers in the app or a group - beta-review get <bundleId> --build <n> : show beta-review state for a build
 
 Flags, arguments, and defaults: `flightline testflight --help`.
 

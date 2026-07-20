@@ -1,0 +1,16 @@
+apiVersion: flightline.dev/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.iap
+  version: "1.0"
+spec:
+  iap:
+    products:
+      com.example.iap.lifetime:
+        type: NON_CONSUMABLE
+        name: Lifetime Access
+        localizations:
+          en-US:
+            name: Lifetime Access
+          es-MX:
+            name: Acceso de por Vida

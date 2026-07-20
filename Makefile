@@ -1,4 +1,4 @@
-.PHONY: build install test vet lint sec fmt gen gen-docs verify clean help sync-schema
+.PHONY: build install test vet lint sec vuln fmt gen gen-docs verify clean help sync-schema
 
 GO ?= go
 BIN := ./bin/flightline
@@ -12,6 +12,7 @@ help:
 	@echo "  vet      go vet"
 	@echo "  lint     golangci-lint run"
 	@echo "  sec      gosec security scan (standalone, all rules)"
+	@echo "  vuln     govulncheck reachable-vulnerability scan"
 	@echo "  fmt      gofmt + goimports"
 	@echo "  gen      Reserved (codegen rejected — see .project/issues/closed/ISSUE-001)"
 	@echo "  verify   vet + test + lint (what the verify hook runs at gates)"
@@ -36,6 +37,9 @@ lint:
 # G304: this CLI opens user-specified paths (uploads, config, screenshots, state) by design.
 sec:
 	gosec -exclude-generated -severity low -confidence low -exclude=G501,G401,G304 ./...
+
+vuln:
+	govulncheck ./...
 
 fmt:
 	gofmt -s -w .

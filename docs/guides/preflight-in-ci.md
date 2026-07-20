@@ -140,6 +140,8 @@ flightline preflight app.tideterm.ios --version 2.1.0 --state-file state.yaml
 
 This is the right form for a release pipeline that manages state as code: it verifies both that the file you are about to `apply` is well-formed and that the live version has everything Apple's submission flow will demand. For the full authoring loop around it, see [State as Code](./state-as-code.md).
 
+Flightline refuses to combine unrelated coordinates. The file's `metadata.bundleId` and `metadata.version` must exactly match the command, and an explicit `metadata.platform` must match `--platform`. If the file omits `metadata.platform`, it inherits the command platform (`IOS` by default). JSON output includes the resolved `platform` alongside `bundleId` and `version`.
+
 ## See also
 
 - [Preflight rules reference](../reference/preflight-rules.md), every rule with mode, severity, and fix hints

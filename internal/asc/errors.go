@@ -94,7 +94,13 @@ func Redact(s string) string {
 	s = jwtPattern.ReplaceAllString(s, "[REDACTED-JWT]")
 	s = bearerPattern.ReplaceAllString(s, "Bearer [REDACTED]")
 	s = authKeyPathPattern.ReplaceAllString(s, "AuthKey_[REDACTED-KEYID].p8")
-	s = keyIDPattern.ReplaceAllString(s, "[REDACTED-KEYID]")
+	// All-digit 10-char tokens are Apple app/resource IDs, not key IDs — redacting them corrupts user-facing errors.
+	s = keyIDPattern.ReplaceAllStringFunc(s, func(m string) string {
+		if strings.ContainsAny(m, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") {
+			return "[REDACTED-KEYID]"
+		}
+		return m
+	})
 	s = uuidPattern.ReplaceAllString(s, "[REDACTED-UUID]")
 	return s
 }

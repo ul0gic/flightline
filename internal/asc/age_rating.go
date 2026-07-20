@@ -24,8 +24,11 @@ type AgeRatingDeclarationAttributes struct {
 	LootBox                *bool `json:"lootBox,omitempty"`
 	MessagingAndChat       *bool `json:"messagingAndChat,omitempty"`
 	ParentalControls       *bool `json:"parentalControls,omitempty"`
-	UnrestrictedWebAccess  *bool `json:"unrestrictedWebAccess,omitempty"`
-	UserGeneratedContent   *bool `json:"userGeneratedContent,omitempty"`
+	// Social-media capability pair added by Apple July 2026; answers required for submissions from 2026-09-07.
+	SocialMedia              *bool `json:"socialMedia,omitempty"`
+	SocialMediaAgeRestricted *bool `json:"socialMediaAgeRestricted,omitempty"`
+	UnrestrictedWebAccess    *bool `json:"unrestrictedWebAccess,omitempty"`
+	UserGeneratedContent     *bool `json:"userGeneratedContent,omitempty"`
 
 	// Frequency-enum fields (NONE | INFREQUENT_OR_MILD | FREQUENT_OR_INTENSE | INFREQUENT | FREQUENT)
 	AlcoholTobaccoOrDrugUseOrReferences         string `json:"alcoholTobaccoOrDrugUseOrReferences,omitempty"`

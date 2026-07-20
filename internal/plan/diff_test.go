@@ -28,6 +28,52 @@ func TestDiff_IdenticalIsZero(t *testing.T) {
 	}
 }
 
+// TestDiff_AgeRatingFalseAnswersUnansweredField: a declared false must diff
+// against a live unanswered (nil) questionnaire field as a create, never as
+// "no changes" — the socialMedia zero-value trap from the PassDMV field notes.
+func TestDiff_AgeRatingFalseAnswersUnansweredField(t *testing.T) {
+	desired := &config.State{Spec: config.StateSpec{
+		AgeRating: &config.AgeRatingSpec{
+			SocialMedia:              boolPtr(false),
+			SocialMediaAgeRestricted: boolPtr(false),
+		},
+	}}
+	live := &config.State{Spec: config.StateSpec{AgeRating: &config.AgeRatingSpec{}}}
+
+	got := Diff(desired, live)
+	if len(got) != 2 {
+		t.Fatalf("expected 2 changes for false-vs-unanswered, got %d: %+v", len(got), got)
+	}
+	for _, ch := range got {
+		if ch.Op != OpCreate {
+			t.Errorf("%s: op = %s, want create", ch.Path, ch.Op)
+		}
+	}
+}
+
+// TestDiff_AgeRatingAbsentFieldsAreNotDeletes: a pre-expansion state file that
+// manages the ageRating block but omits newer scalar fields must not try to
+// unset the live answers (field-notes issue #11: absence = not managed, at
+// field granularity too).
+func TestDiff_AgeRatingAbsentFieldsAreNotDeletes(t *testing.T) {
+	desired := &config.State{Spec: config.StateSpec{
+		AgeRating: &config.AgeRatingSpec{Gambling: boolPtr(false)},
+	}}
+	live := &config.State{Spec: config.StateSpec{
+		AgeRating: &config.AgeRatingSpec{
+			Gambling:             boolPtr(false),
+			Advertising:          boolPtr(false),
+			LootBox:              boolPtr(false),
+			MessagingAndChat:     boolPtr(false),
+			UserGeneratedContent: boolPtr(false),
+			GamblingSimulated:    strPtr("NONE"),
+		},
+	}}
+	if got := Diff(desired, live); len(got) != 0 {
+		t.Errorf("absent scalars produced %d changes (spurious deletes): %+v", len(got), got)
+	}
+}
+
 // TestDiff_NilDesiredFieldNotManaged: desired=nil for a sub-spec means
 // "leave it alone"; the diff must produce zero changes.
 func TestDiff_NilDesiredFieldNotManaged(t *testing.T) {
@@ -315,6 +361,52 @@ func TestDiff_ScreenshotsUpdate(t *testing.T) {
 	got := Diff(desired, live)
 	if len(got) != 1 || got[0].Op != OpUpdate {
 		t.Fatalf("expected one update; got %+v", got)
+	}
+}
+
+func TestDiff_AssetChecksumsConvergeAcrossPathsAndOrder(t *testing.T) {
+	desired := &config.State{Spec: config.StateSpec{
+		Screenshots: &config.ScreenshotsSpec{Locales: map[string]map[string][]config.ScreenshotFile{
+			"en-US": {"APP_IPHONE_69": {
+				{Path: "local/b.png", SourceFileChecksum: "bbb"},
+				{Path: "local/a.png", SourceFileChecksum: "aaa"},
+			}},
+		}},
+		IAP: &config.IAPSpec{Products: map[string]config.IAPProduct{
+			"com.example.pro": {Type: "NON_CONSUMABLE", ReviewScreenshot: &config.IAPReviewScreenshot{
+				Path: "local/review.png", SourceFileChecksum: "iap-hash",
+			}},
+		}},
+	}}
+	pages := config.CustomProductPagesSpec{"summer": {Localizations: map[string]config.CustomProductPageLocale{
+		"en-US": {Screenshots: map[string][]config.ScreenshotFile{
+			"APP_IPHONE_69": {{Path: "local/cpp.png", SourceFileChecksum: "cpp-hash"}},
+		}},
+	}}}
+	desired.Spec.CustomProductPages = &pages
+
+	live := &config.State{Spec: config.StateSpec{
+		Screenshots: &config.ScreenshotsSpec{Locales: map[string]map[string][]config.ScreenshotFile{
+			"en-US": {"APP_IPHONE_69": {
+				{Path: "apple-a.png", SourceFileChecksum: "aaa"},
+				{Path: "apple-b.png", SourceFileChecksum: "bbb"},
+			}},
+		}},
+		IAP: &config.IAPSpec{Products: map[string]config.IAPProduct{
+			"com.example.pro": {Type: "NON_CONSUMABLE", ReviewScreenshot: &config.IAPReviewScreenshot{
+				Path: "apple-review.png", SourceFileChecksum: "iap-hash",
+			}},
+		}},
+	}}
+	livePages := config.CustomProductPagesSpec{"summer": {Localizations: map[string]config.CustomProductPageLocale{
+		"en-US": {Screenshots: map[string][]config.ScreenshotFile{
+			"APP_IPHONE_69": {{Path: "apple-cpp.png", SourceFileChecksum: "cpp-hash"}},
+		}},
+	}}}
+	live.Spec.CustomProductPages = &livePages
+
+	if got := Diff(desired, live); len(got) != 0 {
+		t.Fatalf("matching asset checksums must converge, got %+v", got)
 	}
 }
 

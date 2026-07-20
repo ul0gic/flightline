@@ -57,12 +57,16 @@ func fullCoverageHandler(t *testing.T) http.Handler {
 			_, _ = w.Write([]byte(`{"data":[{"type":"appScreenshotSets","id":"SS1","attributes":{"screenshotDisplayType":"APP_IPHONE_69"}}],"links":{}}`))
 		case r.URL.Path == "/v1/appScreenshotSets/SS1/appScreenshots":
 			_, _ = w.Write([]byte(`{"data":[{"type":"appScreenshots","id":"SH1","attributes":{"fileName":"shot1.png","sourceFileChecksum":"abc"}}],"links":{}}`))
-		case r.URL.Path == "/v1/apps/APP1/customProductPages":
-			_, _ = w.Write([]byte(`{"data":[{"type":"customProductPages","id":"CPP1","attributes":{"name":"summer-2026","visible":true}}],"links":{}}`))
-		case r.URL.Path == "/v1/customProductPages/CPP1/customProductPageVersions":
-			_, _ = w.Write([]byte(`{"data":[{"type":"customProductPageVersions","id":"CPPV1","attributes":{"state":"APPROVED"}}],"links":{}}`))
-		case r.URL.Path == "/v1/customProductPageVersions/CPPV1/customProductPageLocalizations":
-			_, _ = w.Write([]byte(`{"data":[{"type":"customProductPageLocalizations","id":"CPPL1","attributes":{"locale":"en-US","promotionalText":"promo"}}],"links":{}}`))
+		case r.URL.Path == "/v1/apps/APP1/appCustomProductPages":
+			_, _ = w.Write([]byte(`{"data":[{"type":"appCustomProductPages","id":"CPP1","attributes":{"name":"summer-2026","visible":true}}],"links":{}}`))
+		case r.URL.Path == "/v1/appCustomProductPages/CPP1/appCustomProductPageVersions":
+			_, _ = w.Write([]byte(`{"data":[{"type":"appCustomProductPageVersions","id":"CPPV1","attributes":{"state":"APPROVED","version":1}}],"links":{}}`))
+		case r.URL.Path == "/v1/appCustomProductPageVersions/CPPV1/appCustomProductPageLocalizations":
+			_, _ = w.Write([]byte(`{"data":[{"type":"appCustomProductPageLocalizations","id":"CPPL1","attributes":{"locale":"en-US","promotionalText":"promo"}}],"links":{}}`))
+		case r.URL.Path == "/v1/appCustomProductPageLocalizations/CPPL1/appScreenshotSets":
+			_, _ = w.Write([]byte(`{"data":[{"type":"appScreenshotSets","id":"CPPSS1","attributes":{"screenshotDisplayType":"APP_IPHONE_69"}}],"links":{}}`))
+		case r.URL.Path == "/v1/appScreenshotSets/CPPSS1/appScreenshots":
+			_, _ = w.Write([]byte(`{"data":[{"type":"appScreenshots","id":"CPPSH1","attributes":{"fileName":"cpp.png","sourceFileChecksum":"def"}}],"links":{}}`))
 		default:
 			http.Error(w, "unhandled "+r.URL.Path, http.StatusNotFound)
 		}

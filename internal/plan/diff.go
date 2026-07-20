@@ -62,10 +62,12 @@ func Diff(desired, live *config.State) []Change {
 // emitIfDiff appends a change when desired and live differ.
 // A nil desired means "not managed": no change is emitted.
 func emitIfDiff(out *[]Change, resource, path string, desired, live any) {
-	if desired == nil {
-		return // not managed
-	}
+	// Deref before the nil test: a typed nil pointer is not interface-nil, and an
+	// absent scalar means "not managed" — it must never delete the live answer.
 	d := derefAny(desired)
+	if d == nil {
+		return
+	}
 	l := derefAny(live)
 	if reflect.DeepEqual(d, l) {
 		return
@@ -74,8 +76,6 @@ func emitIfDiff(out *[]Change, resource, path string, desired, live any) {
 	op := OpUpdate
 	if l == nil {
 		op = OpCreate
-	} else if d == nil {
-		op = OpDelete
 	}
 	*out = append(*out, Change{
 		Op:       op,
@@ -196,7 +196,7 @@ func diffScreenshots(d, l *config.ScreenshotsSpec, out *[]Change) {
 			path := "/spec/screenshots/locales/" + loc + "/" + dev
 			d := dDevices[dev]
 			ll := lDevices[dev]
-			if !reflect.DeepEqual(d, ll) {
+			if !equalScreenshotFiles(d, ll) {
 				op := OpUpdate
 				if len(ll) == 0 {
 					op = OpCreate
@@ -241,7 +241,7 @@ func diffIAP(d, l *config.IAPSpec, out *[]Change) {
 		emitIfDiff(out, "iap."+pid, base+"/familySharable", dp.FamilySharable, lp.FamilySharable)
 		emitIfDiff(out, "iap."+pid, base+"/contentHosting", dp.ContentHosting, lp.ContentHosting)
 		emitIfDiff(out, "iap."+pid, base+"/reviewNote", dp.ReviewNote, lp.ReviewNote)
-		if !reflect.DeepEqual(dp.ReviewScreenshot, lp.ReviewScreenshot) && dp.ReviewScreenshot != nil {
+		if !equalIAPReviewScreenshot(dp.ReviewScreenshot, lp.ReviewScreenshot) && dp.ReviewScreenshot != nil {
 			op := OpUpdate
 			if lp.ReviewScreenshot == nil {
 				op = OpCreate
@@ -283,6 +283,17 @@ func diffAgeRating(d, l *config.AgeRatingSpec, out *[]Change) {
 	emitIfDiff(out, "ageRating", "/spec/ageRating/sexualContentOrNudity", d.SexualContentOrNudity, live.SexualContentOrNudity)
 	emitIfDiff(out, "ageRating", "/spec/ageRating/sexualContentGraphicAndNudity", d.SexualContentGraphicAndNudity, live.SexualContentGraphicAndNudity)
 	emitIfDiff(out, "ageRating", "/spec/ageRating/gambling", d.Gambling, live.Gambling)
+	emitIfDiff(out, "ageRating", "/spec/ageRating/gamblingSimulated", d.GamblingSimulated, live.GamblingSimulated)
+	emitIfDiff(out, "ageRating", "/spec/ageRating/gunsOrOtherWeapons", d.GunsOrOtherWeapons, live.GunsOrOtherWeapons)
+	emitIfDiff(out, "ageRating", "/spec/ageRating/advertising", d.Advertising, live.Advertising)
+	emitIfDiff(out, "ageRating", "/spec/ageRating/ageAssurance", d.AgeAssurance, live.AgeAssurance)
+	emitIfDiff(out, "ageRating", "/spec/ageRating/healthOrWellnessTopics", d.HealthOrWellnessTopics, live.HealthOrWellnessTopics)
+	emitIfDiff(out, "ageRating", "/spec/ageRating/lootBox", d.LootBox, live.LootBox)
+	emitIfDiff(out, "ageRating", "/spec/ageRating/messagingAndChat", d.MessagingAndChat, live.MessagingAndChat)
+	emitIfDiff(out, "ageRating", "/spec/ageRating/parentalControls", d.ParentalControls, live.ParentalControls)
+	emitIfDiff(out, "ageRating", "/spec/ageRating/userGeneratedContent", d.UserGeneratedContent, live.UserGeneratedContent)
+	emitIfDiff(out, "ageRating", "/spec/ageRating/socialMedia", d.SocialMedia, live.SocialMedia)
+	emitIfDiff(out, "ageRating", "/spec/ageRating/socialMediaAgeRestricted", d.SocialMediaAgeRestricted, live.SocialMediaAgeRestricted)
 	emitIfDiff(out, "ageRating", "/spec/ageRating/unrestrictedWebAccess", d.UnrestrictedWebAccess, live.UnrestrictedWebAccess)
 	emitIfDiff(out, "ageRating", "/spec/ageRating/kidsAgeBand", d.KidsAgeBand, live.KidsAgeBand)
 	emitIfDiff(out, "ageRating", "/spec/ageRating/seventeenPlus", d.SeventeenPlus, live.SeventeenPlus)
@@ -452,7 +463,7 @@ func diffCustomProductPages(d, l config.CustomProductPagesSpec, out *[]Change) {
 			for _, dev := range sortedKeys(dl.Screenshots) {
 				dShots := dl.Screenshots[dev]
 				lShots := ll.Screenshots[dev]
-				if !reflect.DeepEqual(dShots, lShots) {
+				if !equalScreenshotFiles(dShots, lShots) {
 					op := OpUpdate
 					if len(lShots) == 0 {
 						op = OpCreate
@@ -467,6 +478,52 @@ func diffCustomProductPages(d, l config.CustomProductPagesSpec, out *[]Change) {
 			}
 		}
 	}
+}
+
+func equalScreenshotFiles(desired, live []config.ScreenshotFile) bool {
+	if len(desired) != len(live) {
+		return false
+	}
+	desiredIDs := make([]string, len(desired))
+	liveIDs := make([]string, len(live))
+	for i := range desired {
+		desiredIDs[i] = screenshotIdentity(desired[i])
+		liveIDs[i] = screenshotIdentity(live[i])
+	}
+	sort.Strings(desiredIDs)
+	sort.Strings(liveIDs)
+	return equalStringSlices(desiredIDs, liveIDs)
+}
+
+func screenshotIdentity(file config.ScreenshotFile) string {
+	if checksum := screenshotChecksum(file); checksum != "" {
+		return "checksum:" + checksum
+	}
+	alt := ""
+	if file.Alt != nil {
+		alt = *file.Alt
+	}
+	return "path:" + file.Path + "\x00alt:" + alt
+}
+
+func screenshotChecksum(file config.ScreenshotFile) string {
+	if file.SourceFileChecksum != "" {
+		return file.SourceFileChecksum
+	}
+	if file.Alt != nil && strings.HasPrefix(*file.Alt, "checksum:") {
+		return strings.TrimPrefix(*file.Alt, "checksum:")
+	}
+	return ""
+}
+
+func equalIAPReviewScreenshot(desired, live *config.IAPReviewScreenshot) bool {
+	if desired == nil || live == nil {
+		return desired == live
+	}
+	if desired.SourceFileChecksum != "" && live.SourceFileChecksum != "" {
+		return desired.SourceFileChecksum == live.SourceFileChecksum
+	}
+	return desired.Path == live.Path
 }
 
 func derefCPP(p *config.CustomProductPagesSpec) config.CustomProductPagesSpec {

@@ -340,4 +340,9 @@ func runFailFixture(t *testing.T, rule Rule, base, yamlPath, routesPath, expPath
 	diags := runRuleAgainstFixture(t, rule, yamlPath, routesPath)
 	exp := loadExpectation(t, expPath)
 	matchExpectation(t, base, rule, exp, diags)
+	for _, diagnostic := range diags {
+		if diagnostic.RuleID == rule.ID() && strings.TrimSpace(diagnostic.FixHint) == "" {
+			t.Errorf("%s: diagnostic %q has no actionable fixHint", base, diagnostic.Message)
+		}
+	}
 }

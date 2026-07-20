@@ -1,7 +1,10 @@
 package main
 
 import (
+	"io/fs"
 	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -58,6 +61,58 @@ func TestCommittedDocsMatchGenerated(t *testing.T) {
 		}
 		if string(got) != tc.want {
 			t.Errorf("%s is out of date; run `make gen-docs`", tc.path)
+		}
+	}
+}
+
+func TestPublicDocsDoNotExposeInternalProjectManagement(t *testing.T) {
+	internalRef := regexp.MustCompile(`(?i)(\.project|\b(BUG|DBT|ENH|FEAT|ISSUE|PRF|QA|SEC)-[0-9]{3}\b|\bphase [0-9]+\b|\bPRD\b)`)
+	paths := []string{"../../README.md"}
+	err := filepath.WalkDir("../../docs", func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if !entry.IsDir() && filepath.Ext(path) == ".md" {
+			paths = append(paths, path)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walking public docs: %v", err)
+	}
+
+	for _, path := range paths {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("reading %s: %v", path, err)
+		}
+		for i, line := range strings.Split(string(content), "\n") {
+			if internalRef.MatchString(line) {
+				t.Errorf("%s:%d exposes internal project-management language: %s", path, i+1, strings.TrimSpace(line))
+			}
+		}
+	}
+}
+
+func TestPublicDocsKeepLifecycleAndPositioningClaimsPrecise(t *testing.T) {
+	forbidden := regexp.MustCompile(`(?i)(the first declarative tool|the app store doesn't\. until now|beta-review submit[^\n]{0,120}(triggers apple review|only (step|action)))`)
+	paths := []string{"../../README.md", "../../docs/guides/state-as-code.md", "../../docs/concepts/three-layer-model.md"}
+	for _, path := range paths {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("reading %s: %v", path, err)
+		}
+		if match := forbidden.FindString(string(content)); match != "" {
+			t.Errorf("%s contains an imprecise lifecycle or novelty claim: %q", path, match)
+		}
+	}
+	readme, err := os.ReadFile("../../README.md")
+	if err != nil {
+		t.Fatalf("reading README: %v", err)
+	}
+	for _, required := range []string{"Fastlane Deliver", "external TestFlight", "Submit for Review in ASC"} {
+		if !strings.Contains(string(readme), required) {
+			t.Errorf("README is missing required positioning boundary %q", required)
 		}
 	}
 }

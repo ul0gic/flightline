@@ -8,8 +8,12 @@ spec:
     locales:
       en-US:
         name: "Pass"
+        description: "Complete English description"
+        supportUrl: "https://example.com/en/support"
       fr-FR:
         name: "Réussite"
+        description: "Description française complète"
+        supportUrl: "https://example.com/fr/support"
   screenshots:
     locales:
       en-US:

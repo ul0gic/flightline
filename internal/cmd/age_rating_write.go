@@ -276,6 +276,8 @@ var knownAgeRatingKeys = map[string]struct{}{
 	"profanityOrCrudeHumor":                       {},
 	"sexualContentGraphicAndNudity":               {},
 	"sexualContentOrNudity":                       {},
+	"socialMedia":                                 {},
+	"socialMediaAgeRestricted":                    {},
 	"unrestrictedWebAccess":                       {},
 	"userGeneratedContent":                        {},
 	"violenceCartoonOrFantasy":                    {},

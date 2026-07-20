@@ -45,6 +45,7 @@ List commands that wrap an Apple resource keep Apple's structure: `id` and `type
 {
   "bundleId": "app.tideterm.ios",
   "version": "2.1.0",
+  "platform": "IOS",
   "sourcePath": "/Users/dev/tideterm/state.yaml",
   "mode": "preflight",
   "diagnostics": [
@@ -54,7 +55,7 @@ List commands that wrap an Apple resource keep Apple's structure: `id` and `type
       "message": "IAP \"app.tideterm.ios.pro\" has no App Store review screenshot attached",
       "path": "/spec/iap/products/app.tideterm.ios.pro/reviewScreenshot",
       "fixHint": "upload one: `flightline iap review-screenshot upload app.tideterm.ios --product app.tideterm.ios.pro <file>`",
-      "reference": "PRD §L3: IAP review-screenshot-exists"
+      "reference": "https://flightline.dev/docs/reference/preflight-rules#iapreview-screenshot-exists"
     }
   ],
   "summary": { "error": 1, "warning": 0, "info": 0 }
@@ -66,6 +67,7 @@ Envelope fields:
 | Field | Notes |
 |-------|-------|
 | `bundleId`, `version` | Omitted when unknown (a lint of a file without them) |
+| `platform` | Resolved command platform on preflight; omitted from lint output when the file does not declare it |
 | `sourcePath` | Absolute path of the linted file; omitted on live-only preflight |
 | `mode` | `"lint"` or `"preflight"` |
 | `diagnostics` | Every finding, sorted by rule ID then path |
@@ -79,8 +81,42 @@ Each diagnostic has this shape; `ruleId` values are stable identifiers (see the 
 | `severity` | always | `"error"`, `"warning"`, or `"info"` |
 | `message` | always | What is wrong, in plain language |
 | `path` | optional | JSON Pointer into the state file |
-| `fixHint` | optional | The remedy |
+| `fixHint` | runtime rule findings | A concrete field, value, command, or manual action that resolves the finding |
 | `reference` | optional | The guideline or document behind the rule |
+
+## Example: apply with a partial failure
+
+`flightline apply state.yaml --confirm --output json` keeps successful changes and reports each failed change with a stable, redacted message:
+
+```json
+{
+  "bundleId": "app.tideterm.ios",
+  "version": "2.1.0",
+  "applied": [
+    {
+      "op": "update",
+      "resource": "version",
+      "path": "/spec/version/copyright",
+      "from": "2025 TideTerm LLC",
+      "to": "2026 TideTerm LLC"
+    }
+  ],
+  "errors": [
+    {
+      "change": {
+        "op": "update",
+        "resource": "iap",
+        "path": "/spec/iap/products/app.tideterm.ios.pro/name",
+        "from": "Old name",
+        "to": "TideTerm Pro"
+      },
+      "message": "ASC rejected the in-app purchase update"
+    }
+  ]
+}
+```
+
+The command returns a nonzero exit code when `errors` is nonempty. Progress and the joined summary remain on stderr; the JSON payload on stdout is self-contained.
 
 ## Example: a report command
 

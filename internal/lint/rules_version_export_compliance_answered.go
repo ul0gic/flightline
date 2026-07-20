@@ -44,8 +44,8 @@ func (r versionExportComplianceAnsweredRule) checkOffline(ctx CheckContext) []Di
 			Message:  "spec.exportCompliance is set but usesNonExemptEncryption is nil",
 			Path:     "/spec/exportCompliance/usesNonExemptEncryption",
 			FixHint: "set the answer: `spec.exportCompliance.usesNonExemptEncryption: false` (most apps) " +
-				"or `true` plus a declaration block. See docs/state-yaml.md#spec-exportcompliance.",
-			Reference: "PRD §L3: version.export-compliance-answered",
+				"or `true` plus a declaration block. See https://flightline.dev/docs/reference/state-yaml#specexportcompliance.",
+			Reference: publicRuleReference(r.ID()),
 		}}
 	}
 	return nil
@@ -73,13 +73,12 @@ func (r versionExportComplianceAnsweredRule) checkLive(ctx CheckContext) []Diagn
 	}
 	if resp.Data.Attributes.UsesNonExemptEncryption == nil {
 		return []Diagnostic{{
-			RuleID:   r.ID(),
-			Severity: SeverityError,
-			Message:  "the build attached to this version has not declared usesNonExemptEncryption",
-			Path:     "/spec/exportCompliance/usesNonExemptEncryption",
-			FixHint: "answer the export-compliance question in App Store Connect, or " +
-				"`flightline export-compliance set <bundleId> --version <v> --uses-non-exempt-encryption=false`.",
-			Reference: "PRD §L3: version.export-compliance-answered",
+			RuleID:    r.ID(),
+			Severity:  SeverityError,
+			Message:   "the build attached to this version has not declared usesNonExemptEncryption",
+			Path:      "/spec/exportCompliance/usesNonExemptEncryption",
+			FixHint:   fmt.Sprintf("answer the export-compliance question in App Store Connect, or run `flightline export-compliance set %s --version %s --uses-encryption false`", ctx.BundleID, ctx.Version),
+			Reference: publicRuleReference(r.ID()),
 		}}
 	}
 	return nil

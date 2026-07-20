@@ -1,13 +1,67 @@
 package config
 
 import (
+	"crypto/md5" //nolint:gosec // test covers Apple's MD5 asset identity
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestLoadState_HydratesAssetChecksums(t *testing.T) {
+	dir := t.TempDir()
+	payload := []byte("asset-bytes")
+	if err := os.WriteFile(filepath.Join(dir, "asset.png"), payload, 0o600); err != nil {
+		t.Fatalf("write asset: %v", err)
+	}
+	stateYAML := `apiVersion: flightline.dev/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.app
+  version: "1.0"
+spec:
+  screenshots:
+    locales:
+      en-US:
+        APP_IPHONE_69:
+          - path: asset.png
+  iap:
+    products:
+      com.example.pro:
+        type: NON_CONSUMABLE
+        reviewScreenshot:
+          path: asset.png
+  customProductPages:
+    summer:
+      localizations:
+        en-US:
+          screenshots:
+            APP_IPHONE_69:
+              - path: asset.png
+`
+	path := filepath.Join(dir, "state.yaml")
+	if err := os.WriteFile(path, []byte(stateYAML), 0o600); err != nil {
+		t.Fatalf("write state: %v", err)
+	}
+	state, err := LoadState(path)
+	if err != nil {
+		t.Fatalf("LoadState: %v", err)
+	}
+	want := fmt.Sprintf("%x", md5.Sum(payload)) //nolint:gosec // Apple's protocol requires MD5
+	got := []string{
+		state.Spec.Screenshots.Locales["en-US"]["APP_IPHONE_69"][0].SourceFileChecksum,
+		state.Spec.IAP.Products["com.example.pro"].ReviewScreenshot.SourceFileChecksum,
+		(*state.Spec.CustomProductPages)["summer"].Localizations["en-US"].Screenshots["APP_IPHONE_69"][0].SourceFileChecksum,
+	}
+	for i, checksum := range got {
+		if checksum != want {
+			t.Errorf("asset checksum %d = %q, want %q", i, checksum, want)
+		}
+	}
+}
 
 // TestLoadState_Example proves the loader round-trips the canonical example.state.yaml into the typed tree.
 func TestLoadState_Example(t *testing.T) {

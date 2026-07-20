@@ -13,6 +13,16 @@ import (
 	"github.com/ul0gic/flightline/internal/lint"
 )
 
+var stablePreflightTopLevelKeys = []string{
+	"bundleId",
+	"diagnostics",
+	"mode",
+	"platform",
+	"sourcePath",
+	"summary",
+	"version",
+}
+
 func TestPreflightOutput_TopLevelKeysStable(t *testing.T) {
 	srv := multiRuleFireServer(t)
 	c := fixtureASCClient(t, srv)
@@ -29,7 +39,7 @@ func TestPreflightOutput_TopLevelKeysStable(t *testing.T) {
 	got := keysOf(probe)
 	// sourcePath is omitempty (only set with --state-file), so it may be absent
 	// here; assert the required keys are present and no unexpected key leaked in.
-	required := []string{"bundleId", "diagnostics", "mode", "summary", "version"}
+	required := []string{"bundleId", "diagnostics", "mode", "platform", "summary", "version"}
 	for _, k := range required {
 		if _, ok := probe[k]; !ok {
 			t.Errorf("preflight JSON missing required key %q (got: %v)", k, got)
@@ -37,7 +47,7 @@ func TestPreflightOutput_TopLevelKeysStable(t *testing.T) {
 	}
 	for _, k := range got {
 		known := false
-		for _, allowed := range stableLintTopLevelKeys {
+		for _, allowed := range stablePreflightTopLevelKeys {
 			if k == allowed {
 				known = true
 				break
@@ -45,7 +55,7 @@ func TestPreflightOutput_TopLevelKeysStable(t *testing.T) {
 		}
 		if !known {
 			t.Errorf("unexpected preflight top-level key %q (allowed: %v)",
-				k, stableLintTopLevelKeys)
+				k, stablePreflightTopLevelKeys)
 		}
 	}
 }
@@ -176,8 +186,8 @@ func multiRuleFireServer(t *testing.T) *httptest.Server {
 		case strings.HasSuffix(path, "/appStoreVersionLocalizations"):
 			_, _ = w.Write([]byte(`{"data":[{"id":"loc-1","type":"appStoreVersionLocalizations","attributes":{"locale":"en-US"}}]}`))
 		case strings.HasSuffix(path, "/appScreenshotSets"):
-			// Only 6.9: 6.7 is missing.
-			_, _ = w.Write([]byte(`{"data":[{"id":"set-69","type":"appScreenshotSets","attributes":{"screenshotDisplayType":"APP_IPHONE_69"}}]}`))
+			// iPad only: no large-iPhone tier member, so the rule fires.
+			_, _ = w.Write([]byte(`{"data":[{"id":"set-ipad","type":"appScreenshotSets","attributes":{"screenshotDisplayType":"APP_IPAD_PRO_3GEN_129"}}]}`))
 		case strings.HasSuffix(path, "/appScreenshots"):
 			_, _ = w.Write([]byte(`{"data":[]}`))
 		default:

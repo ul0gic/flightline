@@ -110,6 +110,15 @@ func TestAppsList_RenderJSONRoundtrip(t *testing.T) {
 	}
 }
 
+func TestAppsList_DocumentedSelectorMatchesContract(t *testing.T) {
+	if !strings.Contains(appsListCmd.Example, ".apps[].attributes.bundleId") {
+		t.Fatalf("apps list help has stale JSON selector: %s", appsListCmd.Example)
+	}
+	if strings.Contains(appsListCmd.Example, ".apps[].bundleId") {
+		t.Fatalf("apps list help still contains invalid selector: %s", appsListCmd.Example)
+	}
+}
+
 func TestDefaultAppCap(t *testing.T) {
 	if got := defaultAppCap(0); got != 32 {
 		t.Errorf("defaultAppCap(0) = %d, want 32", got)

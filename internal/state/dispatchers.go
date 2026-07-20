@@ -2,15 +2,21 @@ package state
 
 import (
 	"context"
+	"crypto/md5" //nolint:gosec // Apple's asset protocol requires MD5
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/ul0gic/flightline/internal/asc"
+	"github.com/ul0gic/flightline/internal/config"
 	"github.com/ul0gic/flightline/internal/plan"
 )
 
@@ -572,9 +578,12 @@ func applyIAPField(ctx context.Context, c *asc.Client, actx ApplyContext, ch pla
 			return fmt.Errorf("apply iap: malformed localization path %s", ch.Path)
 		}
 		locale, field := locParts[0], locParts[1]
-		locID, err := getOrCreateIAPLocalization(ctx, c, iapID, locale)
+		locID, created, err := ensureIAPLocalization(ctx, c, iapID, locale, field, ch.To)
 		if err != nil {
 			return err
+		}
+		if created {
+			return nil
 		}
 		body := map[string]any{
 			"data": map[string]any{
@@ -592,7 +601,7 @@ func applyIAPField(ctx context.Context, c *asc.Client, actx ApplyContext, ch pla
 	}
 
 	if subPath == "reviewScreenshot" {
-		return fmt.Errorf("apply iap.%s.reviewScreenshot: upload via L1 verb (`flightline iap update --review-screenshot upload`): tracked under QA-010", productID)
+		return applyIAPReviewScreenshot(ctx, c, actx, iapID, productID, ch.To)
 	}
 
 	wire := iapSchemaToWire(subPath)
@@ -634,21 +643,26 @@ func resolveIAPByProductID(ctx context.Context, c *asc.Client, appID, productID 
 	return page.Data[0].ID, nil
 }
 
-func getOrCreateIAPLocalization(ctx context.Context, c *asc.Client, iapID, locale string) (string, error) {
-	q := url.Values{"filter[locale]": {locale}, "limit": {"1"}}
-	page, err := asc.Get[asc.Collection[asc.IAPLocalizationAttributes]](
+// ensureIAPLocalization finds the locale's localization or creates it carrying the applied field.
+// Apple's localization relationship endpoint rejects filter[locale], so matching is client-side.
+func ensureIAPLocalization(ctx context.Context, c *asc.Client, iapID, locale, field string, value any) (locID string, created bool, err error) {
+	q := url.Values{"limit": {"200"}}
+	for page, err := range asc.Pages[asc.IAPLocalizationAttributes](
 		ctx, c, "/v2/inAppPurchases/"+iapID+"/inAppPurchaseLocalizations", q,
-	)
-	if err != nil {
-		return "", fmt.Errorf("list iap localizations: %w", err)
-	}
-	if len(page.Data) > 0 {
-		return page.Data[0].ID, nil
+	) {
+		if err != nil {
+			return "", false, fmt.Errorf("list iap localizations: %w", err)
+		}
+		for _, loc := range page.Data {
+			if loc.Attributes.Locale == locale {
+				return loc.ID, false, nil
+			}
+		}
 	}
 	body := map[string]any{
 		"data": map[string]any{
 			"type":       "inAppPurchaseLocalizations",
-			"attributes": map[string]any{"locale": locale},
+			"attributes": map[string]any{"locale": locale, field: value},
 			"relationships": map[string]any{
 				"inAppPurchaseV2": map[string]any{
 					"data": map[string]any{"type": "inAppPurchases", "id": iapID},
@@ -660,14 +674,258 @@ func getOrCreateIAPLocalization(ctx context.Context, c *asc.Client, iapID, local
 		ctx, c, "/v1/inAppPurchaseLocalizations", nil, body,
 	)
 	if err != nil {
-		return "", fmt.Errorf("create iap localization: %w", err)
+		return "", false, fmt.Errorf("create iap localization %s: %w", locale, err)
+	}
+	return resp.Data.ID, true, nil
+}
+
+func applyScreenshotSet(ctx context.Context, c *asc.Client, actx ApplyContext, ch plan.Change) error {
+	rest := strings.TrimPrefix(ch.Path, "/spec/screenshots/locales/")
+	parts := strings.Split(rest, "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return fmt.Errorf("apply screenshots: malformed path %s", ch.Path)
+	}
+	locale, device := parts[0], parts[1]
+	appID, err := resolveAppID(ctx, c, actx.BundleID)
+	if err != nil {
+		return err
+	}
+	_, versionID, err := fetchVersion(ctx, c, appID, actx.Version, actx.Platform)
+	if err != nil {
+		return err
+	}
+	localizationID, err := resolveVersionLocalizationID(ctx, c, versionID, locale)
+	if err != nil {
+		return err
+	}
+	setID, err := findOrCreateManagedScreenshotSet(ctx, c, localizationID, "appStoreVersionLocalization", "appStoreVersionLocalizations", device)
+	if err != nil {
+		return err
+	}
+	return reconcileScreenshotFiles(ctx, c, actx, setID, ch.To)
+}
+
+func applyIAPReviewScreenshot(ctx context.Context, c *asc.Client, actx ApplyContext, iapID, productID string, target any) error {
+	screenshot, err := decodeIAPReviewScreenshot(target)
+	if err != nil {
+		return fmt.Errorf("apply iap.%s.reviewScreenshot: %w", productID, err)
+	}
+	path, err := resolveAssetPath(actx.StateDir, screenshot.Path)
+	if err != nil {
+		return fmt.Errorf("apply iap.%s.reviewScreenshot: %w", productID, err)
+	}
+	checksum, err := fileMD5(path)
+	if err != nil {
+		return fmt.Errorf("apply iap.%s.reviewScreenshot: %w", productID, err)
+	}
+	current, err := asc.Get[asc.Single[asc.IAPReviewScreenshotAttributes]](
+		ctx, c, "/v2/inAppPurchases/"+url.PathEscape(iapID)+"/appStoreReviewScreenshot", nil,
+	)
+	if err == nil && current.Data.ID != "" && current.Data.Attributes.SourceFileChecksum == checksum {
+		return nil
+	}
+	if err != nil {
+		var apiErr *asc.APIError
+		if !errors.As(err, &apiErr) || apiErr.HTTPStatus != http.StatusNotFound {
+			return fmt.Errorf("apply iap.%s.reviewScreenshot: inspect current screenshot: %w", productID, err)
+		}
+	}
+	_, err = c.Upload(ctx, asc.UploadOptions{
+		Kind: asc.AssetKindIAPReviewScreenshot, ParentID: iapID,
+		Asset: asc.UploadAsset{Path: path}, ResumeFromCheckpoint: actx.ResumeUploads,
+	})
+	if err != nil {
+		return fmt.Errorf("apply iap.%s.reviewScreenshot: %w", productID, err)
+	}
+	return nil
+}
+
+func resolveVersionLocalizationID(ctx context.Context, c *asc.Client, versionID, locale string) (string, error) {
+	page, err := asc.Get[asc.Collection[versionLocAttrs]](
+		ctx, c, "/v1/appStoreVersions/"+url.PathEscape(versionID)+"/appStoreVersionLocalizations",
+		url.Values{"limit": {"50"}},
+	)
+	if err != nil {
+		return "", fmt.Errorf("apply screenshots: list version localizations: %w", err)
+	}
+	for _, localization := range page.Data {
+		if localization.Attributes.Locale == locale {
+			return localization.ID, nil
+		}
+	}
+	return "", fmt.Errorf("apply screenshots: locale %q does not exist on version %s", locale, versionID)
+}
+
+func findOrCreateManagedScreenshotSet(ctx context.Context, c *asc.Client, parentID, relationship, parentType, device string) (string, error) {
+	path := "/v1/" + parentType + "/" + url.PathEscape(parentID) + "/appScreenshotSets"
+	page, err := asc.Get[asc.Collection[screenshotSetAttrs]](
+		ctx, c, path, url.Values{"filter[screenshotDisplayType]": {device}, "limit": {"1"}},
+	)
+	if err != nil {
+		return "", fmt.Errorf("apply screenshots: find set: %w", err)
+	}
+	if len(page.Data) > 0 {
+		return page.Data[0].ID, nil
+	}
+	body := map[string]any{"data": map[string]any{
+		"type":       "appScreenshotSets",
+		"attributes": map[string]any{"screenshotDisplayType": device},
+		"relationships": map[string]any{relationship: map[string]any{
+			"data": map[string]any{"type": parentType, "id": parentID},
+		}},
+	}}
+	resp, err := asc.Post[asc.Single[screenshotSetAttrs]](ctx, c, "/v1/appScreenshotSets", nil, body)
+	if err != nil {
+		return "", fmt.Errorf("apply screenshots: create set: %w", err)
+	}
+	if resp.Data.ID == "" {
+		return "", errors.New("apply screenshots: create set returned empty id")
 	}
 	return resp.Data.ID, nil
 }
 
-// applyScreenshotSet defers to the L1 `flightline screenshots upload` verb (QA-010).
-func applyScreenshotSet(_ context.Context, _ *asc.Client, _ ApplyContext, ch plan.Change) error {
-	return fmt.Errorf("apply screenshots %s: upload via L1 verb (`flightline screenshots upload`): orchestrator integration tracked under QA-010", ch.Path)
+func reconcileScreenshotFiles(ctx context.Context, c *asc.Client, actx ApplyContext, setID string, target any) error {
+	files, err := decodeScreenshotFiles(target)
+	if err != nil {
+		return err
+	}
+	existing, err := fetchExistingScreenshotFiles(ctx, c, setID)
+	if err != nil {
+		return err
+	}
+	for _, file := range files {
+		if err := reconcileOneScreenshotFile(ctx, c, actx, setID, file, existing); err != nil {
+			return err
+		}
+	}
+	return deleteUnmanagedScreenshotFiles(ctx, c, existing)
+}
+
+type managedScreenshotFile struct {
+	id       string
+	checksum string
+	consumed bool
+}
+
+func fetchExistingScreenshotFiles(ctx context.Context, c *asc.Client, setID string) ([]*managedScreenshotFile, error) {
+	existing := make([]*managedScreenshotFile, 0)
+	for page, pageErr := range asc.Pages[screenshotAttrs](ctx, c,
+		"/v1/appScreenshotSets/"+url.PathEscape(setID)+"/appScreenshots", url.Values{"limit": {"200"}}) {
+		if pageErr != nil {
+			return nil, fmt.Errorf("apply screenshots: list existing: %w", pageErr)
+		}
+		for _, resource := range page.Data {
+			existing = append(existing, &managedScreenshotFile{id: resource.ID, checksum: resource.Attributes.SourceFileChecksum})
+		}
+	}
+	return existing, nil
+}
+
+func reconcileOneScreenshotFile(ctx context.Context, c *asc.Client, actx ApplyContext, setID string, file config.ScreenshotFile, existing []*managedScreenshotFile) error {
+	path, err := resolveAssetPath(actx.StateDir, file.Path)
+	if err != nil {
+		return err
+	}
+	checksum, err := fileMD5(path)
+	if err != nil {
+		return err
+	}
+	for _, candidate := range existing {
+		if !candidate.consumed && candidate.checksum == checksum {
+			candidate.consumed = true
+			return nil
+		}
+	}
+	if _, err := c.Upload(ctx, asc.UploadOptions{
+		Kind: asc.AssetKindAppScreenshot, ParentID: setID,
+		Asset: asc.UploadAsset{Path: path}, ResumeFromCheckpoint: actx.ResumeUploads,
+	}); err != nil {
+		return fmt.Errorf("apply screenshots: upload %s: %w", path, err)
+	}
+	return nil
+}
+
+func deleteUnmanagedScreenshotFiles(ctx context.Context, c *asc.Client, existing []*managedScreenshotFile) error {
+	for _, file := range existing {
+		if file.consumed {
+			continue
+		}
+		if err := c.Delete(ctx, "/v1/appScreenshots/"+url.PathEscape(file.id), nil); err != nil {
+			return fmt.Errorf("apply screenshots: delete stale asset %s: %w", file.id, err)
+		}
+	}
+	return nil
+}
+
+func decodeScreenshotFiles(value any) ([]config.ScreenshotFile, error) {
+	if files, ok := value.([]config.ScreenshotFile); ok {
+		return files, nil
+	}
+	buf, err := json.Marshal(value)
+	if err != nil {
+		return nil, fmt.Errorf("apply screenshots: encode target: %w", err)
+	}
+	var files []config.ScreenshotFile
+	if err := json.Unmarshal(buf, &files); err != nil {
+		return nil, fmt.Errorf("apply screenshots: decode target: %w", err)
+	}
+	return files, nil
+}
+
+func decodeIAPReviewScreenshot(value any) (config.IAPReviewScreenshot, error) {
+	var screenshot config.IAPReviewScreenshot
+	if screenshot, ok := value.(*config.IAPReviewScreenshot); ok && screenshot != nil {
+		return validateIAPReviewScreenshot(*screenshot)
+	}
+	if screenshot, ok := value.(config.IAPReviewScreenshot); ok {
+		return validateIAPReviewScreenshot(screenshot)
+	}
+	buf, err := json.Marshal(value)
+	if err != nil {
+		return config.IAPReviewScreenshot{}, err
+	}
+	if err := json.Unmarshal(buf, &screenshot); err != nil {
+		return screenshot, err
+	}
+	return validateIAPReviewScreenshot(screenshot)
+}
+
+func validateIAPReviewScreenshot(screenshot config.IAPReviewScreenshot) (config.IAPReviewScreenshot, error) {
+	if screenshot.Path == "" {
+		return screenshot, errors.New("screenshot path is required")
+	}
+	return screenshot, nil
+}
+
+func resolveAssetPath(stateDir, path string) (string, error) {
+	if path == "" {
+		return "", errors.New("asset path is required")
+	}
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(stateDir, path)
+	}
+	path = filepath.Clean(path)
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", fmt.Errorf("stat asset %s: %w", path, err)
+	}
+	if !info.Mode().IsRegular() || info.Size() == 0 {
+		return "", fmt.Errorf("asset %s must be a non-empty regular file", path)
+	}
+	return path, nil
+}
+
+func fileMD5(path string) (string, error) {
+	file, err := os.Open(path) //nolint:gosec // path is resolved from the trusted state file
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = file.Close() }()
+	hash := md5.New() //nolint:gosec // Apple's upload protocol requires MD5
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 // applyTestFlightField creates a beta group, PATCHes a field, or adds/removes a tester by sub-path.
@@ -819,7 +1077,7 @@ func relationshipNoOpIfPresent(ctx context.Context, c *asc.Client, path, testerI
 	return nil
 }
 
-// applyCustomProductPageField creates a page or PATCHes one attribute; localizations defer to L1 (QA-010).
+// applyCustomProductPageField reconciles a page, its editable version/localizations, and screenshot assets.
 func applyCustomProductPageField(ctx context.Context, c *asc.Client, actx ApplyContext, ch plan.Change) error {
 	rest := strings.TrimPrefix(ch.Path, "/spec/customProductPages/")
 	parts := strings.SplitN(rest, "/", 2)
@@ -835,29 +1093,7 @@ func applyCustomProductPageField(ctx context.Context, c *asc.Client, actx ApplyC
 	}
 
 	if subPath == "" {
-		buf, _ := json.Marshal(ch.To)
-		var p struct {
-			Visible *bool `json:"visible,omitempty"`
-		}
-		_ = json.Unmarshal(buf, &p)
-		body := map[string]any{
-			"data": map[string]any{
-				"type": "customProductPages",
-				"attributes": map[string]any{
-					"name":    pageName,
-					"visible": p.Visible,
-				},
-				"relationships": map[string]any{
-					"app": map[string]any{"data": map[string]any{"type": "apps", "id": appID}},
-				},
-			},
-		}
-		if _, err := asc.Post[asc.Single[asc.AppCustomProductPageAttributes]](
-			ctx, c, "/v1/customProductPages", nil, body,
-		); err != nil {
-			return fmt.Errorf("apply customProductPages.create %s: %w", pageName, err)
-		}
-		return nil
+		return createCustomProductPage(ctx, c, actx, appID, pageName, ch.To)
 	}
 
 	if subPath == "visible" {
@@ -865,31 +1101,212 @@ func applyCustomProductPageField(ctx context.Context, c *asc.Client, actx ApplyC
 		if err != nil {
 			return err
 		}
-		body := map[string]any{
-			"data": map[string]any{
-				"type":       "customProductPages",
-				"id":         pageID,
-				"attributes": map[string]any{"visible": ch.To},
-			},
+		visible, ok := ch.To.(bool)
+		if !ok {
+			return fmt.Errorf("apply customProductPages.%s.visible: expected bool, got %T", pageName, ch.To)
 		}
-		if _, err := asc.Patch[asc.Single[asc.AppCustomProductPageAttributes]](
-			ctx, c, "/v1/customProductPages/"+pageID, nil, body,
-		); err != nil {
-			return fmt.Errorf("apply customProductPages.%s.visible: %w", pageName, err)
-		}
-		return nil
+		return patchCustomProductPageVisible(ctx, c, pageID, visible)
 	}
 
 	if strings.HasPrefix(subPath, "localizations/") {
-		return fmt.Errorf("apply customProductPages.%s.%s: edit via L1 verb (`flightline custom-product-pages ...`): tracked under QA-010", pageName, subPath)
+		pageID, err := resolveCustomProductPage(ctx, c, appID, pageName)
+		if err != nil {
+			return err
+		}
+		return applyCPPLocalizationField(ctx, c, actx, pageID, pageName, subPath, ch.To)
 	}
 	return fmt.Errorf("apply customProductPages.%s.%s: unhandled sub-path", pageName, subPath)
+}
+
+func createCustomProductPage(ctx context.Context, c *asc.Client, actx ApplyContext, appID, pageName string, target any) error {
+	buf, _ := json.Marshal(target)
+	var page config.CustomProductPage
+	_ = json.Unmarshal(buf, &page)
+	body := map[string]any{"data": map[string]any{
+		"type":       "appCustomProductPages",
+		"attributes": map[string]any{"name": pageName},
+		"relationships": map[string]any{
+			"app": map[string]any{"data": map[string]any{"type": "apps", "id": appID}},
+		},
+	}}
+	resp, err := asc.Post[asc.Single[asc.AppCustomProductPageAttributes]](
+		ctx, c, "/v1/appCustomProductPages", nil, body,
+	)
+	if err != nil {
+		return fmt.Errorf("apply customProductPages.create %s: %w", pageName, err)
+	}
+	pageID := resp.Data.ID
+	if pageID == "" {
+		return fmt.Errorf("apply customProductPages.create %s: empty id", pageName)
+	}
+	if page.Visible != nil {
+		if err := patchCustomProductPageVisible(ctx, c, pageID, *page.Visible); err != nil {
+			return err
+		}
+	}
+	for _, locale := range sortedMapKeys(page.Localizations) {
+		if err := reconcileCPPLocalization(ctx, c, actx, pageID, locale, page.Localizations[locale]); err != nil {
+			return fmt.Errorf("apply customProductPages.%s.localizations.%s: %w", pageName, locale, err)
+		}
+	}
+	return nil
+}
+
+func applyCPPLocalizationField(ctx context.Context, c *asc.Client, actx ApplyContext, pageID, pageName, subPath string, target any) error {
+	parts := strings.Split(strings.TrimPrefix(subPath, "localizations/"), "/")
+	if len(parts) < 2 {
+		return fmt.Errorf("apply customProductPages.%s.%s: malformed localization path", pageName, subPath)
+	}
+	versionID, err := ensureEditableCPPVersion(ctx, c, pageID)
+	if err != nil {
+		return err
+	}
+	localizationID, err := ensureCPPLocalization(ctx, c, versionID, parts[0], nil)
+	if err != nil {
+		return err
+	}
+	if len(parts) == 2 && parts[1] == "promotionalText" {
+		return patchCPPPromotionalText(ctx, c, localizationID, pageName, subPath, target)
+	}
+	if len(parts) == 3 && parts[1] == "screenshots" {
+		setID, err := findOrCreateManagedScreenshotSet(ctx, c, localizationID,
+			"appCustomProductPageLocalization", "appCustomProductPageLocalizations", parts[2])
+		if err != nil {
+			return err
+		}
+		return reconcileScreenshotFiles(ctx, c, actx, setID, target)
+	}
+	return fmt.Errorf("apply customProductPages.%s.%s: unhandled localization path", pageName, subPath)
+}
+
+func patchCPPPromotionalText(ctx context.Context, c *asc.Client, localizationID, pageName, subPath string, target any) error {
+	body := map[string]any{"data": map[string]any{
+		"type": "appCustomProductPageLocalizations", "id": localizationID,
+		"attributes": map[string]any{"promotionalText": target},
+	}}
+	if _, err := asc.Patch[asc.Single[asc.AppCustomProductPageLocalizationAttributes]](
+		ctx, c, "/v1/appCustomProductPageLocalizations/"+url.PathEscape(localizationID), nil, body,
+	); err != nil {
+		return fmt.Errorf("apply customProductPages.%s.%s: %w", pageName, subPath, err)
+	}
+	return nil
+}
+
+func patchCustomProductPageVisible(ctx context.Context, c *asc.Client, pageID string, visible bool) error {
+	body := map[string]any{"data": map[string]any{
+		"type": "appCustomProductPages", "id": pageID,
+		"attributes": map[string]any{"visible": visible},
+	}}
+	if _, err := asc.Patch[asc.Single[asc.AppCustomProductPageAttributes]](
+		ctx, c, "/v1/appCustomProductPages/"+url.PathEscape(pageID), nil, body,
+	); err != nil {
+		return fmt.Errorf("apply customProductPages.visible: %w", err)
+	}
+	return nil
+}
+
+func reconcileCPPLocalization(ctx context.Context, c *asc.Client, actx ApplyContext, pageID, locale string, desired config.CustomProductPageLocale) error {
+	versionID, err := ensureEditableCPPVersion(ctx, c, pageID)
+	if err != nil {
+		return err
+	}
+	localizationID, err := ensureCPPLocalization(ctx, c, versionID, locale, desired.PromotionalText)
+	if err != nil {
+		return err
+	}
+	for _, device := range sortedMapKeys(desired.Screenshots) {
+		setID, err := findOrCreateManagedScreenshotSet(ctx, c, localizationID,
+			"appCustomProductPageLocalization", "appCustomProductPageLocalizations", device)
+		if err != nil {
+			return err
+		}
+		if err := reconcileScreenshotFiles(ctx, c, actx, setID, desired.Screenshots[device]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func ensureEditableCPPVersion(ctx context.Context, c *asc.Client, pageID string) (string, error) {
+	path := "/v1/appCustomProductPages/" + url.PathEscape(pageID) + "/appCustomProductPageVersions"
+	page, err := asc.Get[asc.Collection[asc.AppCustomProductPageVersionAttributes]](
+		ctx, c, path, url.Values{"limit": {"50"}},
+	)
+	if err != nil {
+		return "", fmt.Errorf("apply customProductPages: list versions: %w", err)
+	}
+	for _, version := range page.Data {
+		switch version.Attributes.State {
+		case "PREPARE_FOR_SUBMISSION", "REJECTED":
+			return version.ID, nil
+		}
+	}
+	body := map[string]any{"data": map[string]any{
+		"type": "appCustomProductPageVersions",
+		"relationships": map[string]any{"appCustomProductPage": map[string]any{
+			"data": map[string]any{"type": "appCustomProductPages", "id": pageID},
+		}},
+	}}
+	resp, err := asc.Post[asc.Single[asc.AppCustomProductPageVersionAttributes]](
+		ctx, c, "/v1/appCustomProductPageVersions", nil, body,
+	)
+	if err != nil {
+		return "", fmt.Errorf("apply customProductPages: create version: %w", err)
+	}
+	if resp.Data.ID == "" {
+		return "", errors.New("apply customProductPages: create version returned empty id")
+	}
+	return resp.Data.ID, nil
+}
+
+func ensureCPPLocalization(ctx context.Context, c *asc.Client, versionID, locale string, promotionalText *string) (string, error) {
+	path := "/v1/appCustomProductPageVersions/" + url.PathEscape(versionID) + "/appCustomProductPageLocalizations"
+	page, err := asc.Get[asc.Collection[asc.AppCustomProductPageLocalizationAttributes]](
+		ctx, c, path, url.Values{"limit": {"50"}},
+	)
+	if err != nil {
+		return "", fmt.Errorf("apply customProductPages: list localizations: %w", err)
+	}
+	for _, localization := range page.Data {
+		if localization.Attributes.Locale == locale {
+			return localization.ID, nil
+		}
+	}
+	attributes := map[string]any{"locale": locale}
+	if promotionalText != nil {
+		attributes["promotionalText"] = *promotionalText
+	}
+	body := map[string]any{"data": map[string]any{
+		"type": "appCustomProductPageLocalizations", "attributes": attributes,
+		"relationships": map[string]any{"appCustomProductPageVersion": map[string]any{
+			"data": map[string]any{"type": "appCustomProductPageVersions", "id": versionID},
+		}},
+	}}
+	resp, err := asc.Post[asc.Single[asc.AppCustomProductPageLocalizationAttributes]](
+		ctx, c, "/v1/appCustomProductPageLocalizations", nil, body,
+	)
+	if err != nil {
+		return "", fmt.Errorf("apply customProductPages: create localization %s: %w", locale, err)
+	}
+	if resp.Data.ID == "" {
+		return "", fmt.Errorf("apply customProductPages: create localization %s returned empty id", locale)
+	}
+	return resp.Data.ID, nil
+}
+
+func sortedMapKeys[V any](values map[string]V) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func resolveCustomProductPage(ctx context.Context, c *asc.Client, appID, name string) (string, error) {
 	q := url.Values{"filter[name]": {name}, "limit": {"1"}}
 	page, err := asc.Get[asc.Collection[asc.AppCustomProductPageAttributes]](
-		ctx, c, "/v1/apps/"+appID+"/customProductPages", q,
+		ctx, c, "/v1/apps/"+appID+"/appCustomProductPages", q,
 	)
 	if err != nil {
 		return "", fmt.Errorf("resolve customProductPage %s: %w", name, err)

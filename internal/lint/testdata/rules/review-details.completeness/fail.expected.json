@@ -4,7 +4,8 @@
       "ruleId": "review-details.completeness",
       "severity": "warning",
       "messageSubstring": "App Review notes are empty",
-      "path": "/spec/review-details/notes"
+      "path": "/spec/review-details/notes",
+      "fixHintSubstring": "flightline reviewer-demo set com.example.iap --version 1.0 --notes"
     }
   ]
 }

@@ -66,7 +66,7 @@ var appsListCmd = &cobra.Command{
 	Args:         cobra.NoArgs,
 	RunE:         runAppsList,
 	Example: `  flightline apps list
-  flightline apps list --output json | jq -r '.apps[].bundleId'
+  flightline apps list --output json | jq -r '.apps[].attributes.bundleId'
   flightline apps list --limit 50`,
 }
 

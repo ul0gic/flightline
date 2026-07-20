@@ -326,3 +326,30 @@ func TestPost_SendsBody(t *testing.T) {
 		t.Fatalf("Post: %v", err)
 	}
 }
+
+func TestDo_UntrustedTLSCertGetsHint(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	keyPath := writeTestKey(t)
+	// Default http.Client (not srv.Client()) so the self-signed cert is untrusted.
+	c, err := New(Options{
+		KeyID:    "TESTABCDEF",
+		IssuerID: "11111111-2222-3333-4444-555555555555",
+		KeyPath:  keyPath,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	c.baseURL = srv.URL
+
+	_, err = Get[Single[appAttrs]](context.Background(), c, "/v1/apps", nil)
+	if err == nil {
+		t.Fatal("expected TLS verification error")
+	}
+	if !strings.Contains(err.Error(), "SSL_CERT_FILE") {
+		t.Errorf("cert error lacks the MITM hint: %v", err)
+	}
+}

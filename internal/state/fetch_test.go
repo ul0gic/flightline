@@ -110,6 +110,35 @@ func TestFetch_AppNotFound(t *testing.T) {
 	}
 }
 
+func TestFetch_RequireEditable_RejectsReleasedVersion(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/v1/apps":
+			_, _ = w.Write([]byte(`{"data":[{"type":"apps","id":"APP1"}],"links":{}}`))
+		case "/v1/apps/APP1/appStoreVersions":
+			_, _ = w.Write([]byte(`{"data":[{"type":"appStoreVersions","id":"VER1","attributes":{"versionString":"1.0","appVersionState":"READY_FOR_DISTRIBUTION"}}],"links":{}}`))
+		default:
+			http.Error(w, "not found", http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	c := fixtureClient(t, srv)
+	_, err := Fetch(context.Background(), c, "com.example.app", FetchOpts{Version: "1.0", RequireEditable: true})
+	if err == nil {
+		t.Fatal("expected error for non-editable version")
+	}
+	if !strings.Contains(err.Error(), "READY_FOR_DISTRIBUTION") || !strings.Contains(err.Error(), "versions create") {
+		t.Errorf("error should name the state and the fix: %v", err)
+	}
+
+	// Same version without the guard (plain fetch) must succeed.
+	if _, err := Fetch(context.Background(), c, "com.example.app", FetchOpts{Version: "1.0"}); err != nil {
+		t.Errorf("unguarded fetch should read released versions: %v", err)
+	}
+}
+
 func TestFetch_RequiredArgs(t *testing.T) {
 	if _, err := Fetch(context.Background(), nil, "x", FetchOpts{}); err == nil {
 		t.Error("expected error for nil client")

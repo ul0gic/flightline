@@ -4,7 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -65,6 +69,46 @@ func TestCustomProductPageList_TableRowsHeaders(t *testing.T) {
 	}
 	if rows[0][3] != "APPROVED" {
 		t.Errorf("rows[0][STATE] = %q, want APPROVED", rows[0][3])
+	}
+}
+
+func TestEnrichCustomProductPageVersions_DoesNotStopAfterFifty(t *testing.T) {
+	var requests int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&requests, 1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"data":[{"type":"appCustomProductPageVersions","id":"version","attributes":{"version":"1","state":"APPROVED"}}],"links":{}}`)
+	}))
+	defer srv.Close()
+	views := make([]CustomProductPageView, 51)
+	for i := range views {
+		views[i].ID = fmt.Sprintf("CPP-%d", i+1)
+	}
+	if err := enrichCustomProductPageVersions(context.Background(), fixtureASCClient(t, srv), views); err != nil {
+		t.Fatalf("enrichCustomProductPageVersions: %v", err)
+	}
+	if atomic.LoadInt32(&requests) != 51 {
+		t.Errorf("version requests = %d, want 51", requests)
+	}
+	if views[50].CurrentVersion != "1" || views[50].CurrentState != "APPROVED" {
+		t.Errorf("51st page was not enriched: %+v", views[50])
+	}
+}
+
+func TestEnrichCustomProductPageVersions_FailsInsteadOfReturningPartialData(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "CPP-2") {
+			http.Error(w, "rate limited", http.StatusTooManyRequests)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[],"links":{}}`))
+	}))
+	defer srv.Close()
+	views := []CustomProductPageView{{ID: "CPP-1"}, {ID: "CPP-2"}}
+	err := enrichCustomProductPageVersions(context.Background(), fixtureASCClient(t, srv), views)
+	if err == nil || !strings.Contains(err.Error(), "CPP-2") {
+		t.Fatalf("expected named enrichment failure; got %v", err)
 	}
 }
 
@@ -144,7 +188,10 @@ func TestCustomProductPages_JSONOutputStability_List(t *testing.T) {
 		t.Fatalf("renderTo: %v", err)
 	}
 	var decoded struct {
-		Pages []map[string]any `json:"pages"`
+		Pages         []map[string]any `json:"pages"`
+		Complete      bool             `json:"complete"`
+		EnrichedCount int              `json:"enrichedCount"`
+		TotalCount    int              `json:"totalCount"`
 	}
 	if err := json.Unmarshal(buf.Bytes(), &decoded); err != nil {
 		t.Fatalf("decode: %v\nraw: %s", err, buf.String())

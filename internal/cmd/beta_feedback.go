@@ -98,7 +98,7 @@ var betaFeedbackCmd = &cobra.Command{
   - screenshot <bundleId>     : list screenshot submissions, optionally filtered by build
   - download <feedbackId>     : download the crash log or screenshot to disk
 
-Phase 3 has no write surface here: feedback is tester-authored.`,
+Feedback is tester-authored, so this command group is read-only.`,
 }
 
 var betaFeedbackCrashCmd = &cobra.Command{

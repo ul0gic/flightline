@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/ul0gic/flightline/internal/asc"
 	"github.com/ul0gic/flightline/internal/config"
 	"github.com/ul0gic/flightline/internal/plan"
 	"github.com/ul0gic/flightline/internal/state"
@@ -23,18 +24,19 @@ type ApplyResult struct {
 }
 
 func (r *ApplyResult) TableRows() (headers []string, rows [][]string) {
-	headers = []string{"STATUS", "OP", "PATH"}
+	headers = []string{"STATUS", "OP", "PATH", "ERROR"}
 	for _, c := range r.Applied {
-		rows = append(rows, []string{"applied", string(c.Op), c.Path})
+		rows = append(rows, []string{"applied", string(c.Op), c.Path, ""})
 	}
 	for _, c := range r.Skipped {
-		rows = append(rows, []string{"skipped", string(c.Op), c.Path})
+		rows = append(rows, []string{"skipped", string(c.Op), c.Path, ""})
 	}
-	for _, e := range r.Errors {
-		rows = append(rows, []string{"error", string(e.Change.Op), e.Change.Path})
+	for i := range r.Errors {
+		e := &r.Errors[i]
+		rows = append(rows, []string{"error", string(e.Change.Op), e.Change.Path, e.MessageText()})
 	}
 	if len(rows) == 0 {
-		rows = append(rows, []string{"(none)", "", "no changes"})
+		rows = append(rows, []string{"(none)", "", "no changes", ""})
 	}
 	return headers, rows
 }
@@ -51,8 +53,8 @@ guardrail as terraform plan. With --confirm, every leaf-level change
 dispatches to its L1 writer, with a checkpoint persisted after every
 success so a Ctrl-C / crash mid-apply resumes cleanly via --resume.
 
---dry-run computes the dispatch path but never hits the wire; useful
-for preview without --confirm.
+--dry-run fetches live state and computes the dispatch path, but sends
+no mutating API requests. It requires credentials and network access.
 
 Examples:
   flightline apply state.yaml                 # plan only, refuses to write
@@ -64,7 +66,7 @@ Examples:
 	}
 	cmd.Flags().Bool("confirm", false, "actually write changes (without this, apply is a plan)")
 	cmd.Flags().Bool("resume", false, "resume from a previous interrupted apply")
-	cmd.Flags().Bool("dry-run", false, "compute dispatch but make no API calls")
+	cmd.Flags().Bool("dry-run", false, "fetch live state and compute dispatch without mutating ASC")
 	cmd.Flags().String("version", "", "override metadata.version from the state file")
 	cmd.Flags().String("platform", "", "override metadata.platform from the state file")
 	rootCmd.AddCommand(cmd)
@@ -88,7 +90,10 @@ func runApply(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	return runApplyWithClient(cmd, stateFile, desired, c)
+}
 
+func runApplyWithClient(cmd *cobra.Command, stateFile string, desired *config.State, c *asc.Client) error {
 	versionOverride, _ := cmd.Flags().GetString("version")
 	platformOverride, _ := cmd.Flags().GetString("platform")
 	version := desired.Metadata.Version
@@ -99,9 +104,12 @@ func runApply(cmd *cobra.Command, args []string) error {
 	if platformOverride != "" {
 		platform = platformOverride
 	}
+	if platform == "" {
+		platform = "IOS"
+	}
 
 	live, err := state.Fetch(cmd.Context(), c, desired.Metadata.BundleID, state.FetchOpts{
-		Version: version, Platform: platform,
+		Version: version, Platform: platform, RequireEditable: true,
 	})
 	if err != nil {
 		return err

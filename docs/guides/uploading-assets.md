@@ -1,22 +1,21 @@
 # Uploading assets
 
-App Store binary assets (version screenshots, IAP review screenshots, Custom Product Page screenshots) upload through dedicated L1 verbs, not through `flightline apply`. Apple's multipart upload API (reserve, PUT, commit, often via a separate signed-URL host) is structurally different from a JSON PATCH on a config field, so `apply` deliberately does not drive it. Config fields converge through `apply`; asset bytes flow through the upload verbs.
+`flightline apply` reconciles App Store binary assets declared in state YAML, including version screenshots, IAP review screenshots, and Custom Product Page screenshots. It uses Apple's multipart reserve, PUT, and commit protocol and compares local MD5 checksums with live `sourceFileChecksum` values before uploading.
+
+The dedicated version screenshot and IAP review-screenshot commands remain available when you want an explicit one-off upload without managing the asset in state YAML.
 
 This guide covers the upload workflow. For the state-file fields that describe these assets, see the [state-yaml reference](../reference/state-yaml.md).
 
 ## How it fits the apply workflow
 
-When `flightline plan` shows a screenshot or review-screenshot change, `flightline apply` returns a typed error for that path and points you at the upload verb. The intended flow is two commands: upload the asset, then run `apply` for everything else.
+Declare asset paths relative to the state file, review the checksum-based plan, and apply normally:
 
 ```bash
-flightline screenshots upload app.tideterm.ios \
-  --version 1.0.1 --locale en-US --device-set APP_IPHONE_67 \
-  ./screenshots/iphone67-1.png
-
+flightline plan state.yaml
 flightline apply state.yaml --confirm
 ```
 
-The full orchestrator integration (so `apply` drives uploads directly, with checksum-skip and chunked resume) is tracked in [QA-010](../../.project/issues/open/QA-010-orchestrator-upload-integration.md).
+Matching checksums are no-ops. For screenshot sets, assets omitted from the managed list are deleted during the confirmed apply. If an upload is interrupted, rerun `flightline apply state.yaml --confirm --resume`; the apply and multipart checkpoints are both validated before work continues.
 
 ## Version screenshots
 
@@ -75,10 +74,10 @@ Required flags: `--product` (the parent IAP's productId) and `--file`. Pass `--r
 
 ## Custom Product Page screenshots
 
-CPP screenshots are described under `spec.customProductPages` in the state file and upload through the custom-product-pages screenshot verb. CPPs support a subset of device classes (iPhone and iPad only; no TV, Watch, or Vision Pro). See the [CPP section of the state-yaml reference](../reference/state-yaml.md#speccustomproductpages) for the supported device list.
+CPP screenshots are described under `spec.customProductPages` in the state file and upload through `flightline apply`. CPPs support a subset of device classes (iPhone and iPad only; no TV, Watch, or Vision Pro). See the [CPP section of the state-yaml reference](../reference/state-yaml.md#speccustomproductpages) for the supported device list.
 
 ## See also
 
 - [State as code: a 5-minute walkthrough](./state-as-code.md), the fetch, edit, plan, apply loop.
 - [State-yaml reference](../reference/state-yaml.md), the `spec.screenshots`, `spec.iap`, and `spec.customProductPages` fields.
-- `flightline screenshots upload --help`, `flightline iap review-screenshot upload --help`.
+- `flightline apply --help`, `flightline screenshots upload --help`, `flightline iap review-screenshot upload --help`.

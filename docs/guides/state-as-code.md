@@ -186,23 +186,23 @@ Expected stderr output during apply:
 flightline: applied ~ /spec/metadata/locales/en-US/promotionalText
 ```
 
-The command exits 0 on success. If any individual change fails, Flightline continues with the remaining changes, surfaces the errors in the output, and checkpoints completed changes so a re-run skips them.
+The command exits 0 on success. If any individual change fails, Flightline continues with the remaining changes, surfaces the errors in the output, and checkpoints completed changes for a safe resume.
 
-**Checkpoint and resume.** If an apply is interrupted (Ctrl-C, network drop, crash), the checkpoint is at `~/.cache/flightline/apply/<bundleId>.json`. Resume with:
+**Checkpoint and resume.** If an apply is interrupted (Ctrl-C, network drop, crash), Flightline stores a coordinate-scoped checkpoint in the user cache. It binds the checkpoint to the bundle ID, version, platform, and original plan. Resume with:
 
 ```bash
 flightline apply state.yaml --confirm --resume
 ```
 
-Already-applied changes are skipped. The rest continue.
+Flightline fetches live state again, verifies that the remaining diff matches the interrupted plan, and applies that residual diff. A mismatch stops before any write and asks you to start a fresh apply. A fully successful apply removes its checkpoint.
 
-**Dry run.** Compute the full dispatch path, including which API calls would be made, without hitting the wire:
+**Dry run.** Fetch live state and compute the full dispatch path without sending mutating requests:
 
 ```bash
 flightline apply state.yaml --dry-run --output json
 ```
 
-Useful for verifying the routing logic without needing real credentials.
+Dry-run still requires credentials and network access because it reads current ASC state. It sends no POST, PATCH, or DELETE requests.
 
 ---
 
@@ -238,7 +238,7 @@ Flightline fetched the live state, compared it to your file, and found no differ
 | `flightline apply state.yaml` | Plan only, refuses to write | No |
 | `flightline apply state.yaml --confirm` | Write all changes | Yes |
 | `flightline apply state.yaml --confirm --resume` | Resume after interruption | Yes |
-| `flightline apply state.yaml --dry-run` | Compute dispatch, no wire calls | No |
+| `flightline apply state.yaml --dry-run` | Read live state and compute dispatch, no mutations | No |
 
 ---
 
@@ -246,38 +246,48 @@ Flightline fetched the live state, compared it to your file, and found no differ
 
 ```
 1. Edit       edit state.yaml
-2. Lint       flightline lint state.yaml           # Phase 5, offline schema + format rules
+2. Lint       flightline lint state.yaml           # offline schema + format rules
 3. Plan       flightline plan state.yaml           # read-only diff, no writes
 4. Apply      flightline apply state.yaml --confirm
-5. Preflight  flightline preflight <bundleId> -v <v>  # Phase 5, live rule check
-6. Submit     flightline testflight beta-review submit <bundleId> --build <n>  # triggers Apple Review
+5. Preflight  flightline preflight <bundleId> -v <v>  # live rule check
+6a. External TestFlight  flightline testflight beta-review submit <bundleId> --build <n>
+6b. App Store release   attach the build and intended IAPs, then Submit for Review in ASC
 ```
 
-Steps 1 to 5 are reversible. Step 6 is the only point of no return.
+Steps 1 to 5 are reversible. The two terminal paths are separate: beta review unlocks external TestFlight distribution and does not submit a production release. App Store Review submission remains a manual ASC action; run preflight immediately before it and verify the review submission contains the build and every intended IAP.
 
 ---
+
+## Trial-gated paywalls: tell the reviewer where the purchase lives
+
+ASC state cannot see in-app gating. If your paywall only appears after a free
+trial expires, the reviewer's fresh install will never show it — and "we cannot
+locate the In-App Purchases" rejections follow. Two rules of thumb:
+
+- Your App Review notes MUST give the exact steps to reach the purchase
+  (`flightline reviewer-demo` manages this surface; preflight's
+  `review-details.completeness` rule enforces it once an IAP is in the submission).
+- Expose a purchase entry point that is reachable at all times — a buy button in
+  Settings during the trial costs nothing and removes the whole rejection class.
 
 ## Current limitations
 
 ### Screenshots and IAP review screenshots
 
-`flightline apply` cannot yet drive binary asset uploads (screenshots, IAP review screenshots, Custom Product Page screenshots). The diff engine compares checksums correctly, and `flightline plan` shows what would change, but `flightline apply` returns a typed error for these paths and directs you to the L1 upload verbs. Upload the assets first, then run `apply` for everything else:
+`flightline apply` drives binary asset uploads for version screenshots, IAP review screenshots, and Custom Product Page screenshots. Asset paths are resolved relative to the state file. The diff engine compares local MD5 values with Apple's live checksums, so unchanged bytes are skipped:
 
 ```bash
-flightline screenshots upload app.tideterm.ios \
-  --version 1.0.1 --locale en-US --device-set APP_IPHONE_67 \
-  ./screenshots/iphone67-1.png
-
+flightline plan state.yaml
 flightline apply state.yaml --confirm
 ```
 
-See [Uploading assets](./uploading-assets.md) for the full upload workflow (device sets, the MD5 skip behavior, resume). This is tracked in [QA-010](../../.project/issues/open/QA-010-orchestrator-upload-integration.md); the orchestrator integration (checksum-skip and chunked upload resume) lands when that closes.
+For managed screenshot sets, files absent from the desired list are deleted during the confirmed apply. `--resume` also resumes interrupted multipart uploads after validating their file checksums. See [Uploading assets](./uploading-assets.md) for the full workflow and the optional one-off upload commands.
 
 ### Privacy nutrition labels
 
 Privacy nutrition labels are not manageable via the App Store Connect API (v4.3). The API has no endpoint for `appPrivacyDetails`. Manage them in the App Store Connect web UI.
 
-`flightline privacy-labels get <bundleId>` returns a diagnostic explaining this gap, it does not fail silently. See [ISSUE-002](../../.project/issues/closed/ISSUE-002-privacy-labels-not-in-asc-api.md).
+`flightline privacy-labels get <bundleId>` returns a diagnostic explaining this gap; it does not fail silently.
 
 ---
 
@@ -346,6 +356,6 @@ The `seventeenPlus` field in `spec.ageRating` is Apple-computed from your questi
 
 - [Field reference](../reference/state-yaml.md), every field, every constraint, every gotcha
 - [Uploading assets](./uploading-assets.md), the screenshot and IAP review-screenshot upload workflow
-- [PRD Lifecycle](../../.project/prd.md#lifecycle), the full authoring loop
+- [Preflight in CI](./preflight-in-ci.md), run live release checks as a deployment gate
 - Schema: `schemas/flightline.schema.json` (or `https://flightline.dev/schemas/v1alpha1/state.schema.json`)
 - `flightline --help`, `flightline fetch --help`, `flightline plan --help`, `flightline apply --help`

@@ -63,7 +63,7 @@ metadata:
 | `version` | string | yes |, | `^[0-9]+(\.[0-9]+)*$` | Marketing version (CFBundleShortVersionString). Leading zeros rejected, `01.0` fails schema. Quote it: `"1.0"`. |
 | `platform` | enum | no | `IOS` | `IOS`, `MAC_OS`, `TV_OS`, `VISION_OS` | Defaults to `IOS` when absent. Must match the platform your build targets. |
 
-**PRD lifecycle step:** `metadata.bundleId` + `metadata.version` are the identity keys Flightline uses at every step of the [authoring loop](../../.project/prd.md#lifecycle) (fetch → lint → plan → apply → preflight → submit).
+**Authoring loop.** `metadata.bundleId` + `metadata.version` are the identity keys Flightline uses at every step: fetch → lint → plan → apply → preflight.
 
 ---
 
@@ -85,7 +85,7 @@ spec:
 | `copyright` | string | no |, | maxLength 100 | Displayed on the App Store listing. Apple shows this under the app name. |
 | `downloadable` | boolean | no |, |, | Rarely needed; controls whether the build is downloadable from TestFlight or the App Store. |
 
-**PRD lifecycle step:** Version release type is set before you submit. `MANUAL` gives you a hold button after approval; `AFTER_APPROVAL` releases automatically; `SCHEDULED` releases at the specified time.
+**Release timing.** Version release type is set before submission. `MANUAL` gives you a hold button after approval; `AFTER_APPROVAL` releases automatically; `SCHEDULED` releases at the specified time.
 
 ---
 
@@ -139,19 +139,19 @@ Locale codes follow the pattern `^[a-z]{2}(-[A-Z]{2})?$`, two-letter language co
 
 | Field | Type | Required | maxLength | Gotcha |
 |-------|------|----------|-----------|--------|
-| `name` | string | no | 30 | App name on the store listing. Apple enforces 30 chars; plan/apply will reject strings over this limit before hitting the wire. Applies to `appInfoLocalization`. |
+| `name` | string | baseline | 30 | App name on the store listing. Apple enforces 30 chars; plan/apply will reject strings over this limit before hitting the wire. Applies to `appInfoLocalization`. |
 | `subtitle` | string | no | 30 | One-line subtitle beneath the app name. Applies to `appInfoLocalization`. |
-| `description` | string | no | 4000 | Long body text on the listing page. Applies to `appStoreVersionLocalization`. |
+| `description` | string | baseline | 4000 | Long body text on the listing page. Applies to `appStoreVersionLocalization`. |
 | `keywords` | string | no | 100 | Comma-separated, no spaces around commas. Goes to `appStoreVersionLocalization`. Not shown to users but affects search indexing. |
 | `whatsNew` | string | no | 4000 | "What's New in this Version" text. Version-scoped: this is for the current `metadata.version`. |
 | `promotionalText` | string | no | 170 | Promotional text block. **Can be updated without resubmission**, the only metadata field you can change on a live, approved version. Use it for time-sensitive copy. |
 | `marketingUrl` | URI | no |, | Full URL. |
-| `supportUrl` | URI | no |, | Full URL. |
+| `supportUrl` | URI | baseline |, | Full URL. |
 | `privacyPolicyUrl` | URI | no |, | Full URL. |
 
 **Cross-resource routing.** `name` and `subtitle` live on `appInfoLocalization`; everything else lives on `appStoreVersionLocalization`. Flightline handles the routing, you author a single locale map and Flightline dispatches to the correct ASC resource per field.
 
-**Per-locale completeness.** Every locale you declare must be complete enough for Apple to accept. Apple will reject a submission if a declared locale has a `description` but no `supportUrl`. Flightline's L3 preflight rule `localizations.completeness` (Phase 5) will catch this offline; until then, check the [Apple documentation](https://developer.apple.com/help/app-store-connect/manage-app-information/add-app-localizations/) for required fields per locale.
+**Per-locale completeness.** Every locale you declare must be complete enough for Apple to accept. The `localizations.completeness` rule checks Flightline's submission baseline (`name`, `description`, and `supportUrl`) even when metadata is the only localized surface, and reports locale coverage gaps across other managed surfaces. Other fields remain lifecycle-dependent; check the [Apple documentation](https://developer.apple.com/help/app-store-connect/manage-app-information/add-app-localizations/) for Apple's current requirements.
 
 ---
 
@@ -195,9 +195,9 @@ spec:
 
 Each device slot accepts 1 to 10 screenshots (`minItems: 1`, `maxItems: 10`).
 
-**Required devices for new submissions.** Apple requires at least 6.9" and 6.7" screenshots for new iOS app submissions. The L3 preflight rule `screenshots.requiredDevices` (Phase 5) catches this offline.
+**Required devices for new submissions.** Apple requires at least one supported large-iPhone screenshot tier for new iOS app submissions. The L3 preflight rule `screenshots.requiredDevices` catches missing coverage offline.
 
-**Current limitation.** `flightline apply` cannot yet drive the multipart binary upload for screenshots. The diff engine and fetch projection are correct, apply will surface a typed error pointing you to the L1 verb (`flightline screenshots upload`). This is tracked in [QA-010](../../.project/issues/open/QA-010-orchestrator-upload-integration.md). Use `flightline screenshots upload` directly for now; the state file's screenshot section is still useful for tracking what should be there.
+`flightline apply` resolves these paths relative to the state file, compares local MD5 checksums with Apple's live checksums, uploads changed files, and deletes live files omitted from the managed device set. Use `--resume` to continue an interrupted multipart upload. The dedicated `flightline screenshots upload` command remains available for one-off uploads outside state management.
 
 ---
 
@@ -245,9 +245,9 @@ reviewScreenshot:
 
 | Field | Type | Required | Gotcha |
 |-------|------|----------|--------|
-| `path` | string | yes | Relative to state file directory. The L3 preflight rule `iap.reviewScreenshot.exists` (Phase 5) checks this is populated. Missing review screenshots are a common rejection cause. |
+| `path` | string | yes | Relative to state file directory. The L3 preflight rule `iap.reviewScreenshot.exists` checks this is populated. Missing review screenshots are a common rejection cause. |
 
-**Current limitation.** Like app screenshots, the `reviewScreenshot` binary upload is not yet driven by `flightline apply`. Use `flightline iap review-screenshot upload <bundleId> --product <productId> --file <path>` until [QA-010](../../.project/issues/open/QA-010-orchestrator-upload-integration.md) lands.
+**Current limitation.** Like app screenshots, the `reviewScreenshot` binary upload is not driven by `flightline apply`. Use `flightline iap review-screenshot upload <bundleId> --product <productId> --file <path>` directly.
 
 ### iapLocalization fields
 
@@ -260,7 +260,7 @@ reviewScreenshot:
 
 ## spec.ageRating
 
-Apple's age-rating questionnaire. Each field answers one content-category question. All fields are optional individually, answering only the categories relevant to your app is fine. However, Apple requires the questionnaire to be complete before you can submit; the L3 preflight rule `version.ageRating.answered` (Phase 5) verifies this.
+Apple's age-rating questionnaire. Each field answers one content-category question. All fields are optional individually, answering only the categories relevant to your app is fine. However, Apple requires the questionnaire to be complete before you can submit; the L3 preflight rule `version.ageRating.answered` verifies this.
 
 ```yaml
 spec:
@@ -486,7 +486,7 @@ spec:
 
 **Device classes for CPPs.** CPPs support a subset of device classes: `APP_IPHONE_67`, `APP_IPHONE_69`, `APP_IPHONE_65`, `APP_IPHONE_61`, `APP_IPHONE_55`, `APP_IPAD_PRO_3GEN_129`, `APP_IPAD_PRO_3GEN_11`. TV, Watch, and Vision Pro device classes are not supported on CPPs.
 
-**Current limitation.** CPP screenshot binary uploads are not yet driven by `flightline apply`, same as main screenshots. See [QA-010](../../.project/issues/open/QA-010-orchestrator-upload-integration.md).
+**Current limitation.** CPP screenshot binary uploads are not driven by `flightline apply`, the same as main screenshots. Use the dedicated Custom Product Page screenshot upload command directly.
 
 ---
 
@@ -498,7 +498,7 @@ spec:
 
 Flightline ships a `flightline privacy-labels get <bundleId>` stub that returns a typed diagnostic explaining the gap. The JSON contract has `supported: false` and a pointer to the portal.
 
-Manage privacy labels in the App Store Connect web UI. See [ISSUE-002](../../.project/issues/closed/ISSUE-002-privacy-labels-not-in-asc-api.md) for full context.
+Manage privacy labels in the App Store Connect web UI.
 
 ### Asset upload paths (screenshots, IAP review screenshots, CPP screenshots)
 
@@ -509,7 +509,7 @@ flightline screenshots upload <bundleId> --version <v> --locale <l> --device-set
 flightline iap review-screenshot upload <bundleId> --product <productId> --file <path>
 ```
 
-This is tracked in [QA-010](../../.project/issues/open/QA-010-orchestrator-upload-integration.md). The full apply orchestration (including checksum-skip and resume) lands when that issue closes.
+Asset uploads remain explicit L1 operations and are not dispatched by `flightline apply`.
 
 ---
 
@@ -532,7 +532,7 @@ The strict loader surfaces these as `file:line:col` diagnostics before schema va
 
 ### Per-locale completeness
 
-Every locale you declare in `spec.metadata.locales` is managed. If you declare `es-MX` but only provide `name`, Apple may reject the submission because `supportUrl` is missing. Either fill all required fields for a locale or omit the locale entirely. Flightline's L3 rule `localizations.completeness` (Phase 5) will enforce this offline.
+Every locale you declare in `spec.metadata.locales` is managed. Fill the baseline `name`, `description`, and `supportUrl` fields for each locale or omit that locale entirely. Flightline's `localizations.completeness` rule checks those fields and reports locale coverage gaps across the managed localization surfaces.
 
 ### Cross-resource field routing
 
@@ -560,5 +560,5 @@ If you omit `spec.screenshots` entirely, Flightline will not touch your screensh
 
 - [State-as-code guide](../guides/state-as-code.md), 5-minute fetch → edit → plan → apply walkthrough
 - [Schema source](../../schemas/flightline.schema.json), the JSON Schema 2020-12 contract
-- [PRD Lifecycle](../../.project/prd.md#lifecycle), the full authoring loop (lint → plan → apply → preflight → submit)
+- [Preflight in CI](../guides/preflight-in-ci.md), run live release checks as a deployment gate
 - `flightline --help`, `flightline fetch --help`, `flightline plan --help`, `flightline apply --help`

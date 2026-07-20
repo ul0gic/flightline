@@ -56,7 +56,7 @@
         {
           "file": "reference/preflight-rules.md",
           "label": "Preflight rules",
-          "description": "All 14 rules with mode, severity, and fix hints."
+          "description": "All 15 rules with mode, severity, and fix hints."
         },
         {
           "file": "reference/cli.md",

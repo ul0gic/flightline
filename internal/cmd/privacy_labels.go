@@ -35,9 +35,7 @@ Connect's web UI.
 
 This command returns a typed diagnostic so callers can detect the
 unsupported state programmatically. When Apple ships an API endpoint,
-the command will be wired without changing the JSON contract.
-
-See ISSUE-002 in .project/issues/.`,
+the command can be wired without changing the JSON contract.`,
 }
 
 var privacyLabelsGetCmd = &cobra.Command{
@@ -64,9 +62,7 @@ App Store Connect's web UI.
 
 This command returns a typed diagnostic so callers can detect the
 unsupported state programmatically (` + "`.supported == false`" + `). When Apple
-ships an API endpoint, set will be wired without changing the JSON contract.
-
-See ISSUE-002 in .project/issues/.`,
+ships an API endpoint, set can be wired without changing the JSON contract.`,
 	Example: `  flightline privacy-labels set com.example.myapp --from labels.yaml
   flightline privacy-labels set com.example.myapp --output json | jq .supported`,
 }
@@ -76,7 +72,7 @@ See ISSUE-002 in .project/issues/.`,
 var privacyLabelsSetFrom string
 
 func init() {
-	privacyLabelsSetCmd.Flags().StringVar(&privacyLabelsSetFrom, "from", "", "(reserved) path to YAML/JSON describing the labels: see ISSUE-002")
+	privacyLabelsSetCmd.Flags().StringVar(&privacyLabelsSetFrom, "from", "", "(reserved) path to YAML/JSON describing the labels")
 
 	privacyLabelsCmd.AddCommand(privacyLabelsGetCmd)
 	privacyLabelsCmd.AddCommand(privacyLabelsSetCmd)

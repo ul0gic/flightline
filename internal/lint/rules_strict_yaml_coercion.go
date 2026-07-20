@@ -113,7 +113,7 @@ func checkScalar(n *yaml.Node, parentKey string, out *[]Diagnostic, ruleID strin
 		Path: "/" + parentKey,
 		FixHint: "use a real boolean: write `true` or `false`. " +
 			"Quoting yes/no does not suppress the coercion in yaml.v3.",
-		Reference: "QA-011 (resolved via this rule); yaml.v3 YAML 1.1 core schema",
+		Reference: publicRuleReference(ruleID),
 	})
 }
 

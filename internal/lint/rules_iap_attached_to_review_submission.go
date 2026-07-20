@@ -52,7 +52,7 @@ func (r iapAttachedToReviewSubmissionRule) Check(ctx CheckContext) []Diagnostic 
 			"check ASC API access; the review-submissions endpoint requires filter[app].")}
 	}
 	if subID == "" {
-		return iapUnattachedDiagnostics(r.ID(), ready, "no open review submission found for this app")
+		return iapUnattachedDiagnostics(r.ID(), ctx.BundleID, ready, "no open review submission found for this app")
 	}
 
 	itemRefs, err := iapSubmissionItemReferences(ctx, subID)
@@ -103,7 +103,7 @@ func (r iapAttachedToReviewSubmissionRule) unattachedDiagnostics(bundleID, subID
 				"add the IAP to the submission: `flightline review-submissions items %s --submission %s` to inspect, then attach via App Store Connect or the submissions write surface.",
 				bundleID, subID,
 			),
-			Reference: "PRD §L3: IAP attached-to-review-submission",
+			Reference: publicRuleReference(r.ID()),
 		})
 	}
 	return out
@@ -223,7 +223,7 @@ func extractRefFromRels(rels map[string]asc.Relationship) submissionItemRef {
 	return submissionItemRef{}
 }
 
-func iapUnattachedDiagnostics(ruleID string, ready []asc.Resource[asc.IAPAttributes], reason string) []Diagnostic {
+func iapUnattachedDiagnostics(ruleID, bundleID string, ready []asc.Resource[asc.IAPAttributes], reason string) []Diagnostic {
 	out := make([]Diagnostic, 0, len(ready))
 	for _, iap := range ready {
 		out = append(out, Diagnostic{
@@ -234,9 +234,9 @@ func iapUnattachedDiagnostics(ruleID string, ready []asc.Resource[asc.IAPAttribu
 				iap.Attributes.ProductID, reason,
 			),
 			Path: "/spec/iap/products/" + iap.Attributes.ProductID,
-			FixHint: "create or open a review submission for the app and attach the IAP product. " +
-				"`flightline review-submissions list <bundleId>` shows current submissions.",
-			Reference: "PRD §L3: IAP attached-to-review-submission",
+			FixHint: fmt.Sprintf("create or open a review submission and attach IAP %s; `%s` shows current submissions", iap.Attributes.ProductID,
+				"flightline review-submissions list "+bundleID),
+			Reference: publicRuleReference(ruleID),
 		})
 	}
 	return out

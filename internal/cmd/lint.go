@@ -15,6 +15,7 @@ import (
 type LintResult struct {
 	BundleID    string            `json:"bundleId,omitempty"`
 	Version     string            `json:"version,omitempty"`
+	Platform    string            `json:"platform,omitempty"`
 	SourcePath  string            `json:"sourcePath,omitempty"`
 	Mode        string            `json:"mode"`
 	Diagnostics []lint.Diagnostic `json:"diagnostics"`

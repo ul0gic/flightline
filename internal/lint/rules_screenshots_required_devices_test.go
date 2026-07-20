@@ -14,7 +14,7 @@ func TestScreenshotsRequiredDevices_OfflineMissingFires(t *testing.T) {
 	s := &config.State{Spec: config.StateSpec{
 		Screenshots: &config.ScreenshotsSpec{Locales: map[string]map[string][]config.ScreenshotFile{
 			"en-US": {
-				"APP_IPHONE_67": {{Path: "shot.png"}}, // missing APP_IPHONE_69
+				"APP_IPAD_PRO_3GEN_129": {{Path: "shot.png"}}, // no large-iPhone tier at all
 			},
 		}},
 	}}
@@ -22,7 +22,7 @@ func TestScreenshotsRequiredDevices_OfflineMissingFires(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("got %d diags, want 1: %+v", len(got), got)
 	}
-	if got[0].Path != "/spec/screenshots/locales/en-US/APP_IPHONE_69" {
+	if got[0].Path != "/spec/screenshots/locales/en-US" {
 		t.Errorf("path = %q", got[0].Path)
 	}
 }
@@ -31,8 +31,7 @@ func TestScreenshotsRequiredDevices_OfflineCompleteNoOp(t *testing.T) {
 	s := &config.State{Spec: config.StateSpec{
 		Screenshots: &config.ScreenshotsSpec{Locales: map[string]map[string][]config.ScreenshotFile{
 			"en-US": {
-				"APP_IPHONE_67": {{Path: "a.png"}},
-				"APP_IPHONE_69": {{Path: "b.png"}},
+				"APP_IPHONE_65": {{Path: "a.png"}}, // 6.5-only satisfies the tier (Apple scales down)
 			},
 		}},
 	}}
@@ -65,8 +64,8 @@ func TestScreenshotsRequiredDevices_LiveMissingFires(t *testing.T) {
 		case strings.HasSuffix(r.URL.Path, "/appStoreVersionLocalizations"):
 			_, _ = w.Write([]byte(`{"data":[{"id":"loc-1","type":"appStoreVersionLocalizations","attributes":{"locale":"en-US"}}]}`))
 		case strings.HasSuffix(r.URL.Path, "/appScreenshotSets"):
-			// only APP_IPHONE_67 present
-			_, _ = w.Write([]byte(`{"data":[{"id":"set-1","type":"appScreenshotSets","attributes":{"screenshotDisplayType":"APP_IPHONE_67"}}]}`))
+			// only an iPad set: no large-iPhone tier member
+			_, _ = w.Write([]byte(`{"data":[{"id":"set-1","type":"appScreenshotSets","attributes":{"screenshotDisplayType":"APP_IPAD_PRO_3GEN_129"}}]}`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -79,7 +78,7 @@ func TestScreenshotsRequiredDevices_LiveMissingFires(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("got %d diags, want 1: %+v", len(got), got)
 	}
-	if !strings.Contains(got[0].Path, "APP_IPHONE_69") {
-		t.Errorf("path missing 69: %q", got[0].Path)
+	if !strings.Contains(got[0].Message, "APP_IPHONE_69") {
+		t.Errorf("message should list accepted types: %q", got[0].Message)
 	}
 }

@@ -61,14 +61,10 @@ func init() {
 
 	rootCmd.PersistentFlags().String("output", "table", "output format: table | json (report commands also accept tsv)")
 	rootCmd.PersistentFlags().String("config", "", "config file (default $HOME/.config/flightline/config.yaml)")
-	rootCmd.PersistentFlags().String("log-level", "info", "log level: debug | info | warn | error")
-	rootCmd.PersistentFlags().Bool("no-color", false, "disable color output")
 	rootCmd.PersistentFlags().String("key-id", "", "App Store Connect API key ID")
 	rootCmd.PersistentFlags().String("issuer-id", "", "App Store Connect issuer ID")
 
 	_ = viper.BindPFlag("output", rootCmd.PersistentFlags().Lookup("output"))
-	_ = viper.BindPFlag("log_level", rootCmd.PersistentFlags().Lookup("log-level"))
-	_ = viper.BindPFlag("no_color", rootCmd.PersistentFlags().Lookup("no-color"))
 	_ = viper.BindPFlag("key_id", rootCmd.PersistentFlags().Lookup("key-id"))
 	_ = viper.BindPFlag("issuer_id", rootCmd.PersistentFlags().Lookup("issuer-id"))
 }

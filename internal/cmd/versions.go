@@ -249,9 +249,15 @@ func runVersionsGet(cmd *cobra.Command, args []string) error {
 	return Render(view, outputMode())
 }
 
-// resolveAppID resolves a bundleId to its ASC app ID, returning a typed error
-// that names the bundleId when none is found.
+// resolveAppID resolves a bundleId — or a numeric ASC app ID — to the app ID,
+// returning a typed error that names the argument when none is found.
 func resolveAppID(ctx context.Context, c *asc.Client, bundleID string) (string, error) {
+	if isNumericAppID(bundleID) {
+		if _, err := asc.Get[asc.Single[AppAttributes]](ctx, c, "/v1/apps/"+bundleID, nil); err != nil {
+			return "", fmt.Errorf("apps: no app found with id %s: %w", bundleID, err)
+		}
+		return bundleID, nil
+	}
 	q := url.Values{
 		"filter[bundleId]": {bundleID},
 		"limit":            {"1"},
@@ -264,6 +270,20 @@ func resolveAppID(ctx context.Context, c *asc.Client, bundleID string) (string, 
 		return "", fmt.Errorf("apps: no app found with bundleId %q", bundleID)
 	}
 	return page.Data[0].ID, nil
+}
+
+// isNumericAppID reports whether the argument looks like an ASC app ID rather than a bundleId.
+// Bundle IDs always contain dots; ASC app IDs are pure digits.
+func isNumericAppID(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // collectVersions walks the paging iterator; limit 0 means no cap.

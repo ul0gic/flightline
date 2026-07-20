@@ -112,9 +112,7 @@ var testflightCmd = &cobra.Command{
   - groups list <bundleId>          : list internal + external beta groups
   - testers list <bundleId>         : list testers in the app or a group
   - beta-review get <bundleId> --build <n>
-                                    : show beta-review state for a build
-
-Phase 3 will add invite/manage write verbs; v1 is read-only.`,
+                                    : show beta-review state for a build`,
 }
 
 var testflightGroupsCmd = &cobra.Command{

@@ -60,10 +60,9 @@ func (r buildAttachedAndValidRule) Check(ctx CheckContext) []Diagnostic {
 			"build %q is attached but processingState=%q (must be VALID)",
 			resp.Data.Attributes.Version, state,
 		),
-		Path: "/spec/build",
-		FixHint: "wait for Apple to finish processing (PROCESSING -> VALID), or re-upload " +
-			"if the build is FAILED/INVALID. `flightline builds list <bundleId>` shows current state.",
-		Reference: "PRD §L3: build.attached-and-valid",
+		Path:      "/spec/build",
+		FixHint:   fmt.Sprintf("wait for Apple to finish processing (PROCESSING -> VALID), or re-upload if the build is FAILED/INVALID; `flightline builds list %s` shows current state", ctx.BundleID),
+		Reference: publicRuleReference(r.ID()),
 	}}
 }
 
@@ -77,7 +76,7 @@ func (r buildAttachedAndValidRule) notAttachedDiag(ctx CheckContext) Diagnostic 
 			"upload via Xcode/altool, wait for VALID, then `flightline builds attach %s --version %s --build <n>`.",
 			ctx.BundleID, ctx.Version,
 		),
-		Reference: "PRD §L3: build.attached-and-valid",
+		Reference: publicRuleReference(r.ID()),
 	}
 }
 

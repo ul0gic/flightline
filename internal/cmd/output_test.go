@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"os"
 	"strings"
 	"testing"
 )
@@ -99,8 +100,26 @@ func TestColorDisabled_NoColorEnv(t *testing.T) {
 }
 
 func TestColorDisabled_Unset(t *testing.T) {
-	t.Setenv("NO_COLOR", "")
+	previous, present := os.LookupEnv("NO_COLOR")
+	if err := os.Unsetenv("NO_COLOR"); err != nil {
+		t.Fatalf("Unsetenv: %v", err)
+	}
+	t.Cleanup(func() {
+		if present {
+			_ = os.Setenv("NO_COLOR", previous)
+		} else {
+			_ = os.Unsetenv("NO_COLOR")
+		}
+	})
 	if colorDisabled() {
 		t.Error("colorDisabled should be false when NO_COLOR is unset")
+	}
+}
+
+func TestRootDoesNotAdvertiseInactiveOutputFlags(t *testing.T) {
+	for _, name := range []string{"log-level", "no-color"} {
+		if rootCmd.PersistentFlags().Lookup(name) != nil {
+			t.Errorf("inactive --%s flag is still advertised", name)
+		}
 	}
 }

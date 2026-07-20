@@ -132,7 +132,8 @@ func isTTY(w io.Writer) bool {
 	return info.Mode()&os.ModeCharDevice != 0
 }
 
-// colorDisabled reports the NO_COLOR signal (any value, per no-color.org).
+// colorDisabled reports the NO_COLOR signal (presence with any value, per no-color.org).
 func colorDisabled() bool {
-	return os.Getenv("NO_COLOR") != ""
+	_, present := os.LookupEnv("NO_COLOR")
+	return present
 }

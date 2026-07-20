@@ -2,9 +2,9 @@
 
 # Flightline
 
-**App Store as Code.**
+**Terraform-style reconciliation and rejection preflight for App Store Connect.**
 
-The first declarative tool for App Store Connect: fetch live state, edit YAML, lint, plan, apply.
+Fetch live state, review an exact plan, apply idempotently, and prove convergence with an empty plan.
 
 [![CI](https://github.com/ul0gic/flightline/actions/workflows/ci.yml/badge.svg)](https://github.com/ul0gic/flightline/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -14,7 +14,7 @@ The first declarative tool for App Store Connect: fetch live state, edit YAML, l
 
 </div>
 
-Like Terraform for cloud infrastructure, Flightline manages your App Store presence as declarative state. A single Go binary fetches live App Store Connect state into YAML, runs preflight checks against Apple's rejection rules, and applies changes idempotently. The same tool reads sales, analytics, reviews, subscription state, beta feedback, and performance metrics from the terminal. The ASC web UI becomes optional.
+Like Terraform for cloud infrastructure, Flightline reconciles declared release state against live App Store Connect state. A single Go binary fetches ASC into YAML, shows a reviewable plan, applies changes idempotently, and runs preflight checks against known rejection classes. The same tool reads sales, analytics, reviews, subscription state, beta feedback, and performance metrics from the terminal. Explicit manual fallbacks remain for actions Apple's public API does not expose or Flightline intentionally does not submit yet.
 
 MIT licensed, contributions welcome ([CONTRIBUTING.md](CONTRIBUTING.md)). No SaaS layer, no telemetry, no accounts. Just a binary that talks to Apple's API.
 
@@ -112,14 +112,15 @@ Replace `app.tideterm.ios` with your bundle ID. For the full fetch, edit, plan, 
 
 ## Why Flightline
 
-Every other modern platform has "as Code" tooling. The App Store doesn't. Until now.
+File-based App Store metadata is established tooling: Fastlane Deliver has supported it for years. Flightline focuses on the missing control loop around that metadata: fetch live state, calculate an exact diff, apply it, and use an empty follow-up plan as proof of convergence. Its preflight engine adds checks learned from real rejection classes.
 
 | Tool | Domain | "as Code" for |
 |---|---|---|
 | Terraform | AWS, GCP, Azure, on-prem | Infrastructure |
 | Pulumi | Cloud + Kubernetes | Infrastructure |
 | Helm | Kubernetes | Releases |
-| **Flightline** | **App Store Connect** | **App Store** |
+| Fastlane Deliver | App Store Connect | Metadata files and delivery automation |
+| **Flightline** | **App Store Connect** | **Live reconciliation and rejection preflight** |
 
 App Store Connect has two failure modes that cost real time.
 
@@ -142,19 +143,20 @@ flowchart LR
     C --> D["4. plan\ndiff vs live"]
     D --> E["5. preflight\nlive rule check"]
     E --> F["6. apply --confirm\nidempotent writes"]
-    F --> G["7. submit\ntestflight beta-review submit"]
-    G --> H["8. rejection\ndiagnose if bounced"]
+    F --> G["7a. external TestFlight\nbeta-review submit"]
+    F --> H["7b. App Store release\nsubmit manually in ASC"]
+    H --> I["8. rejection\ndiagnose if bounced"]
 
     classDef readonly fill:#e8f5e9,stroke:#388e3c,color:#1b5e20
     classDef write fill:#fff8e1,stroke:#f9a825,color:#3e2723
     classDef commit fill:#fce4ec,stroke:#c62828,color:#b71c1c
 
-    class A,C,D,E,H readonly
+    class A,C,D,E,I readonly
     class B write
-    class F,G commit
+    class F,G,H commit
 ```
 
-Steps 1 to 5 are read-only and reversible. Step 6 patches ASC but does not submit for review. Step 7 (beta-review submit) is the only action that triggers Apple Review, and it requires explicit confirmation.
+Steps 1 to 5 are read-only against ASC and reversible. Step 6 patches ASC but does not submit anything for review. From there the workflows split: `testflight beta-review submit` requests Beta App Review for external TestFlight distribution only; it does not submit an App Store release. For production, attach the build and every intended IAP to the App Store review submission, run preflight, then use Submit for Review in ASC. That final production action remains manual.
 
 ### Observation (stop opening the web UI)
 
@@ -181,18 +183,18 @@ All three layers are complete: L1 (API CLI), L2 (state-as-code), and L3 (preflig
 | Versions | ✅ | ✅ | ✅ | ✅ |
 | Builds (incl. attach) | ✅ | ✅ | ✅ | ✅ |
 | Metadata + localizations | ✅ | ✅ | ✅ | ✅ |
-| Screenshots | ✅ | ✅ | ✅ ¹ | ✅ |
-| IAPs (incl. review screenshot) | ✅ | ✅ | ✅ ¹ | ✅ (3 rules) |
+| Screenshots | ✅ | ✅ | ✅ | ✅ |
+| IAPs (incl. review screenshot) | ✅ | ✅ | ✅ | ✅ (3 rules) |
 | Age rating | ✅ | ✅ | ✅ | ✅ |
 | Export compliance | ✅ | ✅ | ✅ | ✅ |
 | Reviewer demo info | ✅ | ✅ | ✅ | - |
 | Categories | ✅ | ✅ | ✅ | - |
 | Pricing | ✅ | ✅ | ✅ | - |
-| Custom product pages | ✅ | ✅ | ✅ ¹ | - |
+| Custom product pages | ✅ | ✅ | ✅ | - |
 | TestFlight (groups, testers, beta-review submit) | ✅ | ✅ | ✅ (partial) | ✅ |
-| Subscription groups | ✅ | - ² | - ² | - |
-| Review submissions (App Store Review) | ✅ | - ³ | - ³ | - |
-| Customer reviews | ✅ | - ⁴ | - | - |
+| Subscription groups | ✅ | - ¹ | - ¹ | - |
+| Review submissions (App Store Review) | ✅ | - ² | - ² | - |
+| Customer reviews | ✅ | - ³ | - | - |
 | Beta feedback (crash + screenshot) | ✅ | - | - | - |
 | Diagnostic signatures | ✅ | - | - | - |
 | Performance metrics | ✅ | - | - | - |
@@ -200,17 +202,15 @@ All three layers are complete: L1 (API CLI), L2 (state-as-code), and L3 (preflig
 | Finance reports | ✅ | - | - | - |
 | Subscription reports | ✅ | - | - | - |
 | Analytics reports | ✅ | - | - | - |
-| Privacy nutrition labels | portal-only ⁵ | - | - | - |
+| Privacy nutrition labels | portal-only ⁴ | - | - | - |
 
-¹ Asset uploads flow through L1 verbs by design (`screenshots upload`, `iap review-screenshot upload`, `custom-product-pages screenshots upload`). Apple's multipart upload API is structurally distinct from JSON PATCH, so `apply` converges config fields and the upload verbs move asset bytes. See [docs/guides/uploading-assets.md](docs/guides/uploading-assets.md).
+¹ Subscriptions are read-only for now. Subscription writes are deferred, with no near-term plan.
 
-² Subscriptions are read-only for now. Subscription writes are deferred, with no near-term plan.
+² App Store Review submission is intentionally manual; see [What it doesn't do](#what-it-doesnt-do).
 
-³ App Store Review submission is intentionally manual; see [What it doesn't do](#what-it-doesnt-do).
+³ Replying to reviews is not implemented.
 
-⁴ Replying to reviews is not implemented.
-
-⁵ `appPrivacyDetails` is absent from ASC API v4.3. `flightline privacy-labels get` returns a typed `supported: false` diagnostic rather than silently failing.
+⁴ `appPrivacyDetails` is absent from ASC API v4.3. `flightline privacy-labels get` returns a typed `supported: false` diagnostic rather than silently failing.
 
 ---
 
@@ -223,7 +223,7 @@ flowchart TB
     User["You\n(or LLM / cron)"]
     YAML["state.yaml"]
     CLI["flightline CLI\nmain.go"]
-    Lint["internal/lint\n14 preflight rules"]
+    Lint["internal/lint\n15 preflight rules"]
     Plan["internal/plan\ndiff engine"]
     State["internal/state\nfetch / apply"]
     ASC["internal/asc\nhand-rolled HTTP+JSON client"]
@@ -336,7 +336,7 @@ Schema reference: [docs/reference/state-yaml.md](docs/reference/state-yaml.md). 
 # Offline: validates state.yaml against JSON Schema + format rules
 flightline lint state.yaml
 
-# Live: reads ASC state, runs all 14 rules, reports pass/fail
+# Live: reads ASC state, runs all 15 rules, reports pass/fail
 flightline preflight app.tideterm.ios --version 1.1
 
 # Cross-check live state against a state file
@@ -352,15 +352,22 @@ Every rule with mode, severity, and fix hints: [docs/reference/preflight-rules.m
 
 ## Output
 
-Every command supports `--output table` (default) and `--output json`.
+Every command supports `--output table` (default) and `--output json`. The one
+exception is `fetch`: it exists to produce a state file, so it defaults to YAML
+and `-o state.yaml` needs no extra flags — authoring commands default to YAML,
+reporting commands default to table.
+
+Commands take the app as a positional argument — no `--app` flag anywhere.
+Either identifier works: the bundle ID (`com.example.myapp`) or the numeric
+App Store ID (`6762067669`).
 
 ```bash
 flightline apps list --output table
 ```
 
 ```
-BUNDLE ID                  NAME         STATUS
-app.tideterm.ios         PassDMV      READY_FOR_SALE
+BUNDLE_ID             NAME     SKU       ID
+app.tideterm.ios      PassDMV  tideterm  6762067669
 ```
 
 ```bash
@@ -368,14 +375,20 @@ flightline apps list --output json
 ```
 
 ```json
-[
-  {
-    "bundleId": "app.tideterm.ios",
-    "name": "PassDMV",
-    "sku": "tideterm",
-    "primaryLocale": "en-US"
-  }
-]
+{
+  "apps": [
+    {
+      "id": "6762067669",
+      "type": "apps",
+      "attributes": {
+        "bundleId": "app.tideterm.ios",
+        "name": "PassDMV",
+        "sku": "tideterm",
+        "primaryLocale": "en-US"
+      }
+    }
+  ]
+}
 ```
 
 The JSON shape is a stable contract. Adding fields is backward-compatible; removing or renaming fields is a breaking change tracked by a major version bump. Sales and subscription commands additionally support `--output tsv` (passthrough from Apple's wire format).
@@ -404,7 +417,7 @@ output: table
 
 ## What it doesn't do
 
-**Not Fastlane.** No pipeline DSL, no build orchestration. `xcodebuild`, Xcode Cloud, and Fastlane still own compilation, signing, and binary upload. You point a build at a version with `builds attach`; Flightline handles everything from that point forward.
+**Complementary to Fastlane.** Flightline has no pipeline DSL or build orchestration. `xcodebuild`, Xcode Cloud, and Fastlane still own compilation, signing, binary upload, and established metadata-file workflows. Flightline's distinct job is live-state reconciliation, reviewable plans, convergence checks, preflight rules, and rejection diagnosis across the ASC surfaces it supports.
 
 **Not a screenshot generator.** Flightline uploads screenshots you provide.
 
@@ -429,7 +442,7 @@ output: table
 | [docs/guides/state-as-code.md](docs/guides/state-as-code.md) | Fetch, edit, plan, apply walkthrough |
 | [docs/guides/uploading-assets.md](docs/guides/uploading-assets.md) | Uploading screenshots and IAP review screenshots |
 | [docs/reference/state-yaml.md](docs/reference/state-yaml.md) | Full v1alpha1 schema reference |
-| [docs/reference/preflight-rules.md](docs/reference/preflight-rules.md) | All 14 preflight rules + submission-checklist items |
+| [docs/reference/preflight-rules.md](docs/reference/preflight-rules.md) | All 15 preflight rules + submission-checklist items |
 | [docs/reference/cli.md](docs/reference/cli.md) | Command-group index |
 | [docs/concepts/three-layer-model.md](docs/concepts/three-layer-model.md) | How L1, L2, and L3 fit together |
 
@@ -453,7 +466,7 @@ make fmt      # gofmt -s -w . && goimports -w .
 
 ## Status
 
-All three layers are complete and verified against live App Store Connect: L1 (full API CLI), L2 (state-as-code), and L3 (14 preflight rules). Releases are cut by tagging `v*` on GitHub — the release pipeline builds, signs, and publishes binaries with an SBOM automatically.
+All three layers are complete and verified against live App Store Connect: L1 (full API CLI), L2 (state-as-code), and L3 (15 preflight rules). Releases are cut by tagging `v*` on GitHub — the release pipeline builds, signs, and publishes binaries with an SBOM automatically.
 
 **Versioning policy (pre-1.0):** breaking changes to flags, JSON output, or exit codes can happen between minor versions (0.5 → 0.6), are always flagged in a `### Breaking` section of the release notes, and never happen in patch releases. 1.0 locks the contract.
 

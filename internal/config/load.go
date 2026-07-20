@@ -3,6 +3,8 @@
 package config
 
 import (
+	"crypto/md5" //nolint:gosec // Apple's API requires MD5 for asset upload integrity
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -84,8 +86,9 @@ type ScreenshotsSpec struct {
 
 // ScreenshotFile: see #/$defs/screenshotFile.
 type ScreenshotFile struct {
-	Path string  `yaml:"path"          json:"path"`
-	Alt  *string `yaml:"alt,omitempty" json:"alt,omitempty"`
+	Path               string  `yaml:"path"          json:"path"`
+	Alt                *string `yaml:"alt,omitempty" json:"alt,omitempty"`
+	SourceFileChecksum string  `yaml:"-"             json:"-"`
 }
 
 // IAPSpec: see #/$defs/iapSpec.
@@ -106,7 +109,8 @@ type IAPProduct struct {
 
 // IAPReviewScreenshot is the path-only sub-object on iapProduct.
 type IAPReviewScreenshot struct {
-	Path string `yaml:"path" json:"path"`
+	Path               string `yaml:"path" json:"path"`
+	SourceFileChecksum string `yaml:"-"    json:"-"`
 }
 
 // IAPLocalization: see #/$defs/iapLocalization.
@@ -129,7 +133,18 @@ type AgeRatingSpec struct {
 	ContestsAndGambling                       *string `yaml:"contestsAndGambling,omitempty"                         json:"contestsAndGambling,omitempty"`
 	SexualContentOrNudity                     *string `yaml:"sexualContentOrNudity,omitempty"                       json:"sexualContentOrNudity,omitempty"`
 	SexualContentGraphicAndNudity             *string `yaml:"sexualContentGraphicAndNudity,omitempty"               json:"sexualContentGraphicAndNudity,omitempty"`
+	GamblingSimulated                         *string `yaml:"gamblingSimulated,omitempty"                           json:"gamblingSimulated,omitempty"`
+	GunsOrOtherWeapons                        *string `yaml:"gunsOrOtherWeapons,omitempty"                          json:"gunsOrOtherWeapons,omitempty"`
+	Advertising                               *bool   `yaml:"advertising,omitempty"                                 json:"advertising,omitempty"`
+	AgeAssurance                              *bool   `yaml:"ageAssurance,omitempty"                                json:"ageAssurance,omitempty"`
+	HealthOrWellnessTopics                    *bool   `yaml:"healthOrWellnessTopics,omitempty"                      json:"healthOrWellnessTopics,omitempty"`
+	LootBox                                   *bool   `yaml:"lootBox,omitempty"                                     json:"lootBox,omitempty"`
+	MessagingAndChat                          *bool   `yaml:"messagingAndChat,omitempty"                            json:"messagingAndChat,omitempty"`
+	ParentalControls                          *bool   `yaml:"parentalControls,omitempty"                            json:"parentalControls,omitempty"`
+	UserGeneratedContent                      *bool   `yaml:"userGeneratedContent,omitempty"                        json:"userGeneratedContent,omitempty"`
 	Gambling                                  *bool   `yaml:"gambling,omitempty"                                    json:"gambling,omitempty"`
+	SocialMedia                               *bool   `yaml:"socialMedia,omitempty"                                 json:"socialMedia,omitempty"`
+	SocialMediaAgeRestricted                  *bool   `yaml:"socialMediaAgeRestricted,omitempty"                    json:"socialMediaAgeRestricted,omitempty"`
 	UnrestrictedWebAccess                     *bool   `yaml:"unrestrictedWebAccess,omitempty"                       json:"unrestrictedWebAccess,omitempty"`
 	KidsAgeBand                               *string `yaml:"kidsAgeBand,omitempty"                                 json:"kidsAgeBand,omitempty"`
 	SeventeenPlus                             *bool   `yaml:"seventeenPlus,omitempty"                               json:"seventeenPlus,omitempty"`
@@ -286,7 +301,83 @@ func LoadState(path string) (*State, error) {
 	}
 	defer func() { _ = f.Close() }()
 
-	return loadStateFromReader(abs, f)
+	state, err := loadStateFromReader(abs, f)
+	if err != nil {
+		return nil, err
+	}
+	hydrateAssetChecksums(state, filepath.Dir(abs))
+	return state, nil
+}
+
+func hydrateAssetChecksums(state *State, stateDir string) {
+	if state == nil {
+		return
+	}
+	hydrateScreenshotChecksums(state.Spec.Screenshots, stateDir)
+	hydrateIAPAssetChecksums(state.Spec.IAP, stateDir)
+	hydrateCPPAssetChecksums(state.Spec.CustomProductPages, stateDir)
+}
+
+func hydrateScreenshotChecksums(screenshots *ScreenshotsSpec, stateDir string) {
+	if screenshots != nil {
+		for locale, devices := range screenshots.Locales {
+			for device, files := range devices {
+				for i := range files {
+					files[i].SourceFileChecksum = assetChecksum(stateDir, files[i].Path)
+				}
+				devices[device] = files
+			}
+			screenshots.Locales[locale] = devices
+		}
+	}
+}
+
+func hydrateIAPAssetChecksums(iap *IAPSpec, stateDir string) {
+	if iap != nil {
+		for productID, product := range iap.Products {
+			if product.ReviewScreenshot != nil {
+				product.ReviewScreenshot.SourceFileChecksum = assetChecksum(stateDir, product.ReviewScreenshot.Path)
+				iap.Products[productID] = product
+			}
+		}
+	}
+}
+
+func hydrateCPPAssetChecksums(spec *CustomProductPagesSpec, stateDir string) {
+	if spec != nil {
+		pages := *spec
+		for name, page := range pages {
+			for locale, localization := range page.Localizations {
+				for device, files := range localization.Screenshots {
+					for i := range files {
+						files[i].SourceFileChecksum = assetChecksum(stateDir, files[i].Path)
+					}
+					localization.Screenshots[device] = files
+				}
+				page.Localizations[locale] = localization
+			}
+			pages[name] = page
+		}
+	}
+}
+
+func assetChecksum(stateDir, path string) string {
+	if path == "" {
+		return ""
+	}
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(stateDir, path)
+	}
+	f, err := os.Open(filepath.Clean(path)) //nolint:gosec // path comes from the user's state file
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = f.Close() }()
+	hash := md5.New() //nolint:gosec // Apple's wire protocol requires MD5
+	if _, err := io.Copy(hash, f); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 func loadStateFromReader(file string, r io.Reader) (*State, error) {

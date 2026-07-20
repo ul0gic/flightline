@@ -1,0 +1,16 @@
+{
+  "diagnostics": [
+    {
+      "ruleId": "iap.localization-name-is-language-name",
+      "severity": "warning",
+      "messageSubstring": "\"English\"",
+      "path": "/spec/iap/products/com.example.iap.lifetime/localizations/en-US/name"
+    },
+    {
+      "ruleId": "iap.localization-name-is-language-name",
+      "severity": "warning",
+      "messageSubstring": "Español",
+      "path": "/spec/iap/products/com.example.iap.lifetime/localizations/es-MX/name"
+    }
+  ]
+}

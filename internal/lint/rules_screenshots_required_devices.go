@@ -8,8 +8,8 @@ import (
 	"github.com/ul0gic/flightline/internal/asc"
 )
 
-// screenshotsRequiredDevicesRule fires when a locale is missing APP_IPHONE_69 or APP_IPHONE_67 screenshots.
-// Apple blocks Submit-for-Review until both are present per locale. Mode=Both (offline + live re-check).
+// screenshotsRequiredDevicesRule fires when a locale has no screenshot set from the large-iPhone tier.
+// Apple requires 6.9" screenshots UNLESS 6.5" is provided; any one tier member satisfies submission. Mode=Both.
 type screenshotsRequiredDevicesRule struct{}
 
 func init() { Register(screenshotsRequiredDevicesRule{}) }
@@ -18,13 +18,22 @@ func (screenshotsRequiredDevicesRule) ID() string         { return "screenshots.
 func (screenshotsRequiredDevicesRule) Severity() Severity { return SeverityError }
 func (screenshotsRequiredDevicesRule) Mode() Mode         { return ModeBoth }
 func (screenshotsRequiredDevicesRule) Doc() string {
-	return "Checks that every locale has screenshots for the device classes Apple currently requires for new iPhone submissions: 6.9 inch and 6.7 inch. " +
-		"Apple's submission flow hard-blocks Submit for Review until both are present per locale, and it never surfaces as a reviewer rejection; the UI simply will not let you proceed. " +
-		"Fix it by uploading screenshots for the missing device class in each affected locale."
+	return "Checks that every locale has at least one screenshot set from the large-iPhone tier Apple accepts for submission: 6.9 inch, 6.7 inch, or 6.5 inch. " +
+		"Apple requires the 6.9-inch size unless a 6.5-inch set is provided, and scales the largest set you supply down to smaller displays — so any one tier member unblocks Submit for Review. " +
+		"Fix it by uploading screenshots for one of the accepted device classes in each affected locale; 6.9 inch gives the best scaled quality."
 }
 
-// requiredDevices is conservative: Apple rotates this list with device launches; update when required classes change.
-var requiredDevices = []string{"APP_IPHONE_69", "APP_IPHONE_67"}
+// acceptedLargeIPhoneTier: any one satisfies Apple's requirement (6.9" required unless 6.5" provided; 6.7" counts as the large class).
+var acceptedLargeIPhoneTier = []string{"APP_IPHONE_69", "APP_IPHONE_67", "APP_IPHONE_65"}
+
+func hasLargeIPhoneSet(devices map[string]struct{}) bool {
+	for _, dev := range acceptedLargeIPhoneTier {
+		if _, ok := devices[dev]; ok {
+			return true
+		}
+	}
+	return false
+}
 
 func (r screenshotsRequiredDevicesRule) Check(ctx CheckContext) []Diagnostic {
 	if ctx.Live {
@@ -44,23 +53,26 @@ func (r screenshotsRequiredDevicesRule) checkOffline(ctx CheckContext) []Diagnos
 	out := make([]Diagnostic, 0)
 	locales := sortedKeys(sc.Locales)
 	for _, locale := range locales {
-		devices := sc.Locales[locale]
-		for _, dev := range requiredDevices {
-			files, ok := devices[dev]
-			if !ok || len(files) == 0 {
-				out = append(out, Diagnostic{
-					RuleID:   r.ID(),
-					Severity: SeverityError,
-					Message:  fmt.Sprintf("locale %q is missing required device %s", locale, dev),
-					Path:     "/spec/screenshots/locales/" + locale + "/" + dev,
-					FixHint: fmt.Sprintf(
-						"add at least one screenshot for the %s device class to spec.screenshots.locales.%s.",
-						dev, locale,
-					),
-					Reference: "PRD §L3: screenshots.required-devices",
-				})
+		present := make(map[string]struct{}, len(sc.Locales[locale]))
+		for dev, files := range sc.Locales[locale] {
+			if len(files) > 0 {
+				present[dev] = struct{}{}
 			}
 		}
+		if hasLargeIPhoneSet(present) {
+			continue
+		}
+		out = append(out, Diagnostic{
+			RuleID:   r.ID(),
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("locale %q has no large-iPhone screenshot set (need one of APP_IPHONE_69, APP_IPHONE_67, APP_IPHONE_65)", locale),
+			Path:     "/spec/screenshots/locales/" + locale,
+			FixHint: fmt.Sprintf(
+				"add screenshots for one accepted device class to spec.screenshots.locales.%s; APP_IPHONE_69 scales best.",
+				locale,
+			),
+			Reference: publicRuleReference(r.ID()),
+		})
 	}
 	return out
 }
@@ -91,21 +103,20 @@ func (r screenshotsRequiredDevicesRule) checkLive(ctx CheckContext) []Diagnostic
 	out := make([]Diagnostic, 0)
 	for _, loc := range locResp.Data {
 		devices := r.fetchLocaleDevices(ctx, loc.ID)
-		for _, dev := range requiredDevices {
-			if _, ok := devices[dev]; !ok {
-				out = append(out, Diagnostic{
-					RuleID:   r.ID(),
-					Severity: SeverityError,
-					Message:  fmt.Sprintf("locale %q has no live screenshots for required device %s", loc.Attributes.Locale, dev),
-					Path:     "/spec/screenshots/locales/" + loc.Attributes.Locale + "/" + dev,
-					FixHint: fmt.Sprintf(
-						"upload screenshots for %s in locale %s: `flightline screenshots upload <bundleId> --version <v> --locale %s --device-set %s ...`",
-						dev, loc.Attributes.Locale, loc.Attributes.Locale, dev,
-					),
-					Reference: "PRD §L3: screenshots.required-devices",
-				})
-			}
+		if hasLargeIPhoneSet(devices) {
+			continue
 		}
+		out = append(out, Diagnostic{
+			RuleID:   r.ID(),
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("locale %q has no live large-iPhone screenshot set (need one of APP_IPHONE_69, APP_IPHONE_67, APP_IPHONE_65)", loc.Attributes.Locale),
+			Path:     "/spec/screenshots/locales/" + loc.Attributes.Locale,
+			FixHint: fmt.Sprintf(
+				"upload screenshots for one accepted device class: `flightline screenshots upload %s --version %s --locale %s --device-set APP_IPHONE_69 <files...>`",
+				ctx.BundleID, ctx.Version, loc.Attributes.Locale,
+			),
+			Reference: publicRuleReference(r.ID()),
+		})
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].Path != out[j].Path {

@@ -40,7 +40,7 @@ func (r strictFormatEmailRule) Check(ctx CheckContext) []Diagnostic {
 				Message:   fmt.Sprintf("spec.reviewerDemo.contactEmail %q does not look like an email", *rd.ContactEmail),
 				Path:      "/spec/reviewerDemo/contactEmail",
 				FixHint:   "use a real email address: local@domain.tld. Apple uses this to contact you about review issues.",
-				Reference: "QA-011 (resolved via this rule); schema format: email",
+				Reference: publicRuleReference(r.ID()),
 			})
 		}
 	}
@@ -71,7 +71,7 @@ func (r strictFormatEmailRule) scanTesters(groupName string, group config.TestFl
 			),
 			Path:      fmt.Sprintf("/spec/testflight/groups/%s/testers/%d/email", groupName, idx),
 			FixHint:   "use a real email address; Apple's invite system rejects non-RFC-5322 addresses on submit.",
-			Reference: "QA-011 (resolved via this rule); schema format: email",
+			Reference: publicRuleReference(r.ID()),
 		})
 	}
 }

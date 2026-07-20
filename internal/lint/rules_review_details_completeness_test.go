@@ -28,6 +28,8 @@ func TestReviewDetailsCompleteness_MissingDetailWarns(t *testing.T) {
 		case strings.HasSuffix(req.URL.Path, "/appStoreReviewDetail"):
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write([]byte(`{"errors":[{"status":"404","code":"NOT_FOUND","title":"not found"}]}`))
+		case req.URL.Path == "/v1/reviewSubmissions":
+			_, _ = w.Write([]byte(`{"data":[]}`))
 		default:
 			t.Errorf("unexpected request %s", req.URL.Path)
 		}

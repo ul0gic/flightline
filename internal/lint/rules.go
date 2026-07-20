@@ -1,6 +1,15 @@
 package lint
 
-import "sync"
+import (
+	"strings"
+	"sync"
+)
+
+const publicRuleReferenceBase = "https://flightline.dev/docs/reference/preflight-rules#"
+
+func publicRuleReference(ruleID string) string {
+	return publicRuleReferenceBase + strings.ReplaceAll(ruleID, ".", "")
+}
 
 // rulesMu guards defaultRegistry; the lock matters most for tests that swap rule sets under t.Parallel.
 var rulesMu sync.RWMutex

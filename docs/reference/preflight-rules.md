@@ -23,6 +23,7 @@ When both errors and warnings are present, exit code is `1`.
 | [`agreements.paid-apps-unverifiable`](#agreementspaid-apps-unverifiable) | Live | Info |
 | [`build.attached-and-valid`](#buildattached-and-valid) | Live | Error |
 | [`iap.attached-to-review-submission`](#iapattached-to-review-submission) | Live | Error |
+| [`iap.localization-name-is-language-name`](#iaplocalization-name-is-language-name) | Offline | Warning |
 | [`iap.promotional-image-distinct`](#iappromotional-image-distinct) | Live | Error |
 | [`iap.review-screenshot-exists`](#iapreview-screenshot-exists) | Live | Error |
 | [`iap.state-submittable`](#iapstate-submittable) | Live | Error |
@@ -60,6 +61,13 @@ Checks that the App Store version has a build attached and that the build's proc
 
 Checks that every in-app purchase marked READY_TO_SUBMIT also appears in the app's open review submission. This is the most common IAP rejection cause: developers mark an IAP ready and assume that means submitted, so the app goes through review without it and the IAP never goes live. Fix it by attaching the IAP to the review submission, or by creating a submission first if none is open.
 
+### `iap.localization-name-is-language-name`
+
+- **Mode:** Offline
+- **Severity:** Warning
+
+Warns when an in-app purchase localization's display name is a language name like "English" or "Español" — the classic paste bug where the locale label lands in the product-name field. Customers see this name on the purchase sheet, and Apple's reviewer will describe the IAP by it, turning the mistake into a confusing rejection. Fix it by naming what the customer buys ("Lifetime Access", "Acceso de por Vida"), never the language it is written in.
+
 ### `iap.promotional-image-distinct`
 
 - **Mode:** Live
@@ -86,21 +94,21 @@ Errors when any in-app purchase is in DEVELOPER_ACTION_NEEDED, MISSING_METADATA,
 - **Mode:** Offline
 - **Severity:** Warning
 
-Checks that every locale appearing in one localizable surface (metadata, screenshots, or IAP localizations) also appears in the others. Apple may reject a listing where a locale has metadata but no screenshots because reviewers cannot preview it in that language, and the gap is often the sign of a half-applied edit. Fix it by adding the locale to every surface or removing it everywhere; this rule is advisory, so a deliberately single-surface locale can be left as-is.
+Checks that each managed metadata locale has Flightline's submission baseline fields (name, description, and supportUrl), and that every locale appearing in one localizable surface (metadata, screenshots, or IAP localizations) also appears in the others. Apple may reject a listing where a locale has metadata but no screenshots because reviewers cannot preview it in that language, and the gap is often the sign of a half-applied edit. Fix field gaps at the diagnostic path, then add the locale to every intended surface or remove it where it should not be managed.
 
 ### `review-details.completeness`
 
 - **Mode:** Live
 - **Severity:** Warning
 
-Warns when an app that sells in-app purchases submits a version whose App Review notes are empty. Reviewers who cannot see the purchase flow respond with an Information Needed rejection asking for it — and for demo credentials the app may not even have. Fix it by writing notes that describe the purchase flow, any trial mechanics, and state explicitly when the app has no accounts or sign-in.
+Warns when an app that sells in-app purchases submits a version whose App Review notes are empty, and escalates to an error once an IAP is attached to the review submission. Reviewers who cannot see the purchase flow respond with an Information Needed rejection asking for it — and for demo credentials the app may not even have; trial-gated paywalls are the top reason reviewers cannot find an IAP. Fix it by writing notes that give the exact steps to reach the purchase, describe any trial mechanics, and state explicitly when the app has no accounts or sign-in.
 
 ### `screenshots.required-devices`
 
 - **Mode:** Both
 - **Severity:** Error
 
-Checks that every locale has screenshots for the device classes Apple currently requires for new iPhone submissions: 6.9 inch and 6.7 inch. Apple's submission flow hard-blocks Submit for Review until both are present per locale, and it never surfaces as a reviewer rejection; the UI simply will not let you proceed. Fix it by uploading screenshots for the missing device class in each affected locale.
+Checks that every locale has at least one screenshot set from the large-iPhone tier Apple accepts for submission: 6.9 inch, 6.7 inch, or 6.5 inch. Apple requires the 6.9-inch size unless a 6.5-inch set is provided, and scales the largest set you supply down to smaller displays — so any one tier member unblocks Submit for Review. Fix it by uploading screenshots for one of the accepted device classes in each affected locale; 6.9 inch gives the best scaled quality.
 
 ### `strict.format-email`
 
@@ -128,7 +136,7 @@ Checks that boolean fields use true or false rather than the YAML 1.1 tokens yes
 - **Mode:** Both
 - **Severity:** Error
 
-Checks that every prompt in the age-rating questionnaire has a value, across both the frequency-enum fields (violence, sexual content, profanity, and so on) and the boolean prompts (gambling, unrestricted web access). A partially answered questionnaire shows up only as a soft block on the Submit for Review button, and Apple will not tell you which field is missing until you open the specific panel. Fix it by giving every prompt a value; NONE for frequency fields and false for boolean prompts are valid answers meaning the content is absent.
+Checks that every prompt in the age-rating questionnaire has a value, across both the frequency-enum fields (violence, sexual content, profanity, and so on) and the boolean prompts (gambling, unrestricted web access). A partially answered questionnaire shows up only as a soft block on the Submit for Review button, and Apple will not tell you which field is missing until you open the specific panel. Fix it by giving every prompt a value; NONE for frequency fields and false for boolean prompts are valid answers meaning the content is absent. Derived and optional fields (seventeenPlus, kidsAgeBand) are exempt: Apple computes seventeenPlus itself and kidsAgeBand only applies to Kids-category apps.
 
 ### `version.export-compliance-answered`
 

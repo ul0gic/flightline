@@ -115,7 +115,7 @@ subscription resources. Apple structures subscriptions as a tree:
   - list <bundleId>                             : list groups + member count
   - get <bundleId> --product <productId>        : full detail for one product
 
-v1 is read-only; full CRUD lands in Phase 3.`,
+This command group is read-only.`,
 }
 
 var subscriptionsListCmd = &cobra.Command{

@@ -268,12 +268,27 @@ func fetchIAPs(ctx context.Context, c *asc.Client, appID string) (*config.IAPSpe
 			s := r.Attributes.ReviewNote
 			prod.ReviewNote = &s
 		}
+		if screenshot := fetchIAPReviewScreenshotProjection(ctx, c, r.ID); screenshot != nil {
+			prod.ReviewScreenshot = screenshot
+		}
 		if locs, lerr := fetchIAPLocalizations(ctx, c, r.ID); lerr == nil && len(locs) > 0 {
 			prod.Localizations = locs
 		}
 		out.Products[r.Attributes.ProductID] = prod
 	}
 	return out, nil
+}
+
+func fetchIAPReviewScreenshotProjection(ctx context.Context, c *asc.Client, iapID string) *config.IAPReviewScreenshot {
+	resp, err := asc.Get[asc.Single[asc.IAPReviewScreenshotAttributes]](
+		ctx, c, "/v2/inAppPurchases/"+iapID+"/appStoreReviewScreenshot", nil,
+	)
+	if err != nil || resp.Data.ID == "" {
+		return nil
+	}
+	return &config.IAPReviewScreenshot{
+		Path: resp.Data.Attributes.FileName, SourceFileChecksum: resp.Data.Attributes.SourceFileChecksum,
+	}
 }
 
 func fetchIAPLocalizations(ctx context.Context, c *asc.Client, iapID string) (map[string]config.IAPLocalization, error) {
@@ -427,7 +442,9 @@ func fetchScreenshotsInSet(ctx context.Context, c *asc.Client, setID string) ([]
 	}
 	out := make([]config.ScreenshotFile, 0, len(resp.Data))
 	for _, r := range resp.Data {
-		f := config.ScreenshotFile{Path: r.Attributes.FileName}
+		f := config.ScreenshotFile{
+			Path: r.Attributes.FileName, SourceFileChecksum: r.Attributes.SourceFileChecksum,
+		}
 		if r.Attributes.SourceFileChecksum != "" {
 			s := "checksum:" + r.Attributes.SourceFileChecksum
 			f.Alt = &s
@@ -440,7 +457,7 @@ func fetchScreenshotsInSet(ctx context.Context, c *asc.Client, setID string) ([]
 func fetchCustomProductPages(ctx context.Context, c *asc.Client, appID string) (config.CustomProductPagesSpec, error) {
 	q := url.Values{"limit": {"100"}}
 	page, err := asc.Get[asc.Collection[asc.AppCustomProductPageAttributes]](
-		ctx, c, "/v1/apps/"+appID+"/customProductPages", q,
+		ctx, c, "/v1/apps/"+appID+"/appCustomProductPages", q,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list customProductPages: %w", err)
@@ -467,15 +484,15 @@ func fetchCustomProductPages(ctx context.Context, c *asc.Client, appID string) (
 // no version exists yet (CPPs may not have a version on first creation).
 func fetchCPPLocalizations(ctx context.Context, c *asc.Client, pageID string) map[string]config.CustomProductPageLocale {
 	versResp, err := asc.Get[asc.Collection[asc.AppCustomProductPageVersionAttributes]](
-		ctx, c, "/v1/customProductPages/"+pageID+"/customProductPageVersions",
-		url.Values{"limit": {"5"}},
+		ctx, c, "/v1/appCustomProductPages/"+pageID+"/appCustomProductPageVersions",
+		url.Values{"limit": {"50"}},
 	)
 	if err != nil || len(versResp.Data) == 0 {
 		return nil
 	}
-	verID := versResp.Data[0].ID
+	verID := latestCPPVersionID(versResp.Data)
 	locResp, err := asc.Get[asc.Collection[asc.AppCustomProductPageLocalizationAttributes]](
-		ctx, c, "/v1/customProductPageVersions/"+verID+"/customProductPageLocalizations",
+		ctx, c, "/v1/appCustomProductPageVersions/"+verID+"/appCustomProductPageLocalizations",
 		url.Values{"limit": {"50"}},
 	)
 	if err != nil || len(locResp.Data) == 0 {
@@ -488,7 +505,39 @@ func fetchCPPLocalizations(ctx context.Context, c *asc.Client, pageID string) ma
 			s := r.Attributes.PromotionalText
 			l.PromotionalText = &s
 		}
+		l.Screenshots = fetchCPPScreenshots(ctx, c, r.ID)
 		out[r.Attributes.Locale] = l
+	}
+	return out
+}
+
+func latestCPPVersionID(versions []asc.Resource[asc.AppCustomProductPageVersionAttributes]) string {
+	current := versions[0]
+	for _, version := range versions[1:] {
+		if version.Attributes.Version > current.Attributes.Version {
+			current = version
+		}
+	}
+	return current.ID
+}
+
+func fetchCPPScreenshots(ctx context.Context, c *asc.Client, localizationID string) map[string][]config.ScreenshotFile {
+	sets, err := asc.Get[asc.Collection[screenshotSetAttrs]](
+		ctx, c, "/v1/appCustomProductPageLocalizations/"+localizationID+"/appScreenshotSets",
+		url.Values{"limit": {"50"}},
+	)
+	if err != nil {
+		return nil
+	}
+	out := map[string][]config.ScreenshotFile{}
+	for _, set := range sets.Data {
+		files, err := fetchScreenshotsInSet(ctx, c, set.ID)
+		if err == nil && len(files) > 0 {
+			out[set.Attributes.ScreenshotDisplayType] = files
+		}
+	}
+	if len(out) == 0 {
+		return nil
 	}
 	return out
 }

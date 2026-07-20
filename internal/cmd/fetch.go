@@ -23,9 +23,8 @@ func init() {
 the result as a Flightline state file. Default output is YAML with a
 yaml-language-server schema directive prepended for editor autocomplete.
 
-Surfaces not yet implemented (see QA-009) appear absent from the output;
-the diff engine treats absence as "not managed" so Flightline leaves them
-alone on subsequent applies.
+Surfaces absent from the state file are not managed. The diff engine leaves
+those surfaces untouched on subsequent applies.
 
 Examples:
   flightline fetch app.tideterm.ios > state.yaml
@@ -56,15 +55,22 @@ func runFetch(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	mode := outputMode()
+	// fetch authors state files, so YAML is its default regardless of the
+	// global table default; --output only changes behavior when set explicitly.
+	mode := "yaml"
+	if flag := cmd.Flag("output"); flag != nil && flag.Changed {
+		mode = outputMode()
+	}
+	target, _ := cmd.Flags().GetString("output-file")
+
 	switch mode {
 	case "json":
+		if target != "" {
+			return fmt.Errorf("fetch: -o writes YAML state files; drop --output %s or omit -o", mode)
+		}
 		return Render(st, "json")
-	case "table":
-		// A state file has no sensible table form; fall back to JSON.
-		fmt.Fprintln(os.Stderr, "flightline: fetch has no table view; emitting JSON. Pass --output yaml or omit -o for YAML.")
-		return Render(st, "json")
-	case "yaml", "":
+	case "yaml", "table", "":
+		// table has no meaning for a state file; treat it as the YAML default.
 		return writeStateYAML(cmd, st)
 	default:
 		return fmt.Errorf("fetch: unknown --output %q (expected yaml | json)", mode)

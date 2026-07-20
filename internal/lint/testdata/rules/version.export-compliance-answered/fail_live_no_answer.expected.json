@@ -4,7 +4,8 @@
       "ruleId": "version.export-compliance-answered",
       "severity": "error",
       "messageSubstring": "has not declared usesNonExemptEncryption",
-      "path": "/spec/exportCompliance/usesNonExemptEncryption"
+      "path": "/spec/exportCompliance/usesNonExemptEncryption",
+      "fixHintSubstring": "flightline export-compliance set com.example.export --version 1.0.1 --uses-encryption false"
     }
   ]
 }

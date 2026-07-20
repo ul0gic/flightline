@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -31,6 +32,10 @@ input: useful for "is the version actually submittable right now?"
 checks against any app you have credentials for. With --state-file the
 user-authored YAML is the input for offline rules and the live ASC
 state is consulted for live rules.
+
+When --state-file is used, its bundleId, version, and platform must
+match the command coordinates. An omitted state-file platform inherits
+the command platform (IOS by default); mismatches fail before rules run.
 
 Exit codes:
   0  clean (no diagnostics, or info-only)
@@ -62,6 +67,7 @@ func runPreflight(cmd *cobra.Command, args []string) error {
 	if platform == "" {
 		platform = "IOS"
 	}
+	platform = strings.ToUpper(platform)
 
 	c, err := newClient()
 	if err != nil {
@@ -90,6 +96,7 @@ func runPreflight(cmd *cobra.Command, args []string) error {
 	out := &LintResult{
 		BundleID:    bundleID,
 		Version:     versionStr,
+		Platform:    platform,
 		SourcePath:  sourcePath,
 		Mode:        "preflight",
 		Diagnostics: merged,
@@ -113,6 +120,9 @@ func resolvePreflightState(ctx context.Context, c *asc.Client, bundleID, version
 		if err != nil {
 			return nil, "", nil, err
 		}
+		if err := validatePreflightStateCoordinates(st, bundleID, versionStr, platform); err != nil {
+			return nil, "", nil, err
+		}
 		return st, abs, config.Validate(abs, st), nil
 	}
 	live, err := state.Fetch(ctx, c, bundleID, state.FetchOpts{
@@ -123,4 +133,47 @@ func resolvePreflightState(ctx context.Context, c *asc.Client, bundleID, version
 		return nil, "", nil, fmt.Errorf("fetch live state: %w", err)
 	}
 	return live, "", nil, nil
+}
+
+type preflightCoordinateError struct {
+	Field     string
+	StateFile string
+	Command   string
+}
+
+func (e *preflightCoordinateError) Error() string {
+	return fmt.Sprintf("preflight: state-file metadata.%s %q does not match command coordinate %q", e.Field, e.StateFile, e.Command)
+}
+
+func validatePreflightStateCoordinates(st *config.State, bundleID, versionStr, platform string) error {
+	if st == nil {
+		return errors.New("preflight: state-file decoded to nil state")
+	}
+	type coordinate struct {
+		field   string
+		state   string
+		command string
+	}
+	statePlatform := strings.ToUpper(strings.TrimSpace(st.Metadata.Platform))
+	commandPlatform := strings.ToUpper(strings.TrimSpace(platform))
+	if commandPlatform == "" {
+		commandPlatform = "IOS"
+	}
+	if statePlatform == "" {
+		statePlatform = commandPlatform
+		st.Metadata.Platform = commandPlatform
+	}
+	want := []coordinate{
+		{field: "bundleId", state: strings.TrimSpace(st.Metadata.BundleID), command: strings.TrimSpace(bundleID)},
+		{field: "version", state: strings.TrimSpace(st.Metadata.Version), command: strings.TrimSpace(versionStr)},
+		{field: "platform", state: statePlatform, command: commandPlatform},
+	}
+	for _, coordinate := range want {
+		if coordinate.state != coordinate.command {
+			return &preflightCoordinateError{
+				Field: coordinate.field, StateFile: coordinate.state, Command: coordinate.command,
+			}
+		}
+	}
+	return nil
 }

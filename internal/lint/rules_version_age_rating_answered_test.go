@@ -61,6 +61,7 @@ func TestVersionAgeRatingAnswered_OfflineFullyAnsweredNoOp(t *testing.T) {
 		SexualContentOrNudity:                     &none,
 		SexualContentGraphicAndNudity:             &none,
 		Gambling:                                  &f,
+		SocialMedia:                               &f,
 		UnrestrictedWebAccess:                     &f,
 		KidsAgeBand:                               &none,
 		SeventeenPlus:                             &f,

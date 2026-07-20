@@ -3,6 +3,8 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -34,6 +36,7 @@ func preflightFor(t *testing.T, c *asc.Client, bundleID, versionStr string) *Lin
 	return &LintResult{
 		BundleID:    bundleID,
 		Version:     versionStr,
+		Platform:    "IOS",
 		SourcePath:  sourcePath,
 		Mode:        "preflight",
 		Diagnostics: merged,
@@ -60,7 +63,7 @@ func happyPathServer(t *testing.T) *httptest.Server {
 		case strings.HasSuffix(r.URL.Path, "/appInfos"):
 			_, _ = w.Write([]byte(`{"data":[{"id":"info-1","type":"appInfos","attributes":{"state":"PREPARE_FOR_SUBMISSION"}}]}`))
 		case strings.HasSuffix(r.URL.Path, "/ageRatingDeclaration"):
-			_, _ = w.Write([]byte(`{"data":{"id":"ar-1","type":"ageRatingDeclarations","attributes":{"violenceCartoonOrFantasy":"NONE","violenceRealistic":"NONE","profanityOrCrudeHumor":"NONE","matureOrSuggestiveThemes":"NONE","horrorOrFearThemes":"NONE","medicalOrTreatmentInformation":"NONE","alcoholTobaccoOrDrugUseOrReferences":"NONE","contests":"NONE","sexualContentOrNudity":"NONE","sexualContentGraphicAndNudity":"NONE","gambling":false,"unrestrictedWebAccess":false}}}`))
+			_, _ = w.Write([]byte(`{"data":{"id":"ar-1","type":"ageRatingDeclarations","attributes":{"violenceCartoonOrFantasy":"NONE","violenceRealistic":"NONE","profanityOrCrudeHumor":"NONE","matureOrSuggestiveThemes":"NONE","horrorOrFearThemes":"NONE","medicalOrTreatmentInformation":"NONE","alcoholTobaccoOrDrugUseOrReferences":"NONE","contests":"NONE","sexualContentOrNudity":"NONE","sexualContentGraphicAndNudity":"NONE","gambling":false,"socialMedia":false,"unrestrictedWebAccess":false}}}`))
 		case strings.HasSuffix(r.URL.Path, "/appStoreVersionLocalizations"):
 			_, _ = w.Write([]byte(`{"data":[{"id":"loc-1","type":"appStoreVersionLocalizations","attributes":{"locale":"en-US"}}]}`))
 		case strings.HasSuffix(r.URL.Path, "/appScreenshotSets"):
@@ -115,7 +118,7 @@ func TestRunPreflight_NoBuildSurfacesError(t *testing.T) {
 		case strings.HasSuffix(r.URL.Path, "/appInfos"):
 			_, _ = w.Write([]byte(`{"data":[{"id":"info-1","type":"appInfos","attributes":{"state":"PREPARE_FOR_SUBMISSION"}}]}`))
 		case strings.HasSuffix(r.URL.Path, "/ageRatingDeclaration"):
-			_, _ = w.Write([]byte(`{"data":{"id":"ar-1","type":"ageRatingDeclarations","attributes":{"violenceCartoonOrFantasy":"NONE","violenceRealistic":"NONE","profanityOrCrudeHumor":"NONE","matureOrSuggestiveThemes":"NONE","horrorOrFearThemes":"NONE","medicalOrTreatmentInformation":"NONE","alcoholTobaccoOrDrugUseOrReferences":"NONE","contests":"NONE","sexualContentOrNudity":"NONE","sexualContentGraphicAndNudity":"NONE","gambling":false,"unrestrictedWebAccess":false}}}`))
+			_, _ = w.Write([]byte(`{"data":{"id":"ar-1","type":"ageRatingDeclarations","attributes":{"violenceCartoonOrFantasy":"NONE","violenceRealistic":"NONE","profanityOrCrudeHumor":"NONE","matureOrSuggestiveThemes":"NONE","horrorOrFearThemes":"NONE","medicalOrTreatmentInformation":"NONE","alcoholTobaccoOrDrugUseOrReferences":"NONE","contests":"NONE","sexualContentOrNudity":"NONE","sexualContentGraphicAndNudity":"NONE","gambling":false,"socialMedia":false,"unrestrictedWebAccess":false}}}`))
 		case strings.HasSuffix(r.URL.Path, "/appStoreVersionLocalizations"):
 			_, _ = w.Write([]byte(`{"data":[]}`))
 		default:
@@ -169,6 +172,7 @@ func TestPreflightResult_JSONShapeStable(t *testing.T) {
 	res := &LintResult{
 		BundleID: "com.example.x",
 		Version:  "1.0.1",
+		Platform: "IOS",
 		Mode:     "preflight",
 		Summary:  LintResultSummary{Error: 1, Warning: 2, Info: 3},
 	}
@@ -180,9 +184,61 @@ func TestPreflightResult_JSONShapeStable(t *testing.T) {
 	if err := json.Unmarshal(b, &probe); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	for _, k := range []string{"bundleId", "version", "mode", "diagnostics", "summary"} {
+	for _, k := range []string{"bundleId", "version", "platform", "mode", "diagnostics", "summary"} {
 		if _, ok := probe[k]; !ok {
 			t.Errorf("preflight JSON missing required key %q", k)
 		}
+	}
+}
+
+func TestResolvePreflightState_RejectsCoordinateMismatches(t *testing.T) {
+	base := `apiVersion: flightline.dev/v1alpha1
+kind: AppState
+metadata:
+  bundleId: %s
+  version: %q
+  platform: %s
+spec: {}
+`
+	tests := []struct {
+		name, bundleID, version, platform, wantField string
+	}{
+		{name: "bundle", bundleID: "com.example.other", version: "1.0", platform: "IOS", wantField: "bundleId"},
+		{name: "version", bundleID: "com.example.app", version: "2.0", platform: "IOS", wantField: "version"},
+		{name: "platform", bundleID: "com.example.app", version: "1.0", platform: "MAC_OS", wantField: "platform"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			prev := preflightStateFile
+			t.Cleanup(func() { preflightStateFile = prev })
+			preflightStateFile = writeTempState(t, fmt.Sprintf(base, tt.bundleID, tt.version, tt.platform))
+			_, _, _, err := resolvePreflightState(context.Background(), nil, "com.example.app", "1.0", "IOS")
+			var coordinateErr *preflightCoordinateError
+			if !errors.As(err, &coordinateErr) {
+				t.Fatalf("expected coordinate error; got %v", err)
+			}
+			if coordinateErr.Field != tt.wantField {
+				t.Errorf("field = %q, want %q", coordinateErr.Field, tt.wantField)
+			}
+		})
+	}
+}
+
+func TestResolvePreflightState_MatchingCoordinatesAndDefaultPlatform(t *testing.T) {
+	prev := preflightStateFile
+	t.Cleanup(func() { preflightStateFile = prev })
+	preflightStateFile = writeTempState(t, `apiVersion: flightline.dev/v1alpha1
+kind: AppState
+metadata:
+  bundleId: com.example.app
+  version: "1.0"
+spec: {}
+`)
+	st, _, _, err := resolvePreflightState(context.Background(), nil, "com.example.app", "1.0", "IOS")
+	if err != nil {
+		t.Fatalf("resolvePreflightState: %v", err)
+	}
+	if st.Metadata.Platform != "IOS" {
+		t.Errorf("platform = %q, want inherited IOS", st.Metadata.Platform)
 	}
 }

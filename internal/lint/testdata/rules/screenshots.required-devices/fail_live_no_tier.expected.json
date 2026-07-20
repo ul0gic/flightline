@@ -1,0 +1,11 @@
+{
+  "diagnostics": [
+    {
+      "ruleId": "screenshots.required-devices",
+      "severity": "error",
+      "messageSubstring": "no live large-iPhone screenshot set",
+      "path": "/spec/screenshots/locales/en-US",
+      "fixHintSubstring": "flightline screenshots upload com.example.screenshots --version 1.0.1 --locale en-US"
+    }
+  ]
+}

@@ -7,5 +7,5 @@ spec:
   screenshots:
     locales:
       en-US:
-        APP_IPAD_PRO_3GEN_129:
-          - path: ./ipad.png
+        APP_IPHONE_65:
+          - path: ./en-65.png

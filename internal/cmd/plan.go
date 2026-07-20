@@ -98,7 +98,7 @@ func runPlan(cmd *cobra.Command, args []string) error {
 	}
 
 	live, err := state.Fetch(cmd.Context(), c, desired.Metadata.BundleID, state.FetchOpts{
-		Version: version, Platform: platform,
+		Version: version, Platform: platform, RequireEditable: true,
 	})
 	if err != nil {
 		return err

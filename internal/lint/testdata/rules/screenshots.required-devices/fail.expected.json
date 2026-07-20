@@ -3,8 +3,8 @@
     {
       "ruleId": "screenshots.required-devices",
       "severity": "error",
-      "messageSubstring": "APP_IPHONE_67",
-      "path": "/spec/screenshots/locales/en-US/APP_IPHONE_67"
+      "messageSubstring": "no large-iPhone screenshot set",
+      "path": "/spec/screenshots/locales/en-US"
     }
   ]
 }

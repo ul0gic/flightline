@@ -12,7 +12,7 @@ You can use `flightline sales` and `flightline reviews` (L1) without ever touchi
 
 ## L1: API CLI
 
-Every App Store Connect surface, reachable from the terminal, for both pillars: authoring (read and write) and observation (read). One command group per resource, backed by a hand-rolled typed HTTP and JSON client. Verbs are conventional: `flightline <resource> <verb> [flags]`.
+Supported App Store Connect surfaces are reachable from the terminal across both pillars: authoring (read and write) and observation (read). Command groups are backed by a typed HTTP and JSON client. Verbs are conventional: `flightline <resource> <verb> [flags]`.
 
 Authoring examples:
 
@@ -82,7 +82,8 @@ The three layers come together in the authoring loop:
 4. plan        diff against live ASC, no writes (L2)
 5. preflight   live rule check (L3)
 6. apply       idempotent writes (L2)
-7. submit      flightline testflight beta-review submit, the only step that triggers Apple Review
+7a. external TestFlight   flightline testflight beta-review submit
+7b. App Store release    attach build and IAPs, then Submit for Review manually in ASC
 ```
 
-Steps 1 through 5 are read-only and reversible. Step 6 patches ASC but does not submit. Step 7 is the only action that commits to Apple, and it requires explicit confirmation.
+Steps 1 through 5 are read-only against ASC and reversible. Step 6 patches ASC but does not submit. The terminal paths are different workflows: beta review gates external TestFlight testing, while production App Store Review requires a separate review submission. Flightline checks that submission but does not press its final Submit for Review action today.

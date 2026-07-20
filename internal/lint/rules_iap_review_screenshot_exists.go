@@ -76,7 +76,7 @@ func (r iapReviewScreenshotExistsRule) Check(ctx CheckContext) []Diagnostic {
 				"upload one: `flightline iap review-screenshot upload %s --product %s <file>`",
 				ctx.BundleID, iap.Attributes.ProductID,
 			),
-			Reference: "PRD §L3: IAP review-screenshot-exists",
+			Reference: publicRuleReference(r.ID()),
 		})
 	}
 	return out

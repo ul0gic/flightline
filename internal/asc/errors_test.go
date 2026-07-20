@@ -95,6 +95,14 @@ func TestRedact_StripsKeyID(t *testing.T) {
 	}
 }
 
+func TestRedact_PreservesNumericAppID(t *testing.T) {
+	in := `no app found with bundleId "6762067669"`
+	got := redact(in)
+	if !strings.Contains(got, "6762067669") {
+		t.Errorf("redact() ate a numeric app ID: %q", got)
+	}
+}
+
 func TestAPIError_Error_RedactsLeakedToken(t *testing.T) {
 	// Imagine a server pathologically echoes a token back; ensure Error() redacts.
 	e := &APIError{

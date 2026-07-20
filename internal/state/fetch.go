@@ -17,6 +17,25 @@ import (
 type FetchOpts struct {
 	Version  string // e.g. "1.0.1"; empty = latest editable
 	Platform string // e.g. "IOS"; empty = IOS
+	// RequireEditable fails Fetch on non-writable versions, so a stale
+	// metadata.version errors loudly instead of diffing against a released one.
+	RequireEditable bool
+}
+
+// editableVersionStates are the appStoreVersion states Apple accepts writes in.
+var editableVersionStates = map[string]struct{}{
+	"PREPARE_FOR_SUBMISSION": {},
+	"METADATA_REJECTED":      {},
+	"DEVELOPER_REJECTED":     {},
+	"REJECTED":               {},
+	"INVALID_BINARY":         {},
+}
+
+func versionState(a asc.VersionAttributes) string {
+	if a.AppVersionState != "" {
+		return a.AppVersionState
+	}
+	return a.AppStoreState
 }
 
 // Fetch reads live ASC state for bundleID as a schema-round-trippable *State.
@@ -40,6 +59,16 @@ func Fetch(ctx context.Context, c *asc.Client, bundleID string, opts FetchOpts) 
 	versionAttrs, versionID, err := fetchVersion(ctx, c, appID, opts.Version, platform)
 	if err != nil {
 		return nil, err
+	}
+	if opts.RequireEditable {
+		if st := versionState(versionAttrs); st != "" {
+			if _, ok := editableVersionStates[st]; !ok {
+				return nil, fmt.Errorf(
+					"state: version %s is %s and cannot be edited; update metadata.version to an editable version or run `flightline versions create`",
+					versionAttrs.VersionString, st,
+				)
+			}
+		}
 	}
 
 	out := &config.State{
@@ -131,65 +160,53 @@ func projectVersion(a asc.VersionAttributes) *config.VersionSpec {
 // projectAgeRating maps Apple's wire names to schema names; apply re-translates
 // back via ageRatingSchemaToWire.
 func projectAgeRating(a asc.AgeRatingDeclarationAttributes) *config.AgeRatingSpec {
-	out := &config.AgeRatingSpec{}
-	if a.ViolenceCartoonOrFantasy != "" {
-		s := a.ViolenceCartoonOrFantasy
-		out.CartoonOrFantasyViolence = &s
-	}
-	if a.ViolenceRealistic != "" {
-		s := a.ViolenceRealistic
-		out.RealisticViolence = &s
+	out := &config.AgeRatingSpec{
+		CartoonOrFantasyViolence:            optStr(a.ViolenceCartoonOrFantasy),
+		RealisticViolence:                   optStr(a.ViolenceRealistic),
+		ProfanityOrCrudeHumor:               optStr(a.ProfanityOrCrudeHumor),
+		MatureSuggestiveThemes:              optStr(a.MatureOrSuggestiveThemes),
+		HorrorOrFearThemes:                  optStr(a.HorrorOrFearThemes),
+		MedicalOrTreatmentInformation:       optStr(a.MedicalOrTreatmentInformation),
+		AlcoholTobaccoOrDrugUseOrReferences: optStr(a.AlcoholTobaccoOrDrugUseOrReferences),
+		ContestsAndGambling:                 optStr(a.Contests),
+		SexualContentOrNudity:               optStr(a.SexualContentOrNudity),
+		SexualContentGraphicAndNudity:       optStr(a.SexualContentGraphicAndNudity),
+		GamblingSimulated:                   optStr(a.GamblingSimulated),
+		GunsOrOtherWeapons:                  optStr(a.GunsOrOtherWeapons),
+		Advertising:                         copyBool(a.Advertising),
+		AgeAssurance:                        copyBool(a.AgeAssurance),
+		HealthOrWellnessTopics:              copyBool(a.HealthOrWellnessTopics),
+		LootBox:                             copyBool(a.LootBox),
+		MessagingAndChat:                    copyBool(a.MessagingAndChat),
+		ParentalControls:                    copyBool(a.ParentalControls),
+		UserGeneratedContent:                copyBool(a.UserGeneratedContent),
+		Gambling:                            copyBool(a.Gambling),
+		SocialMedia:                         copyBool(a.SocialMedia),
+		SocialMediaAgeRestricted:            copyBool(a.SocialMediaAgeRestricted),
+		UnrestrictedWebAccess:               copyBool(a.UnrestrictedWebAccess),
+		KidsAgeBand:                         optStr(a.KidsAgeBand),
 	}
 	if a.ViolenceRealisticProlongedGraphicOrSadistic != "" {
 		// schema is *bool, Apple is enum string. Treat any non-NONE as true.
 		v := a.ViolenceRealisticProlongedGraphicOrSadistic != "NONE"
 		out.ProlongedGraphicSadisticRealisticViolence = &v
 	}
-	if a.ProfanityOrCrudeHumor != "" {
-		s := a.ProfanityOrCrudeHumor
-		out.ProfanityOrCrudeHumor = &s
-	}
-	if a.MatureOrSuggestiveThemes != "" {
-		s := a.MatureOrSuggestiveThemes
-		out.MatureSuggestiveThemes = &s
-	}
-	if a.HorrorOrFearThemes != "" {
-		s := a.HorrorOrFearThemes
-		out.HorrorOrFearThemes = &s
-	}
-	if a.MedicalOrTreatmentInformation != "" {
-		s := a.MedicalOrTreatmentInformation
-		out.MedicalOrTreatmentInformation = &s
-	}
-	if a.AlcoholTobaccoOrDrugUseOrReferences != "" {
-		s := a.AlcoholTobaccoOrDrugUseOrReferences
-		out.AlcoholTobaccoOrDrugUseOrReferences = &s
-	}
-	if a.Contests != "" {
-		s := a.Contests
-		out.ContestsAndGambling = &s
-	}
-	if a.SexualContentOrNudity != "" {
-		s := a.SexualContentOrNudity
-		out.SexualContentOrNudity = &s
-	}
-	if a.SexualContentGraphicAndNudity != "" {
-		s := a.SexualContentGraphicAndNudity
-		out.SexualContentGraphicAndNudity = &s
-	}
-	if a.Gambling != nil {
-		v := *a.Gambling
-		out.Gambling = &v
-	}
-	if a.UnrestrictedWebAccess != nil {
-		v := *a.UnrestrictedWebAccess
-		out.UnrestrictedWebAccess = &v
-	}
-	if a.KidsAgeBand != "" {
-		s := a.KidsAgeBand
-		out.KidsAgeBand = &s
-	}
 	return out
+}
+
+func optStr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+func copyBool(b *bool) *bool {
+	if b == nil {
+		return nil
+	}
+	v := *b
+	return &v
 }
 
 type appAttributes struct {
@@ -197,6 +214,12 @@ type appAttributes struct {
 }
 
 func resolveAppID(ctx context.Context, c *asc.Client, bundleID string) (string, error) {
+	if isNumericAppID(bundleID) {
+		if _, err := asc.Get[asc.Single[appAttributes]](ctx, c, "/v1/apps/"+bundleID, nil); err != nil {
+			return "", fmt.Errorf("state: no app found with id %s: %w", bundleID, err)
+		}
+		return bundleID, nil
+	}
 	q := url.Values{
 		"filter[bundleId]": {bundleID},
 		"limit":            {"1"},
@@ -209,6 +232,19 @@ func resolveAppID(ctx context.Context, c *asc.Client, bundleID string) (string, 
 		return "", fmt.Errorf("state: no app found with bundleId %q", bundleID)
 	}
 	return page.Data[0].ID, nil
+}
+
+// isNumericAppID reports whether the argument is an ASC app ID (pure digits) rather than a bundleId.
+func isNumericAppID(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // fetchVersion returns the matching version row, or the newest editable when versionStr is empty.

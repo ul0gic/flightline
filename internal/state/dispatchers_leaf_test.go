@@ -2,13 +2,17 @@ package state
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
 
+	"github.com/ul0gic/flightline/internal/config"
 	"github.com/ul0gic/flightline/internal/plan"
 )
 
@@ -365,10 +369,11 @@ func TestDispatch_AppInfoLocalization_ReusesExisting(t *testing.T) {
 	}
 }
 
-// --- getOrCreateIAPLocalization (via applyIAPField localization path) --------
+// --- ensureIAPLocalization (via applyIAPField localization path) -------------
 
 func TestDispatch_IAPLocalization_CreatesWhenMissing(t *testing.T) {
 	var creates, patches int32
+	var createBody string
 	err := applyOneChange(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
@@ -377,9 +382,14 @@ func TestDispatch_IAPLocalization_CreatesWhenMissing(t *testing.T) {
 		case r.URL.Path == "/v1/apps/APP1/inAppPurchasesV2":
 			_, _ = io.WriteString(w, `{"data":[{"type":"inAppPurchases","id":"IAP1","attributes":{"productId":"com.x.lifetime"}}],"links":{}}`)
 		case r.URL.Path == "/v2/inAppPurchases/IAP1/inAppPurchaseLocalizations" && r.Method == http.MethodGet:
+			if r.URL.Query().Has("filter[locale]") {
+				t.Error("filter[locale] sent to inAppPurchaseLocalizations; Apple rejects it as ILLEGAL")
+			}
 			_, _ = io.WriteString(w, `{"data":[],"links":{}}`)
 		case r.URL.Path == "/v1/inAppPurchaseLocalizations" && r.Method == http.MethodPost:
 			atomic.AddInt32(&creates, 1)
+			b, _ := io.ReadAll(r.Body)
+			createBody = string(b)
 			w.WriteHeader(http.StatusCreated)
 			_, _ = io.WriteString(w, `{"data":{"type":"inAppPurchaseLocalizations","id":"IL_NEW"}}`)
 		case r.URL.Path == "/v1/inAppPurchaseLocalizations/IL_NEW" && r.Method == http.MethodPatch:
@@ -398,22 +408,288 @@ func TestDispatch_IAPLocalization_CreatesWhenMissing(t *testing.T) {
 	if creates != 1 {
 		t.Errorf("IAP localization POSTs = %d, want 1", creates)
 	}
+	if patches != 0 {
+		t.Errorf("IAP localization PATCHes = %d, want 0 (create carries the field)", patches)
+	}
+	if !strings.Contains(createBody, `"name":"Lifetime"`) {
+		t.Errorf("create body missing applied field: %s", createBody)
+	}
+}
+
+func TestDispatch_IAPLocalization_MatchesLocaleClientSide(t *testing.T) {
+	var patches int32
+	err := applyOneChange(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/v1/apps":
+			_, _ = io.WriteString(w, `{"data":[{"type":"apps","id":"APP1"}],"links":{}}`)
+		case r.URL.Path == "/v1/apps/APP1/inAppPurchasesV2":
+			_, _ = io.WriteString(w, `{"data":[{"type":"inAppPurchases","id":"IAP1","attributes":{"productId":"com.x.lifetime"}}],"links":{}}`)
+		case r.URL.Path == "/v2/inAppPurchases/IAP1/inAppPurchaseLocalizations" && r.Method == http.MethodGet:
+			_, _ = io.WriteString(w, `{"data":[{"type":"inAppPurchaseLocalizations","id":"IL_EN","attributes":{"locale":"en-US"}},{"type":"inAppPurchaseLocalizations","id":"IL_ES","attributes":{"locale":"es-MX"}}],"links":{}}`)
+		case r.URL.Path == "/v1/inAppPurchaseLocalizations/IL_ES" && r.Method == http.MethodPatch:
+			atomic.AddInt32(&patches, 1)
+			_, _ = io.WriteString(w, `{"data":{"type":"inAppPurchaseLocalizations","id":"IL_ES"}}`)
+		default:
+			http.Error(w, "unhandled "+r.Method+" "+r.URL.Path, http.StatusNotFound)
+		}
+	}, plan.Change{
+		Op: plan.OpUpdate, Resource: "iap.com.x.lifetime",
+		Path: "/spec/iap/products/com.x.lifetime/localizations/es-MX/name", To: "Acceso de por Vida",
+	})
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
 	if patches != 1 {
-		t.Errorf("IAP localization PATCHes = %d, want 1", patches)
+		t.Errorf("PATCHes on IL_ES = %d, want 1 (client-side locale match)", patches)
 	}
 }
 
 // --- applyScreenshotSet -----------------------------------------------------
 
-func TestDispatch_ScreenshotSet_DefersToL1(t *testing.T) {
-	err := applyOneChange(t, func(_ http.ResponseWriter, _ *http.Request) {
-		// No route should be hit: the dispatcher returns before any HTTP.
+func TestDispatch_ScreenshotSet_UploadsAsset(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "a.png")
+	payload := []byte("png-payload")
+	if err := os.WriteFile(path, payload, 0o600); err != nil {
+		t.Fatalf("write screenshot: %v", err)
+	}
+	var puts int32
+	chunkSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			http.Error(w, "method", http.StatusMethodNotAllowed)
+			return
+		}
+		atomic.AddInt32(&puts, 1)
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(chunkSrv.Close)
+	var reserves, commits int32
+	err := applyOneChange(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/v1/apps":
+			_, _ = io.WriteString(w, `{"data":[{"type":"apps","id":"APP1"}],"links":{}}`)
+		case r.URL.Path == "/v1/apps/APP1/appStoreVersions":
+			_, _ = io.WriteString(w, `{"data":[{"type":"appStoreVersions","id":"VER1","attributes":{"versionString":"1.0","platform":"IOS"}}],"links":{}}`)
+		case r.URL.Path == "/v1/appStoreVersions/VER1/appStoreVersionLocalizations":
+			_, _ = io.WriteString(w, `{"data":[{"type":"appStoreVersionLocalizations","id":"LOC1","attributes":{"locale":"en-US"}}],"links":{}}`)
+		case r.URL.Path == "/v1/appStoreVersionLocalizations/LOC1/appScreenshotSets":
+			_, _ = io.WriteString(w, `{"data":[{"type":"appScreenshotSets","id":"SET1","attributes":{"screenshotDisplayType":"APP_IPHONE_69"}}],"links":{}}`)
+		case r.URL.Path == "/v1/appScreenshotSets/SET1/appScreenshots" && r.Method == http.MethodGet:
+			_, _ = io.WriteString(w, `{"data":[],"links":{}}`)
+		case r.URL.Path == "/v1/appScreenshots" && r.Method == http.MethodPost:
+			atomic.AddInt32(&reserves, 1)
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
+				"type": "appScreenshots", "id": "SHOT1", "attributes": map[string]any{
+					"fileName": "a.png", "fileSize": len(payload), "uploadOperations": []map[string]any{{
+						"method": "PUT", "url": chunkSrv.URL + "/chunk", "length": len(payload), "offset": 0,
+					}},
+				},
+			}})
+		case r.URL.Path == "/v1/appScreenshots/SHOT1" && r.Method == http.MethodPatch:
+			atomic.AddInt32(&commits, 1)
+			_, _ = io.WriteString(w, `{"data":{"type":"appScreenshots","id":"SHOT1"}}`)
+		default:
+			http.Error(w, "unhandled "+r.Method+" "+r.URL.Path, http.StatusNotFound)
+		}
 	}, plan.Change{
 		Op: plan.OpUpdate, Resource: "screenshots.en-US.APP_IPHONE_69",
-		Path: "/spec/screenshots/locales/en-US/APP_IPHONE_69", To: []any{"a.png"},
+		Path: "/spec/screenshots/locales/en-US/APP_IPHONE_69",
+		To:   []config.ScreenshotFile{{Path: path}},
 	})
-	if err == nil || !strings.Contains(err.Error(), "QA-010") {
-		t.Fatalf("expected QA-010 deferral error, got %v", err)
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if reserves != 1 || puts != 1 || commits != 1 {
+		t.Fatalf("upload calls reserve=%d put=%d commit=%d, want 1 each", reserves, puts, commits)
+	}
+}
+
+func TestDispatch_IAPReviewScreenshot_UploadsAsset(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "review.png")
+	payload := []byte("iap-review-payload")
+	if err := os.WriteFile(path, payload, 0o600); err != nil {
+		t.Fatalf("write screenshot: %v", err)
+	}
+	var puts int32
+	chunkSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&puts, 1)
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(chunkSrv.Close)
+	var reserves, commits int32
+	err := applyOneChange(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/v1/apps":
+			_, _ = io.WriteString(w, `{"data":[{"type":"apps","id":"APP1"}],"links":{}}`)
+		case r.URL.Path == "/v1/apps/APP1/inAppPurchasesV2":
+			_, _ = io.WriteString(w, `{"data":[{"type":"inAppPurchases","id":"IAP1","attributes":{"productId":"com.example.pro"}}],"links":{}}`)
+		case r.URL.Path == "/v2/inAppPurchases/IAP1/appStoreReviewScreenshot" && r.Method == http.MethodGet:
+			_, _ = io.WriteString(w, `{"data":null}`)
+		case r.URL.Path == "/v1/inAppPurchaseAppStoreReviewScreenshots" && r.Method == http.MethodPost:
+			atomic.AddInt32(&reserves, 1)
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
+				"type": "inAppPurchaseAppStoreReviewScreenshots", "id": "IAPSHOT1", "attributes": map[string]any{
+					"fileName": "review.png", "fileSize": len(payload), "uploadOperations": []map[string]any{{
+						"method": "PUT", "url": chunkSrv.URL + "/chunk", "length": len(payload), "offset": 0,
+					}},
+				},
+			}})
+		case r.URL.Path == "/v1/inAppPurchaseAppStoreReviewScreenshots/IAPSHOT1" && r.Method == http.MethodPatch:
+			atomic.AddInt32(&commits, 1)
+			_, _ = io.WriteString(w, `{"data":{"type":"inAppPurchaseAppStoreReviewScreenshots","id":"IAPSHOT1"}}`)
+		default:
+			http.Error(w, "unhandled "+r.Method+" "+r.URL.Path, http.StatusNotFound)
+		}
+	}, plan.Change{
+		Op: plan.OpUpdate, Resource: "iap.com.example.pro",
+		Path: "/spec/iap/products/com.example.pro/reviewScreenshot",
+		To:   &config.IAPReviewScreenshot{Path: path},
+	})
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if reserves != 1 || puts != 1 || commits != 1 {
+		t.Fatalf("upload calls reserve=%d put=%d commit=%d, want 1 each", reserves, puts, commits)
+	}
+}
+
+func TestDispatch_IAPReviewScreenshot_InspectionFailureStopsBeforeUpload(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "review.png")
+	if err := os.WriteFile(path, []byte("review"), 0o600); err != nil {
+		t.Fatalf("write screenshot: %v", err)
+	}
+	var uploads int32
+	err := applyOneChange(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/v1/apps":
+			_, _ = io.WriteString(w, `{"data":[{"type":"apps","id":"APP1"}],"links":{}}`)
+		case r.URL.Path == "/v1/apps/APP1/inAppPurchasesV2":
+			_, _ = io.WriteString(w, `{"data":[{"type":"inAppPurchases","id":"IAP1","attributes":{"productId":"com.example.pro"}}],"links":{}}`)
+		case r.URL.Path == "/v2/inAppPurchases/IAP1/appStoreReviewScreenshot":
+			w.WriteHeader(http.StatusBadGateway)
+			_, _ = io.WriteString(w, `{"errors":[{"status":"502","title":"upstream unavailable"}]}`)
+		case r.Method == http.MethodPost:
+			atomic.AddInt32(&uploads, 1)
+		default:
+			http.Error(w, "unhandled "+r.Method+" "+r.URL.Path, http.StatusNotFound)
+		}
+	}, plan.Change{
+		Op: plan.OpUpdate, Resource: "iap.com.example.pro",
+		Path: "/spec/iap/products/com.example.pro/reviewScreenshot",
+		To:   &config.IAPReviewScreenshot{Path: path},
+	})
+	if err == nil || !strings.Contains(err.Error(), "inspect current screenshot") {
+		t.Fatalf("expected inspection error, got %v", err)
+	}
+	if uploads != 0 {
+		t.Fatalf("uploads=%d, want 0 after failed live-state inspection", uploads)
+	}
+}
+
+func TestDispatch_CPPScreenshot_UploadsAsset(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cpp.png")
+	payload := []byte("cpp-payload")
+	if err := os.WriteFile(path, payload, 0o600); err != nil {
+		t.Fatalf("write screenshot: %v", err)
+	}
+	var puts int32
+	chunkSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&puts, 1)
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(chunkSrv.Close)
+	var reserves, commits int32
+	err := applyOneChange(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/v1/apps":
+			_, _ = io.WriteString(w, `{"data":[{"type":"apps","id":"APP1"}],"links":{}}`)
+		case r.URL.Path == "/v1/apps/APP1/appCustomProductPages":
+			_, _ = io.WriteString(w, `{"data":[{"type":"appCustomProductPages","id":"CPP1","attributes":{"name":"summer"}}],"links":{}}`)
+		case r.URL.Path == "/v1/appCustomProductPages/CPP1/appCustomProductPageVersions":
+			_, _ = io.WriteString(w, `{"data":[{"type":"appCustomProductPageVersions","id":"CPPV1","attributes":{"state":"PREPARE_FOR_SUBMISSION"}}],"links":{}}`)
+		case r.URL.Path == "/v1/appCustomProductPageVersions/CPPV1/appCustomProductPageLocalizations":
+			_, _ = io.WriteString(w, `{"data":[{"type":"appCustomProductPageLocalizations","id":"CPPL1","attributes":{"locale":"en-US"}}],"links":{}}`)
+		case r.URL.Path == "/v1/appCustomProductPageLocalizations/CPPL1/appScreenshotSets":
+			_, _ = io.WriteString(w, `{"data":[{"type":"appScreenshotSets","id":"CPPSET1","attributes":{"screenshotDisplayType":"APP_IPHONE_69"}}],"links":{}}`)
+		case r.URL.Path == "/v1/appScreenshotSets/CPPSET1/appScreenshots" && r.Method == http.MethodGet:
+			_, _ = io.WriteString(w, `{"data":[],"links":{}}`)
+		case r.URL.Path == "/v1/appScreenshots" && r.Method == http.MethodPost:
+			atomic.AddInt32(&reserves, 1)
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
+				"type": "appScreenshots", "id": "CPPSHOT1", "attributes": map[string]any{
+					"fileName": "cpp.png", "fileSize": len(payload), "uploadOperations": []map[string]any{{
+						"method": "PUT", "url": chunkSrv.URL + "/chunk", "length": len(payload), "offset": 0,
+					}},
+				},
+			}})
+		case r.URL.Path == "/v1/appScreenshots/CPPSHOT1" && r.Method == http.MethodPatch:
+			atomic.AddInt32(&commits, 1)
+			_, _ = io.WriteString(w, `{"data":{"type":"appScreenshots","id":"CPPSHOT1"}}`)
+		default:
+			http.Error(w, "unhandled "+r.Method+" "+r.URL.Path, http.StatusNotFound)
+		}
+	}, plan.Change{
+		Op: plan.OpCreate, Resource: "customProductPages.summer.loc.en-US.screenshots",
+		Path: "/spec/customProductPages/summer/localizations/en-US/screenshots/APP_IPHONE_69",
+		To:   []config.ScreenshotFile{{Path: path}},
+	})
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if reserves != 1 || puts != 1 || commits != 1 {
+		t.Fatalf("upload calls reserve=%d put=%d commit=%d, want 1 each", reserves, puts, commits)
+	}
+}
+
+func TestReconcileScreenshotFiles_SkipsMatchingAndDeletesStale(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "kept.png")
+	if err := os.WriteFile(path, []byte("kept-payload"), 0o600); err != nil {
+		t.Fatalf("write screenshot: %v", err)
+	}
+	checksum, err := fileMD5(path)
+	if err != nil {
+		t.Fatalf("hash screenshot: %v", err)
+	}
+	var deletes, uploads int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/v1/appScreenshotSets/SET1/appScreenshots" && r.Method == http.MethodGet:
+			_, _ = io.WriteString(w, `{"data":[`+
+				`{"type":"appScreenshots","id":"KEEP","attributes":{"sourceFileChecksum":"`+checksum+`"}},`+
+				`{"type":"appScreenshots","id":"STALE","attributes":{"sourceFileChecksum":"old"}}`+
+				`],"links":{}}`)
+		case r.URL.Path == "/v1/appScreenshots/STALE" && r.Method == http.MethodDelete:
+			atomic.AddInt32(&deletes, 1)
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == http.MethodPost:
+			atomic.AddInt32(&uploads, 1)
+			http.Error(w, "unexpected upload", http.StatusInternalServerError)
+		default:
+			http.Error(w, "unhandled "+r.Method+" "+r.URL.Path, http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	if err := reconcileScreenshotFiles(context.Background(), fixtureClient(t, srv), ctxApply(), "SET1",
+		[]config.ScreenshotFile{{Path: path}}); err != nil {
+		t.Fatalf("reconcileScreenshotFiles: %v", err)
+	}
+	if uploads != 0 || deletes != 1 {
+		t.Fatalf("uploads=%d deletes=%d, want 0 and 1", uploads, deletes)
 	}
 }
 
@@ -487,11 +763,13 @@ func TestDispatch_CustomProductPage_Create(t *testing.T) {
 		switch {
 		case r.URL.Path == "/v1/apps":
 			_, _ = io.WriteString(w, `{"data":[{"type":"apps","id":"APP1"}],"links":{}}`)
-		case r.URL.Path == "/v1/customProductPages" && r.Method == http.MethodPost:
+		case r.URL.Path == "/v1/appCustomProductPages" && r.Method == http.MethodPost:
 			atomic.AddInt32(&posts, 1)
 			body = readBody(t, r)
 			w.WriteHeader(http.StatusCreated)
-			_, _ = io.WriteString(w, `{"data":{"type":"customProductPages","id":"CPP1"}}`)
+			_, _ = io.WriteString(w, `{"data":{"type":"appCustomProductPages","id":"CPP1"}}`)
+		case r.URL.Path == "/v1/appCustomProductPages/CPP1" && r.Method == http.MethodPatch:
+			_, _ = io.WriteString(w, `{"data":{"type":"appCustomProductPages","id":"CPP1"}}`)
 		default:
 			http.Error(w, "unhandled "+r.Method+" "+r.URL.Path, http.StatusNotFound)
 		}
@@ -518,12 +796,12 @@ func TestDispatch_CustomProductPage_VisiblePatch(t *testing.T) {
 		switch {
 		case r.URL.Path == "/v1/apps":
 			_, _ = io.WriteString(w, `{"data":[{"type":"apps","id":"APP1"}],"links":{}}`)
-		case r.URL.Path == "/v1/apps/APP1/customProductPages" && r.Method == http.MethodGet:
-			_, _ = io.WriteString(w, `{"data":[{"type":"customProductPages","id":"CPP1","attributes":{"name":"summer-2026"}}],"links":{}}`)
-		case r.URL.Path == "/v1/customProductPages/CPP1" && r.Method == http.MethodPatch:
+		case r.URL.Path == "/v1/apps/APP1/appCustomProductPages" && r.Method == http.MethodGet:
+			_, _ = io.WriteString(w, `{"data":[{"type":"appCustomProductPages","id":"CPP1","attributes":{"name":"summer-2026"}}],"links":{}}`)
+		case r.URL.Path == "/v1/appCustomProductPages/CPP1" && r.Method == http.MethodPatch:
 			atomic.AddInt32(&patches, 1)
 			body = readBody(t, r)
-			_, _ = io.WriteString(w, `{"data":{"type":"customProductPages","id":"CPP1"}}`)
+			_, _ = io.WriteString(w, `{"data":{"type":"appCustomProductPages","id":"CPP1"}}`)
 		default:
 			http.Error(w, "unhandled "+r.Method+" "+r.URL.Path, http.StatusNotFound)
 		}
@@ -548,7 +826,7 @@ func TestDispatch_CustomProductPage_NotFoundErrors(t *testing.T) {
 		switch r.URL.Path {
 		case "/v1/apps":
 			_, _ = io.WriteString(w, `{"data":[{"type":"apps","id":"APP1"}],"links":{}}`)
-		case "/v1/apps/APP1/customProductPages":
+		case "/v1/apps/APP1/appCustomProductPages":
 			_, _ = io.WriteString(w, `{"data":[],"links":{}}`)
 		default:
 			http.Error(w, "unhandled "+r.URL.Path, http.StatusNotFound)

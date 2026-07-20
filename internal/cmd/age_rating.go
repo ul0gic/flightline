@@ -47,6 +47,8 @@ func (v *AgeRatingView) TableRows() (headers []string, rows [][]string) {
 		{"lootBox", ageRatingBool(a.LootBox)},
 		{"messagingAndChat", ageRatingBool(a.MessagingAndChat)},
 		{"parentalControls", ageRatingBool(a.ParentalControls)},
+		{"socialMedia", ageRatingBool(a.SocialMedia)},
+		{"socialMediaAgeRestricted", ageRatingBool(a.SocialMediaAgeRestricted)},
 		{"unrestrictedWebAccess", ageRatingBool(a.UnrestrictedWebAccess)},
 		{"userGeneratedContent", ageRatingBool(a.UserGeneratedContent)},
 		{"kidsAgeBand", ageRatingValue(a.KidsAgeBand)},

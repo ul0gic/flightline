@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
 	"strconv"
 	"strings"
@@ -23,7 +24,10 @@ type CustomProductPageView struct {
 
 // CustomProductPageList is the table-aware view for `custom-product-pages list`.
 type CustomProductPageList struct {
-	Pages []CustomProductPageView `json:"pages"`
+	Pages         []CustomProductPageView `json:"pages"`
+	Complete      bool                    `json:"complete"`
+	EnrichedCount int                     `json:"enrichedCount"`
+	TotalCount    int                     `json:"totalCount"`
 }
 
 // TableRows implements TableRenderable for the pages list view.
@@ -217,21 +221,25 @@ func runCustomProductPagesList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// One version lookup per page; cap at 50 so apps with dozens of CPPs
-	// don't burn the per-hour rate-limit quota. Beyond 50, fields stay empty.
-	const versionLookupCap = 50
-	for i := range views {
-		if i >= versionLookupCap {
-			break
-		}
-		ver, vstate, verr := fetchCurrentCustomProductPageVersion(cmd.Context(), c, views[i].ID)
-		if verr == nil {
-			views[i].CurrentVersion = ver
-			views[i].CurrentState = vstate
-		}
+	if err := enrichCustomProductPageVersions(cmd.Context(), c, views); err != nil {
+		return err
 	}
 
-	return Render(CustomProductPageList{Pages: views}, outputMode())
+	return Render(CustomProductPageList{
+		Pages: views, Complete: true, EnrichedCount: len(views), TotalCount: len(views),
+	}, outputMode())
+}
+
+func enrichCustomProductPageVersions(ctx context.Context, c *asc.Client, views []CustomProductPageView) error {
+	for i := range views {
+		version, state, err := fetchCurrentCustomProductPageVersion(ctx, c, views[i].ID)
+		if err != nil {
+			return fmt.Errorf("custom-product-pages: enrich page %s: %w", views[i].ID, err)
+		}
+		views[i].CurrentVersion = version
+		views[i].CurrentState = state
+	}
+	return nil
 }
 
 func runCustomProductPagesGet(cmd *cobra.Command, args []string) error {

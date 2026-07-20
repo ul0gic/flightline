@@ -3,6 +3,7 @@ package lint
 import (
 	"fmt"
 	"sort"
+	"strings"
 )
 
 // localizationsCompletenessRule fires when a locale appears in one surface (metadata, screenshots, IAP) but not another.
@@ -15,18 +16,19 @@ func (localizationsCompletenessRule) ID() string         { return "localizations
 func (localizationsCompletenessRule) Severity() Severity { return SeverityWarning }
 func (localizationsCompletenessRule) Mode() Mode         { return ModeOffline }
 func (localizationsCompletenessRule) Doc() string {
-	return "Checks that every locale appearing in one localizable surface (metadata, screenshots, or IAP localizations) also appears in the others. " +
+	return "Checks that each managed metadata locale has Flightline's submission baseline fields (name, description, and supportUrl), and that every locale appearing in one localizable surface (metadata, screenshots, or IAP localizations) also appears in the others. " +
 		"Apple may reject a listing where a locale has metadata but no screenshots because reviewers cannot preview it in that language, and the gap is often the sign of a half-applied edit. " +
-		"Fix it by adding the locale to every surface or removing it everywhere; this rule is advisory, so a deliberately single-surface locale can be left as-is."
+		"Fix field gaps at the diagnostic path, then add the locale to every intended surface or remove it where it should not be managed."
 }
 
 func (r localizationsCompletenessRule) Check(ctx CheckContext) []Diagnostic {
 	if ctx.State == nil {
 		return nil
 	}
+	out := r.checkMetadataFields(ctx)
 	surfaces := r.collectLocalizedSurfaces(ctx)
 	if len(surfaces) < 2 {
-		return nil // need at least two surfaces to compare
+		return out
 	}
 	union := map[string]struct{}{}
 	for _, locales := range surfaces {
@@ -35,7 +37,6 @@ func (r localizationsCompletenessRule) Check(ctx CheckContext) []Diagnostic {
 		}
 	}
 
-	out := make([]Diagnostic, 0)
 	for surface, locales := range surfaces {
 		missing := make([]string, 0)
 		for loc := range union {
@@ -58,7 +59,7 @@ func (r localizationsCompletenessRule) Check(ctx CheckContext) []Diagnostic {
 				Path: surfacePath(surface, loc),
 				FixHint: "either add the locale to every localizable surface (metadata, " +
 					"screenshots, iap.localizations) or remove it everywhere.",
-				Reference: "PRD §L3: localizations.completeness",
+				Reference: publicRuleReference(r.ID()),
 			})
 		}
 	}
@@ -68,6 +69,40 @@ func (r localizationsCompletenessRule) Check(ctx CheckContext) []Diagnostic {
 		}
 		return out[i].Message < out[j].Message
 	})
+	return out
+}
+
+func (r localizationsCompletenessRule) checkMetadataFields(ctx CheckContext) []Diagnostic {
+	if ctx.State.Spec.Metadata == nil {
+		return nil
+	}
+	type requiredField struct {
+		name  string
+		value *string
+	}
+	out := make([]Diagnostic, 0)
+	for _, locale := range sortedKeys(ctx.State.Spec.Metadata.Locales) {
+		metadata := ctx.State.Spec.Metadata.Locales[locale]
+		fields := []requiredField{
+			{name: "name", value: metadata.Name},
+			{name: "description", value: metadata.Description},
+			{name: "supportUrl", value: metadata.SupportURL},
+		}
+		for _, field := range fields {
+			if field.value != nil && strings.TrimSpace(*field.value) != "" {
+				continue
+			}
+			path := "/spec/metadata/locales/" + locale + "/" + field.name
+			out = append(out, Diagnostic{
+				RuleID:    r.ID(),
+				Severity:  SeverityWarning,
+				Message:   fmt.Sprintf("metadata locale %q is missing required submission field %s", locale, field.name),
+				Path:      path,
+				FixHint:   fmt.Sprintf("set `%s` to a non-empty value for locale %s, or remove that locale from spec.metadata.locales if it is not managed", path, locale),
+				Reference: publicRuleReference(r.ID()),
+			})
+		}
+	}
 	return out
 }
 

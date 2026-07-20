@@ -166,7 +166,7 @@ func (f *statefulApplyFixture) serveLookup(w http.ResponseWriter, r *http.Reques
 		_, _ = w.Write(body)
 	case "/v1/apps/APP1/betaGroups":
 		_, _ = io.WriteString(w, `{"data":[],"links":{}}`)
-	case "/v1/apps/APP1/customProductPages":
+	case "/v1/apps/APP1/appCustomProductPages":
 		_, _ = io.WriteString(w, `{"data":[],"links":{}}`)
 	default:
 		return f.serveLookupPrefix(w, r)
