@@ -1,0 +1,11 @@
+{
+  "data": [
+    { "type": "appPrices", "id": "AP-1", "attributes": { "manual": false } },
+    { "type": "appPrices", "id": "AP-2", "attributes": { "manual": false } },
+    { "type": "appPrices", "id": "AP-3", "attributes": { "manual": false } }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/appPriceSchedules/1234567890/automaticPrices"
+  },
+  "meta": { "paging": { "total": 3, "limit": 200 } }
+}

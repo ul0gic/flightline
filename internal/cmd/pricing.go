@@ -216,11 +216,13 @@ func fetchPriceSchedule(ctx context.Context, c *asc.Client, appID string) (Price
 	if resp.Data.Relationships.BaseTerritory != nil && resp.Data.Relationships.BaseTerritory.Data != nil {
 		sched.BaseTerritoryID = resp.Data.Relationships.BaseTerritory.Data.ID
 	}
-	if resp.Data.Relationships.ManualPrices != nil {
-		sched.ManualPriceCount = len(resp.Data.Relationships.ManualPrices.Data)
+	// Sideloaded relationship arrays are capped at Apple's include limit of 50,
+	// so true totals come from paging the dedicated schedule endpoints.
+	if sched.ManualPriceCount, err = countSchedulePrices(ctx, c, resp.Data.ID, "manualPrices"); err != nil {
+		return PriceScheduleSummary{}, nil, err
 	}
-	if resp.Data.Relationships.AutomaticPrices != nil {
-		sched.AutomaticPriceCount = len(resp.Data.Relationships.AutomaticPrices.Data)
+	if sched.AutomaticPriceCount, err = countSchedulePrices(ctx, c, resp.Data.ID, "automaticPrices"); err != nil {
+		return PriceScheduleSummary{}, nil, err
 	}
 
 	included := decodeIncluded(resp.Included)
@@ -252,6 +254,22 @@ func fetchPriceSchedule(ctx context.Context, c *asc.Client, appID string) (Price
 	}
 
 	return sched, basePrice, nil
+}
+
+func countSchedulePrices(ctx context.Context, c *asc.Client, scheduleID, relationship string) (int, error) {
+	q := url.Values{
+		"fields[appPrices]": {"manual"},
+		"limit":             {"200"},
+	}
+	total := 0
+	path := "/v1/appPriceSchedules/" + scheduleID + "/" + relationship
+	for page, err := range asc.Pages[struct{}](ctx, c, path, q) {
+		if err != nil {
+			return 0, fmt.Errorf("counting %s: %w", relationship, err)
+		}
+		total += len(page.Data)
+	}
+	return total, nil
 }
 
 // pickActiveBasePrice finds the base-territory manual price covering today

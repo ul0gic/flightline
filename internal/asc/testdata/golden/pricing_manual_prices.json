@@ -1,0 +1,10 @@
+{
+  "data": [
+    { "type": "appPrices", "id": "MP-1", "attributes": { "manual": true } },
+    { "type": "appPrices", "id": "MP-2", "attributes": { "manual": true } }
+  ],
+  "links": {
+    "self": "https://api.appstoreconnect.apple.com/v1/appPriceSchedules/1234567890/manualPrices"
+  },
+  "meta": { "paging": { "total": 2, "limit": 200 } }
+}

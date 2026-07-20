@@ -187,8 +187,10 @@ func TestWindowCovers_Boundaries(t *testing.T) {
 func TestPricing_FixtureReplay_ScheduleAndPricePoint(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
-		"GET /v1/apps/1234567890/appPriceSchedule": {File: "pricing_get"},
-		"GET /v3/appPricePoints/PP-USA-999":        {File: "pricing_price_point"},
+		"GET /v1/apps/1234567890/appPriceSchedule":             {File: "pricing_get"},
+		"GET /v3/appPricePoints/PP-USA-999":                    {File: "pricing_price_point"},
+		"GET /v1/appPriceSchedules/1234567890/manualPrices":    {File: "pricing_manual_prices"},
+		"GET /v1/appPriceSchedules/1234567890/automaticPrices": {File: "pricing_automatic_prices"},
 	})
 	c := fixtureASCClient(t, srv)
 	ctx := context.Background()
