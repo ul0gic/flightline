@@ -1,0 +1,24 @@
+{
+  "data": [
+    {
+      "type": "appStoreVersions",
+      "id": "8000000001",
+      "attributes": {
+        "platform": "IOS",
+        "versionString": "1.0.1",
+        "appStoreState": "REJECTED",
+        "appVersionState": "REJECTED",
+        "releaseType": "MANUAL"
+      },
+      "links": {
+        "self": "https://api.appstoreconnect.apple.com/v1/appStoreVersions/8000000001"
+      }
+    }
+  ],
+  "meta": {
+    "paging": {
+      "total": 1,
+      "limit": 1
+    }
+  }
+}

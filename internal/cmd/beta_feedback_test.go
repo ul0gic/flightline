@@ -292,7 +292,7 @@ func TestResolveBuildID(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			srv := startFixtureServer(t, map[string]fixtureRoute{
-				"GET /v1/apps/app-1/builds": {File: tt.fixture},
+				"GET /v1/builds": {File: tt.fixture},
 			})
 			c := fixtureASCClient(t, srv)
 			id, err := resolveBuildID(context.Background(), c, "app-1", "com.example.alpha", tt.buildNum)
@@ -322,7 +322,7 @@ func assertErrContains(t *testing.T, err error, subs []string) {
 	}
 }
 
-// The resolver must query by CFBundleVersion with limit=2 so ambiguity is detectable.
+// The resolver uses the top-level builds collection with app and version filters.
 func TestResolveBuildID_QueryShape(t *testing.T) {
 	var gotQuery url.Values
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -339,14 +339,26 @@ func TestResolveBuildID_QueryShape(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	c := fixtureASCClient(t, srv)
-	if _, err := resolveBuildID(context.Background(), c, "app-1", "com.example.alpha", "42"); err != nil {
+	if _, err := resolveBuildIDWithOptions(context.Background(), c, "app-1", "com.example.alpha", "42", buildLookupOptions{
+		ReleaseVersion: "1.1",
+		Platform:       "IOS",
+	}); err != nil {
 		t.Fatalf("resolveBuildID: %v", err)
 	}
 	if got := gotQuery.Get("filter[version]"); got != "42" {
 		t.Errorf("filter[version] = %q, want 42", got)
 	}
-	if got := gotQuery.Get("limit"); got != "2" {
-		t.Errorf("limit = %q, want 2", got)
+	if got := gotQuery.Get("filter[app]"); got != "app-1" {
+		t.Errorf("filter[app] = %q, want app-1", got)
+	}
+	if got := gotQuery.Get("filter[preReleaseVersion.version]"); got != "1.1" {
+		t.Errorf("release version filter = %q, want 1.1", got)
+	}
+	if got := gotQuery.Get("filter[preReleaseVersion.platform]"); got != "IOS" {
+		t.Errorf("platform filter = %q, want IOS", got)
+	}
+	if got := gotQuery.Get("limit"); got != "200" {
+		t.Errorf("limit = %q, want 200", got)
 	}
 }
 

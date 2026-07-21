@@ -108,8 +108,9 @@ var betaFeedbackCrashCmd = &cobra.Command{
 	Args:         cobra.ExactArgs(1),
 	RunE:         runBetaFeedbackCrash,
 	Example: `  flightline beta-feedback crash com.example.myapp
-  flightline beta-feedback crash com.example.myapp --build 42
-  flightline beta-feedback crash com.example.myapp --output json | jq '.submissions[].attributes.deviceModel'`,
+	  flightline beta-feedback crash com.example.myapp --build 42
+	  flightline beta-feedback crash com.example.myapp --build 2 --version 1.1 --platform IOS
+	  flightline beta-feedback crash com.example.myapp --output json | jq '.submissions[].attributes.deviceModel'`,
 }
 
 var betaFeedbackScreenshotCmd = &cobra.Command{
@@ -119,7 +120,8 @@ var betaFeedbackScreenshotCmd = &cobra.Command{
 	Args:         cobra.ExactArgs(1),
 	RunE:         runBetaFeedbackScreenshot,
 	Example: `  flightline beta-feedback screenshot com.example.myapp
-  flightline beta-feedback screenshot com.example.myapp --build 42 --output json`,
+	  flightline beta-feedback screenshot com.example.myapp --build 2 --version 1.1 --platform IOS
+	  flightline beta-feedback screenshot com.example.myapp --build 42 --output json`,
 }
 
 var betaFeedbackDownloadCmd = &cobra.Command{
@@ -135,9 +137,13 @@ var betaFeedbackDownloadCmd = &cobra.Command{
 
 var (
 	betaFeedbackCrashBuild      string
+	betaFeedbackCrashVersion    string
+	betaFeedbackCrashPlatform   string
 	betaFeedbackCrashSince      string
 	betaFeedbackCrashLimit      int
 	betaFeedbackScreenshotBuild string
+	betaFeedbackScreenshotVer   string
+	betaFeedbackScreenshotPlat  string
 	betaFeedbackScreenshotSince string
 	betaFeedbackScreenshotLimit int
 	betaFeedbackDownloadOut     string
@@ -146,10 +152,14 @@ var (
 
 func init() {
 	betaFeedbackCrashCmd.Flags().StringVar(&betaFeedbackCrashBuild, "build", "", "filter by build number (CFBundleVersion, e.g. 42)")
+	betaFeedbackCrashCmd.Flags().StringVar(&betaFeedbackCrashVersion, "version", "", "App Store version/train used to disambiguate duplicate build numbers")
+	betaFeedbackCrashCmd.Flags().StringVar(&betaFeedbackCrashPlatform, "platform", "IOS", "platform used to disambiguate duplicate build numbers")
 	betaFeedbackCrashCmd.Flags().StringVar(&betaFeedbackCrashSince, "since", "", "only submissions newer than this duration (e.g. 30d) or ISO date (2026-04-01)")
 	betaFeedbackCrashCmd.Flags().IntVar(&betaFeedbackCrashLimit, "limit", 0, "max submissions to emit (0 = no cap)")
 
 	betaFeedbackScreenshotCmd.Flags().StringVar(&betaFeedbackScreenshotBuild, "build", "", "filter by build number (CFBundleVersion, e.g. 42)")
+	betaFeedbackScreenshotCmd.Flags().StringVar(&betaFeedbackScreenshotVer, "version", "", "App Store version/train used to disambiguate duplicate build numbers")
+	betaFeedbackScreenshotCmd.Flags().StringVar(&betaFeedbackScreenshotPlat, "platform", "IOS", "platform used to disambiguate duplicate build numbers")
 	betaFeedbackScreenshotCmd.Flags().StringVar(&betaFeedbackScreenshotSince, "since", "", "only submissions newer than this duration (e.g. 30d) or ISO date (2026-04-01)")
 	betaFeedbackScreenshotCmd.Flags().IntVar(&betaFeedbackScreenshotLimit, "limit", 0, "max submissions to emit (0 = no cap)")
 
@@ -175,7 +185,10 @@ func runBetaFeedbackCrash(cmd *cobra.Command, args []string) error {
 
 	q := url.Values{"limit": {"200"}}
 	if b := strings.TrimSpace(betaFeedbackCrashBuild); b != "" {
-		buildID, err := resolveBuildID(cmd.Context(), c, appID, bundleID, b)
+		buildID, err := resolveBuildIDWithOptions(cmd.Context(), c, appID, bundleID, b, buildLookupOptions{
+			ReleaseVersion: betaFeedbackCrashVersion,
+			Platform:       betaFeedbackCrashPlatform,
+		})
 		if err != nil {
 			return fmt.Errorf("beta-feedback: %w", err)
 		}
@@ -214,7 +227,10 @@ func runBetaFeedbackScreenshot(cmd *cobra.Command, args []string) error {
 
 	q := url.Values{"limit": {"200"}}
 	if b := strings.TrimSpace(betaFeedbackScreenshotBuild); b != "" {
-		buildID, err := resolveBuildID(cmd.Context(), c, appID, bundleID, b)
+		buildID, err := resolveBuildIDWithOptions(cmd.Context(), c, appID, bundleID, b, buildLookupOptions{
+			ReleaseVersion: betaFeedbackScreenshotVer,
+			Platform:       betaFeedbackScreenshotPlat,
+		})
 		if err != nil {
 			return fmt.Errorf("beta-feedback: %w", err)
 		}

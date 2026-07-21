@@ -88,7 +88,8 @@ func (reviewDetailsCompletenessRule) iapInOpenSubmission(ctx CheckContext, appID
 		return false
 	}
 	for _, ref := range refs {
-		if ref.Type == "inAppPurchaseV2" || ref.Type == "inAppPurchase" {
+		if ref.Type == "inAppPurchaseV2" || ref.Type == "inAppPurchase" ||
+			ref.Type == "inAppPurchases" || ref.Type == "inAppPurchaseVersions" {
 			return true
 		}
 	}

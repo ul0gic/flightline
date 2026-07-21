@@ -298,7 +298,7 @@ func TestBuildLinkage_NullData(t *testing.T) {
 // TestBuilds_LookupBuild_Found exercises the build idempotency probe.
 func TestBuilds_LookupBuild_Found(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
-		"GET /v1/apps/1234567890/builds": {File: "builds_lookup_byVersion"},
+		"GET /v1/builds": {File: "builds_lookup_byVersion"},
 	})
 	c := fixtureASCClient(t, srv)
 	got, err := lookupBuild(context.Background(), c, "1234567890", "42")
@@ -312,7 +312,7 @@ func TestBuilds_LookupBuild_Found(t *testing.T) {
 
 func TestBuilds_LookupBuild_NotFound(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
-		"GET /v1/apps/1234567890/builds": {File: "builds_lookup_empty"},
+		"GET /v1/builds": {File: "builds_lookup_empty"},
 	})
 	c := fixtureASCClient(t, srv)
 	got, err := lookupBuild(context.Background(), c, "1234567890", "999")
@@ -379,7 +379,7 @@ func TestBuilds_AttachIdempotency_SameBuild(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
 		"GET /v1/apps/1234567890/appStoreVersions": {File: "versions_lookup_existing"},
-		"GET /v1/apps/1234567890/builds":           {File: "builds_lookup_byVersion"},
+		"GET /v1/builds": {File: "builds_lookup_byVersion"},
 		"GET /v1/appStoreVersions/8000000001/relationships/build": {
 			File: "builds_attach_linkage_already",
 		},
@@ -411,7 +411,7 @@ func TestBuilds_AttachIdempotency_DifferentBuild(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
 		"GET /v1/apps/1234567890/appStoreVersions": {File: "versions_lookup_existing"},
-		"GET /v1/apps/1234567890/builds":           {File: "builds_lookup_byVersion"},
+		"GET /v1/builds": {File: "builds_lookup_byVersion"},
 		"GET /v1/appStoreVersions/8000000001/relationships/build": {
 			File: "builds_attach_linkage_other",
 		},

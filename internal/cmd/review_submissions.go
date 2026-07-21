@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/url"
 	"strings"
@@ -180,13 +179,13 @@ func listReviewSubmissionItems(ctx context.Context, c *asc.Client, submissionID 
 			return nil, err
 		}
 		for _, r := range page.Data {
-			refType, refID := extractItemReference(r.Relationships)
+			ref := asc.ResolveReviewSubmissionItemReference(r.ID, submissionID, r.Relationships)
 			out = append(out, ReviewSubmissionItemView{
 				ID:            r.ID,
 				Type:          r.Type,
 				Attributes:    r.Attributes,
-				ReferenceType: refType,
-				ReferenceID:   refID,
+				ReferenceType: ref.Type,
+				ReferenceID:   ref.ID,
 			})
 		}
 	}
@@ -196,20 +195,9 @@ func listReviewSubmissionItems(ctx context.Context, c *asc.Client, submissionID 
 // extractItemReference returns the item's single non-null to-one reference:
 // the resource it requests review for (appStoreVersion, appEvent, etc.).
 func extractItemReference(rels map[string]asc.Relationship) (refType, refID string) {
-	for _, rel := range rels {
-		if len(rel.Data) == 0 || string(rel.Data) == "null" {
-			continue
-		}
-		var ref struct {
-			Type string `json:"type"`
-			ID   string `json:"id"`
-		}
-		if err := json.Unmarshal(rel.Data, &ref); err != nil {
-			continue
-		}
-		if ref.Type != "" || ref.ID != "" {
-			return ref.Type, ref.ID
-		}
+	ref := asc.ResolveReviewSubmissionItemReference("", "", rels)
+	if ref.Opaque {
+		return "", ""
 	}
-	return "", ""
+	return ref.Type, ref.ID
 }

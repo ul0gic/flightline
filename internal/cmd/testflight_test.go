@@ -219,12 +219,12 @@ func TestTestflight_FixtureReplay_GroupsList(t *testing.T) {
 	}
 }
 
-// TestTestflight_FixtureReplay_TestersListAppScoped uses the app-scoped
-// /v1/apps/{id}/betaTesters path (no --group filter).
+// TestTestflight_FixtureReplay_TestersListAppScoped uses the top-level
+// betaTesters collection because Apple's app relationship forbids GET_RELATED.
 func TestTestflight_FixtureReplay_TestersListAppScoped(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
-		"GET /v1/apps":                        {File: "apps_get_byBundleId"},
-		"GET /v1/apps/1234567890/betaTesters": {File: "testflight_testers_list"},
+		"GET /v1/apps":        {File: "apps_get_byBundleId"},
+		"GET /v1/betaTesters": {File: "testflight_testers_list"},
 	})
 	c := fixtureASCClient(t, srv)
 	ctx := context.Background()
@@ -233,7 +233,7 @@ func TestTestflight_FixtureReplay_TestersListAppScoped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveAppID: %v", err)
 	}
-	views, err := collectBetaTesters(ctx, c, "/v1/apps/"+appID+"/betaTesters", url.Values{"limit": {"200"}}, 0)
+	views, err := collectBetaTesters(ctx, c, "/v1/betaTesters", url.Values{"limit": {"200"}, "filter[apps]": {appID}}, 0)
 	if err != nil {
 		t.Fatalf("collectBetaTesters: %v", err)
 	}

@@ -193,7 +193,7 @@ func TestIdempotency_BuildsAttach_SecondPassNoPATCH(t *testing.T) {
 	srv := startCountingFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
 		"GET /v1/apps/1234567890/appStoreVersions": {File: "versions_lookup_existing"},
-		"GET /v1/apps/1234567890/builds":           {File: "builds_lookup_byVersion"},
+		"GET /v1/builds": {File: "builds_lookup_byVersion"},
 		"GET /v1/appStoreVersions/8000000001/relationships/build": {
 			File: "builds_attach_linkage_already",
 		},

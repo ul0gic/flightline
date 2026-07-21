@@ -20,8 +20,10 @@ type SubscriptionReport struct {
 	ReportType   string               `json:"reportType"`
 	Frequency    string               `json:"frequency"`
 	ReportDates  []string             `json:"reportDates"`
+	Unavailable  []string             `json:"unavailableDates"`
 	RowCount     int                  `json:"rowCount"`
 	Rows         []asc.SalesReportRow `json:"rows"`
+	Note         string               `json:"note,omitempty"`
 }
 
 func (r SubscriptionReport) TableRows() (headers []string, rows [][]string) {
@@ -64,8 +66,8 @@ Frequency is inferred from --range:
   P1Y                    → YEARLY  (single call when --frequency=YEARLY)
 
 Vendor number is read from APP_STORE_CONNECT_VENDOR_NUMBER. The bundleId
-argument filters typed output by parent identifier (sales reports are
-vendor-wide on the wire).`,
+argument resolves the app and filters typed output by its bundle ID, SKU,
+and Apple ID (sales reports are vendor-wide on the wire).`,
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runSubscriptionsReports,
@@ -122,17 +124,25 @@ func runSubscriptionsReports(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	app, err := resolveApp(cmd.Context(), c, bundleID)
+	if err != nil {
+		return err
+	}
 
 	mode := outputMode()
 	rawMode := mode == "tsv"
 
-	rows, raw, err := fetchSalesAcrossDates(cmd.Context(), c, salesFetchOpts{
-		vendor:      vendor,
-		reportType:  reportType,
-		reportSub:   asc.SalesReportSubTypeSummary,
-		frequency:   plan.frequency,
-		dates:       plan.dates,
-		bundleID:    bundleID,
+	fetched, err := fetchSalesAcrossDates(cmd.Context(), c, salesFetchOpts{
+		vendor:     vendor,
+		reportType: reportType,
+		reportSub:  asc.SalesReportSubTypeSummary,
+		frequency:  plan.frequency,
+		dates:      plan.dates,
+		app: salesAppIdentity{
+			BundleID: app.Attributes.BundleID,
+			SKU:      app.Attributes.SKU,
+			AppleID:  app.ID,
+		},
 		captureRaw:  rawMode,
 		captureRows: !rawMode,
 	})
@@ -141,20 +151,24 @@ func runSubscriptionsReports(cmd *cobra.Command, args []string) error {
 	}
 
 	if rawMode {
-		if _, err := os.Stdout.Write(raw); err != nil {
+		if _, err := os.Stdout.Write(fetched.raw); err != nil {
 			return fmt.Errorf("subscriptions reports: write tsv: %w", err)
 		}
 		return nil
 	}
 
 	report := SubscriptionReport{
-		BundleID:     bundleID,
+		BundleID:     app.Attributes.BundleID,
 		VendorNumber: vendor,
 		ReportType:   string(reportType),
 		Frequency:    string(plan.frequency),
 		ReportDates:  plan.dates,
-		RowCount:     len(rows),
-		Rows:         rows,
+		Unavailable:  fetched.unavailableDates,
+		RowCount:     len(fetched.rows),
+		Rows:         fetched.rows,
+	}
+	if len(fetched.unavailableDates) > 0 {
+		report.Note = fmt.Sprintf("Apple had no report for %d requested date(s); available dates were still processed", len(fetched.unavailableDates))
 	}
 	return Render(report, mode)
 }
@@ -181,9 +195,9 @@ func buildSubscriptionPlan(now time.Time) (salesPlan, error) {
 		if _, err := time.Parse("2006-01", month); err != nil {
 			return salesPlan{}, fmt.Errorf("subscriptions reports: --month must be YYYY-MM, got %q", subscriptionsReportsMonth)
 		}
-		freq := asc.SalesFrequencyMonthly
-		if override := strings.TrimSpace(subscriptionsReportsFrequency); override != "" {
-			freq = asc.SalesFrequency(strings.ToUpper(override))
+		freq, err := reportFrequencyFor(subscriptionsReportsFrequency, asc.SalesFrequencyMonthly, "subscriptions reports")
+		if err != nil {
+			return salesPlan{}, err
 		}
 		return salesPlan{frequency: freq, dates: []string{month}}, nil
 	default:
@@ -226,9 +240,9 @@ func planDailySubscriptionWindow(now time.Time, n int) (salesPlan, error) {
 	if n <= 0 {
 		return salesPlan{}, errors.New("subscriptions reports: range produced 0 days")
 	}
-	freq := asc.SalesFrequencyDaily
-	if override := strings.TrimSpace(subscriptionsReportsFrequency); override != "" {
-		freq = asc.SalesFrequency(strings.ToUpper(override))
+	freq, err := reportFrequencyFor(subscriptionsReportsFrequency, asc.SalesFrequencyDaily, "subscriptions reports")
+	if err != nil {
+		return salesPlan{}, err
 	}
 	dates := make([]string, 0, n)
 	end := now.AddDate(0, 0, -1)

@@ -219,25 +219,25 @@ func TestSubscriptionsReports_FetchesViaSalesEndpoint(t *testing.T) {
 	})
 	c := fixtureASCClient(t, srv)
 
-	rows, _, err := fetchSalesAcrossDates(context.Background(), c, salesFetchOpts{
+	got, err := fetchSalesAcrossDates(context.Background(), c, salesFetchOpts{
 		vendor:      "99999999",
 		reportType:  asc.SalesReportTypeSubscription,
 		reportSub:   asc.SalesReportSubTypeSummary,
 		frequency:   asc.SalesFrequencyDaily,
 		dates:       []string{"2026-05-01"},
-		bundleID:    "com.example.testapp",
+		app:         salesAppIdentity{BundleID: "com.example.testapp", SKU: "com.example.testapp", AppleID: "1234567890"},
 		captureRows: true,
 	})
 	if err != nil {
 		t.Fatalf("fetch: %v", err)
 	}
-	if len(rows) < 3 {
-		t.Fatalf("rows = %d, want >= 3 from subscription_summary fixture", len(rows))
+	if len(got.rows) < 3 {
+		t.Fatalf("rows = %d, want >= 3 from subscription_summary fixture", len(got.rows))
 	}
-	if rows[0].SKU != "com.example.testapp.subscription.monthly" {
-		t.Errorf("rows[0].SKU = %q", rows[0].SKU)
+	if got.rows[0].SKU != "com.example.testapp.subscription.monthly" {
+		t.Errorf("rows[0].SKU = %q", got.rows[0].SKU)
 	}
-	if rows[0].Units != 120 {
-		t.Errorf("rows[0].Units = %d, want 120", rows[0].Units)
+	if got.rows[0].Units != 120 {
+		t.Errorf("rows[0].Units = %d, want 120", got.rows[0].Units)
 	}
 }

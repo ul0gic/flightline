@@ -17,7 +17,7 @@ type ExportComplianceView struct {
 	BundleID      string                      `json:"bundleId"`
 	VersionString string                      `json:"versionString"`
 	Build         asc.BuildEncryptionView     `json:"build"`
-	Declarations  []EncryptionDeclarationView `json:"declarations,omitempty"`
+	Declarations  []EncryptionDeclarationView `json:"declarations"`
 }
 
 // EncryptionDeclarationView is one row in the declarations list.
@@ -184,13 +184,13 @@ func fetchVersionBuildEncryption(ctx context.Context, c *asc.Client, versionID s
 	}, nil
 }
 
-// collectAppEncryptionDeclarations walks the app's encryption-declaration
-// resources. Most apps have none; the per-build boolean usually suffices.
+// collectAppEncryptionDeclarations walks the top-level collection. Apple's
+// app relationship is not readable even though older schema snapshots listed it.
 func collectAppEncryptionDeclarations(ctx context.Context, c *asc.Client, appID string) ([]EncryptionDeclarationView, error) {
 	out := make([]EncryptionDeclarationView, 0, 4)
-	q := url.Values{"limit": {"50"}}
+	q := url.Values{"filter[app]": {appID}, "limit": {"50"}}
 	for page, err := range asc.Pages[asc.AppEncryptionDeclarationAttributes](
-		ctx, c, "/v1/apps/"+appID+"/appEncryptionDeclarations", q,
+		ctx, c, "/v1/appEncryptionDeclarations", q,
 	) {
 		if err != nil {
 			return nil, err

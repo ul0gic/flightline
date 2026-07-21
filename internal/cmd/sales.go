@@ -22,9 +22,11 @@ type SalesReport struct {
 	ReportType   string               `json:"reportType"`
 	Frequency    string               `json:"frequency"`
 	ReportDates  []string             `json:"reportDates"`
+	Unavailable  []string             `json:"unavailableDates"`
 	RowCount     int                  `json:"rowCount"`
 	Rows         []asc.SalesReportRow `json:"rows"`
-	Summary      []SalesDailySummary  `json:"summary,omitempty"`
+	Summary      []SalesDailySummary  `json:"summary"`
+	Note         string               `json:"note,omitempty"`
 }
 
 // SalesDailySummary collapses the per-row sales numbers into a date+platform
@@ -61,12 +63,13 @@ var salesCmd = &cobra.Command{
 	Long: `sales pulls Sales and Trends reports from /v1/salesReports.
 
 Reports are vendor-wide: Apple does not filter by app on the wire. The
-bundleId argument scopes the typed table/JSON output by parent identifier
-so a single-vendor multi-app account stays focused. Use --output tsv to
+bundleId argument resolves the app and scopes typed output by bundle ID,
+configured SKU, and Apple ID. Use --output tsv to
 stream Apple's raw (gunzipped) wire format unfiltered for downstream tools.
 
 Frequency is inferred from the date flag (--days → DAILY, --week → WEEKLY,
---month → MONTHLY, --year → YEARLY) and can be overridden with --frequency.
+--month → MONTHLY, --year → YEARLY). --frequency may be supplied as an
+explicit assertion but must match the selected date shape.
 Reports are fetched per-day for daily windows so a 30-day pull = 30 API
 calls; budget against Apple's 500 req/hr cap accordingly.
 
@@ -122,7 +125,7 @@ func runSales(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	plan, err := buildSalesPlan(time.Now().UTC())
+	plan, err := buildSalesPlan(time.Now().UTC(), cmd.Flags().Changed("days"))
 	if err != nil {
 		return err
 	}
@@ -131,17 +134,25 @@ func runSales(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	app, err := resolveApp(cmd.Context(), c, bundleID)
+	if err != nil {
+		return err
+	}
 
 	mode := outputMode()
 	rawMode := mode == "tsv"
 
-	rows, raw, err := fetchSalesAcrossDates(cmd.Context(), c, salesFetchOpts{
-		vendor:      vendor,
-		reportType:  asc.SalesReportType(strings.TrimSpace(salesReportType)),
-		reportSub:   asc.SalesReportSubType(strings.TrimSpace(salesReportSubTyp)),
-		frequency:   plan.frequency,
-		dates:       plan.dates,
-		bundleID:    bundleID,
+	fetched, err := fetchSalesAcrossDates(cmd.Context(), c, salesFetchOpts{
+		vendor:     vendor,
+		reportType: asc.SalesReportType(strings.TrimSpace(salesReportType)),
+		reportSub:  asc.SalesReportSubType(strings.TrimSpace(salesReportSubTyp)),
+		frequency:  plan.frequency,
+		dates:      plan.dates,
+		app: salesAppIdentity{
+			BundleID: app.Attributes.BundleID,
+			SKU:      app.Attributes.SKU,
+			AppleID:  app.ID,
+		},
 		captureRaw:  rawMode,
 		captureRows: !rawMode,
 	})
@@ -150,23 +161,33 @@ func runSales(cmd *cobra.Command, args []string) error {
 	}
 
 	if rawMode {
-		if _, err := os.Stdout.Write(raw); err != nil {
+		if _, err := os.Stdout.Write(fetched.raw); err != nil {
 			return fmt.Errorf("sales: write tsv: %w", err)
 		}
 		return nil
 	}
 
 	report := SalesReport{
-		BundleID:     bundleID,
+		BundleID:     app.Attributes.BundleID,
 		VendorNumber: vendor,
 		ReportType:   salesReportType,
 		Frequency:    string(plan.frequency),
 		ReportDates:  plan.dates,
-		RowCount:     len(rows),
-		Rows:         rows,
-		Summary:      summarizeSalesByDate(rows),
+		Unavailable:  fetched.unavailableDates,
+		RowCount:     len(fetched.rows),
+		Rows:         fetched.rows,
+		Summary:      summarizeSalesByDate(fetched.rows),
+	}
+	if len(fetched.unavailableDates) > 0 {
+		report.Note = fmt.Sprintf("Apple had no report for %d requested date(s); available dates were still processed", len(fetched.unavailableDates))
 	}
 	return Render(report, mode)
+}
+
+type salesAppIdentity struct {
+	BundleID string
+	SKU      string
+	AppleID  string
 }
 
 type salesFetchOpts struct {
@@ -175,18 +196,25 @@ type salesFetchOpts struct {
 	reportSub   asc.SalesReportSubType
 	frequency   asc.SalesFrequency
 	dates       []string
-	bundleID    string
+	app         salesAppIdentity
 	captureRaw  bool
 	captureRows bool
 }
 
+type salesFetchResult struct {
+	rows             []asc.SalesReportRow
+	raw              []byte
+	unavailableDates []string
+}
+
 // fetchSalesAcrossDates makes one /v1/salesReports call per date: Apple returns one date per call,
 // so a 30-day window is 30 calls. Returns typed rows or raw TSV per captureRaw.
-func fetchSalesAcrossDates(ctx context.Context, c *asc.Client, opts salesFetchOpts) ([]asc.SalesReportRow, []byte, error) {
-	var (
-		rows []asc.SalesReportRow
-		raw  []byte
-	)
+func fetchSalesAcrossDates(ctx context.Context, c *asc.Client, opts salesFetchOpts) (salesFetchResult, error) {
+	result := salesFetchResult{
+		rows:             []asc.SalesReportRow{},
+		raw:              []byte{},
+		unavailableDates: []string{},
+	}
 	for _, date := range opts.dates {
 		body, err := c.FetchSalesReport(ctx, asc.SalesReportParams{
 			VendorNumber:  opts.vendor,
@@ -196,10 +224,14 @@ func fetchSalesAcrossDates(ctx context.Context, c *asc.Client, opts salesFetchOp
 			ReportDate:    date,
 		})
 		if err != nil {
-			return nil, nil, fmt.Errorf("sales: fetch %s: %w", date, err)
+			if isExpectedNoReport(err) {
+				result.unavailableDates = append(result.unavailableDates, date)
+				continue
+			}
+			return salesFetchResult{}, fmt.Errorf("sales: fetch %s: %w", date, err)
 		}
 		if opts.captureRaw {
-			raw = append(raw, body...)
+			result.raw = append(result.raw, body...)
 			continue
 		}
 		if !opts.captureRows {
@@ -207,30 +239,55 @@ func fetchSalesAcrossDates(ctx context.Context, c *asc.Client, opts salesFetchOp
 		}
 		decoded, err := asc.DecodeSalesTSV(body)
 		if err != nil {
-			return nil, nil, fmt.Errorf("sales: decode %s: %w", date, err)
+			return salesFetchResult{}, fmt.Errorf("sales: decode %s: %w", date, err)
 		}
 		for i := range decoded {
-			if salesRowMatchesBundle(&decoded[i], opts.bundleID) {
-				rows = append(rows, decoded[i])
+			if salesRowMatchesApp(&decoded[i], opts.app) {
+				result.rows = append(result.rows, decoded[i])
 			}
 		}
 	}
-	return rows, raw, nil
+	return result, nil
 }
 
-// salesRowMatchesBundle matches a row to an app, falling back to SKU-prefix when the row has no parent.
+// salesRowMatchesBundle is retained for focused compatibility tests. Live
+// commands use salesRowMatchesApp with the resolved app identity.
 func salesRowMatchesBundle(r *asc.SalesReportRow, bundleID string) bool {
-	if bundleID == "" {
+	return salesRowMatchesApp(r, salesAppIdentity{BundleID: bundleID, SKU: bundleID})
+}
+
+func salesRowMatchesApp(r *asc.SalesReportRow, app salesAppIdentity) bool {
+	if app.BundleID == "" && app.SKU == "" && app.AppleID == "" {
 		return true
 	}
-	if r.ParentIdentifier == bundleID {
-		return true
+	for _, identifier := range []string{app.BundleID, app.SKU, app.AppleID} {
+		if identifier == "" {
+			continue
+		}
+		if r.AppleIdentifier == identifier || r.ParentIdentifier == identifier || r.SKU == identifier {
+			return true
+		}
 	}
-	if r.ParentIdentifier == "" && strings.HasPrefix(r.SKU, bundleID) {
-		return true
+	for _, prefix := range []string{app.BundleID, app.SKU} {
+		if prefix != "" && strings.HasPrefix(r.SKU, prefix+".") {
+			return true
+		}
 	}
-	if r.SKU == bundleID {
-		return true
+	return false
+}
+
+func isExpectedNoReport(err error) bool {
+	var apiErr *asc.APIError
+	if !errors.As(err, &apiErr) || apiErr.HTTPStatus != 404 {
+		return false
+	}
+	for _, item := range apiErr.Errors {
+		text := strings.ToLower(item.Title + " " + item.Detail)
+		if strings.Contains(text, "there were no sales for the date specified") ||
+			strings.Contains(text, "no report is available for the selected date") ||
+			strings.Contains(text, "report is not available yet") {
+			return true
+		}
 	}
 	return false
 }
@@ -274,8 +331,9 @@ func requireVendorNumber() (string, error) {
 
 // buildSalesPlan turns flag inputs into a date list + frequency.
 // `now` is injected so tests can pin a "today" reference.
-func buildSalesPlan(now time.Time) (salesPlan, error) {
-	chosen, err := pickSalesDateFlag()
+func buildSalesPlan(now time.Time, daysExplicit ...bool) (salesPlan, error) {
+	explicitDays := len(daysExplicit) > 0 && daysExplicit[0]
+	chosen, err := pickSalesDateFlag(explicitDays)
 	if err != nil {
 		return salesPlan{}, err
 	}
@@ -296,10 +354,10 @@ func buildSalesPlan(now time.Time) (salesPlan, error) {
 
 // pickSalesDateFlag enforces mutual exclusivity across --days/--month/--week/--year.
 // Returns the name of the chosen flag ("" if none).
-func pickSalesDateFlag() (string, error) {
+func pickSalesDateFlag(daysExplicit bool) (string, error) {
 	count := 0
 	chosen := ""
-	if salesDays > 0 {
+	if daysExplicit || salesDays > 0 {
 		count++
 		chosen = "days"
 	}
@@ -326,9 +384,9 @@ func planDailyWindow(now time.Time, n int) (salesPlan, error) {
 	if n <= 0 {
 		return salesPlan{}, fmt.Errorf("sales: --days must be > 0, got %d", n)
 	}
-	freq := asc.SalesFrequencyDaily
-	if override := strings.TrimSpace(salesFrequency); override != "" {
-		freq = asc.SalesFrequency(strings.ToUpper(override))
+	freq, err := salesFrequencyFor(asc.SalesFrequencyDaily)
+	if err != nil {
+		return salesPlan{}, err
 	}
 	dates := make([]string, 0, n)
 	end := now.AddDate(0, 0, -1)
@@ -345,9 +403,9 @@ func planMonth() (salesPlan, error) {
 	if _, err := time.Parse("2006-01", m); err != nil {
 		return salesPlan{}, fmt.Errorf("sales: --month must be YYYY-MM, got %q", salesMonth)
 	}
-	freq := asc.SalesFrequencyMonthly
-	if override := strings.TrimSpace(salesFrequency); override != "" {
-		freq = asc.SalesFrequency(strings.ToUpper(override))
+	freq, err := salesFrequencyFor(asc.SalesFrequencyMonthly)
+	if err != nil {
+		return salesPlan{}, err
 	}
 	return salesPlan{frequency: freq, dates: []string{m}}, nil
 }
@@ -359,11 +417,13 @@ func planWeek() (salesPlan, error) {
 	if err != nil {
 		return salesPlan{}, fmt.Errorf("sales: --week must be YYYY-MM-DD, got %q", salesWeek)
 	}
-	freq := asc.SalesFrequencyWeekly
-	if override := strings.TrimSpace(salesFrequency); override != "" {
-		freq = asc.SalesFrequency(strings.ToUpper(override))
+	freq, err := salesFrequencyFor(asc.SalesFrequencyWeekly)
+	if err != nil {
+		return salesPlan{}, err
 	}
-	return salesPlan{frequency: freq, dates: []string{t.Format("2006-01-02")}}, nil
+	daysToSunday := (7 - int(t.Weekday())) % 7
+	endingSunday := t.AddDate(0, 0, daysToSunday)
+	return salesPlan{frequency: freq, dates: []string{endingSunday.Format("2006-01-02")}}, nil
 }
 
 // planYear validates --year YYYY and returns a single-date plan.
@@ -372,9 +432,29 @@ func planYear() (salesPlan, error) {
 	if _, err := time.Parse("2006", y); err != nil {
 		return salesPlan{}, fmt.Errorf("sales: --year must be YYYY, got %q", salesYear)
 	}
-	freq := asc.SalesFrequencyYearly
-	if override := strings.TrimSpace(salesFrequency); override != "" {
-		freq = asc.SalesFrequency(strings.ToUpper(override))
+	freq, err := salesFrequencyFor(asc.SalesFrequencyYearly)
+	if err != nil {
+		return salesPlan{}, err
 	}
 	return salesPlan{frequency: freq, dates: []string{y}}, nil
+}
+
+func salesFrequencyFor(inferred asc.SalesFrequency) (asc.SalesFrequency, error) {
+	return reportFrequencyFor(salesFrequency, inferred, "sales")
+}
+
+func reportFrequencyFor(raw string, inferred asc.SalesFrequency, command string) (asc.SalesFrequency, error) {
+	override := strings.ToUpper(strings.TrimSpace(raw))
+	if override == "" {
+		return inferred, nil
+	}
+	switch asc.SalesFrequency(override) {
+	case asc.SalesFrequencyDaily, asc.SalesFrequencyWeekly, asc.SalesFrequencyMonthly, asc.SalesFrequencyYearly:
+	default:
+		return "", fmt.Errorf("%s: --frequency must be DAILY, WEEKLY, MONTHLY, or YEARLY; got %q", command, raw)
+	}
+	if asc.SalesFrequency(override) != inferred {
+		return "", fmt.Errorf("%s: --frequency %s conflicts with the selected %s date shape", command, override, inferred)
+	}
+	return inferred, nil
 }

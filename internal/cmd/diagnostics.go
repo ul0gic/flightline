@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/url"
 	"sort"
 	"strconv"
@@ -47,7 +46,7 @@ func (l DiagnosticSignatureList) TableRows() (headers []string, rows [][]string)
 type DiagnosticGetView struct {
 	SignatureID string                      `json:"signatureId"`
 	Version     string                      `json:"version,omitempty"`
-	ProductData []asc.DiagnosticProductData `json:"productData,omitempty"`
+	ProductData []asc.DiagnosticProductData `json:"productData"`
 	Note        string                      `json:"note,omitempty"`
 }
 
@@ -125,7 +124,8 @@ var diagnosticsListCmd = &cobra.Command{
 	Args:         cobra.ExactArgs(1),
 	RunE:         runDiagnosticsList,
 	Example: `  flightline diagnostics list com.example.myapp --build 42
-  flightline diagnostics list com.example.myapp --build 42 --type HANGS
+	  flightline diagnostics list com.example.myapp --build 2 --version 1.1 --platform IOS
+	  flightline diagnostics list com.example.myapp --build 42 --type HANGS
   flightline diagnostics list com.example.myapp --build 42 --output json | jq '.signatures[].attributes.weight'`,
 }
 
@@ -141,12 +141,16 @@ var diagnosticsGetCmd = &cobra.Command{
 
 var (
 	diagnosticsListBuild string
+	diagnosticsListVer   string
+	diagnosticsListPlat  string
 	diagnosticsListType  string
 	diagnosticsListLimit int
 )
 
 func init() {
 	diagnosticsListCmd.Flags().StringVar(&diagnosticsListBuild, "build", "", "build number to inspect (CFBundleVersion, e.g. 42)")
+	diagnosticsListCmd.Flags().StringVar(&diagnosticsListVer, "version", "", "App Store version/train used to disambiguate duplicate build numbers")
+	diagnosticsListCmd.Flags().StringVar(&diagnosticsListPlat, "platform", "IOS", "platform used to disambiguate duplicate build numbers")
 	diagnosticsListCmd.Flags().StringVar(&diagnosticsListType, "type", "", "filter by diagnostic type: DISK_WRITES | HANGS | LAUNCHES")
 	diagnosticsListCmd.Flags().IntVar(&diagnosticsListLimit, "limit", 0, "max signatures to emit (0 = no cap)")
 	_ = diagnosticsListCmd.MarkFlagRequired("build")
@@ -172,20 +176,13 @@ func runDiagnosticsList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	bq := url.Values{
-		"filter[version]": {build},
-		"limit":           {"1"},
-	}
-	bpage, err := asc.Get[asc.Collection[asc.BuildAttributes]](
-		cmd.Context(), c, "/v1/apps/"+appID+"/builds", bq,
-	)
+	buildID, err := resolveBuildIDWithOptions(cmd.Context(), c, appID, bundleID, build, buildLookupOptions{
+		ReleaseVersion: diagnosticsListVer,
+		Platform:       diagnosticsListPlat,
+	})
 	if err != nil {
 		return err
 	}
-	if len(bpage.Data) == 0 {
-		return fmt.Errorf("diagnostics: no build %q found for %q", build, bundleID)
-	}
-	buildID := bpage.Data[0].ID
 
 	q := url.Values{"limit": {"200"}}
 	if dt := strings.TrimSpace(diagnosticsListType); dt != "" {
@@ -235,6 +232,9 @@ func runDiagnosticsGet(cmd *cobra.Command, args []string) error {
 		SignatureID: signatureID,
 		Version:     logs.Version,
 		ProductData: logs.ProductData,
+	}
+	if view.ProductData == nil {
+		view.ProductData = []asc.DiagnosticProductData{}
 	}
 	if len(logs.ProductData) == 0 {
 		view.Note = "no diagnostic logs available for this signature (Apple may not have processed the logs yet, or the signature has no captured stack traces)"

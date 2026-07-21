@@ -175,13 +175,14 @@ func composeRejectionReport(ctx context.Context, c *asc.Client, bundleID, versio
 		ReleaseType:     versionView.Attributes.ReleaseType,
 	}
 
-	if buildID := relationshipID(versionView.Relationships, "build"); buildID != "" {
-		report.Version.BuildID = buildID
-		// Build-fetch failure is non-fatal: the build ID alone is enough signal, so don't break the composite read.
-		if buildAttrs, err := fetchBuild(ctx, c, buildID); err == nil {
-			report.Version.BuildVersion = buildAttrs.Version
-			report.Version.BuildState = buildAttrs.ProcessingState
-		}
+	build, attached, err := fetchRejectionVersionBuild(ctx, c, versionView.ID)
+	if err != nil {
+		return report, err
+	}
+	if attached {
+		report.Version.BuildID = build.ID
+		report.Version.BuildVersion = build.Attributes.Version
+		report.Version.BuildState = build.Attributes.ProcessingState
 	}
 
 	submission, items, err := findSubmissionForVersion(ctx, c, appID, versionView.ID)
@@ -235,12 +236,16 @@ func fetchVersion(ctx context.Context, c *asc.Client, appID, versionStr, platfor
 	return versionFull{Resource: page.Data[0]}, nil
 }
 
-func fetchBuild(ctx context.Context, c *asc.Client, buildID string) (asc.BuildAttributes, error) {
-	resp, err := asc.Get[asc.Single[asc.BuildAttributes]](ctx, c, "/v1/builds/"+buildID, nil)
+func fetchRejectionVersionBuild(ctx context.Context, c *asc.Client, versionID string) (asc.Resource[asc.BuildAttributes], bool, error) {
+	resp, err := asc.Get[asc.Single[asc.BuildAttributes]](ctx, c, "/v1/appStoreVersions/"+versionID+"/build", nil)
 	if err != nil {
-		return asc.BuildAttributes{}, err
+		var apiErr *asc.APIError
+		if errors.As(err, &apiErr) && apiErr.HTTPStatus == 404 {
+			return asc.Resource[asc.BuildAttributes]{}, false, nil
+		}
+		return asc.Resource[asc.BuildAttributes]{}, false, err
 	}
-	return resp.Data.Attributes, nil
+	return resp.Data, true, nil
 }
 
 // Returns (nil, nil, nil) when no submission references the version: a valid not-yet-submitted state.

@@ -207,8 +207,8 @@ func TestRejection_JSONOutputStability(t *testing.T) {
 func TestRejection_FixtureReplay_FullCompose(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
-		"GET /v1/apps/1234567890/appStoreVersions":      {File: "versions_get"},
-		"GET /v1/builds/9000000001":                     {File: "rejection_build_single"},
+		"GET /v1/apps/1234567890/appStoreVersions":      {File: "rejection_version_without_build_relationship"},
+		"GET /v1/appStoreVersions/8000000001/build":     {File: "rejection_build_single"},
 		"GET /v1/reviewSubmissions":                     {File: "review_submissions_list"},
 		"GET /v1/reviewSubmissions/rs-7700000001/items": {File: "review_submissions_items"},
 	})
@@ -254,6 +254,21 @@ func TestRejection_FixtureReplay_FullCompose(t *testing.T) {
 	}
 	if !strings.Contains(report.Note, "resolution-center reviewer text is NOT in the public API") {
 		t.Errorf("note missing required disclaimer: %q", report.Note)
+	}
+}
+
+func TestFetchRejectionVersionBuild_NotAttached(t *testing.T) {
+	srv := startFixtureServer(t, map[string]fixtureRoute{
+		"GET /v1/appStoreVersions/8000000001/build": {File: "iap_get_notFound", Status: 404},
+	})
+	c := fixtureASCClient(t, srv)
+
+	_, attached, err := fetchRejectionVersionBuild(context.Background(), c, "8000000001")
+	if err != nil {
+		t.Fatalf("fetchRejectionVersionBuild: %v", err)
+	}
+	if attached {
+		t.Fatal("attached = true, want false for 404")
 	}
 }
 

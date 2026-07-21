@@ -706,6 +706,61 @@ func TestAnalytics_Status_MissingFileHelpfulError(t *testing.T) {
 	}
 }
 
+func TestAnalytics_RefreshResumesQueuedRequest(t *testing.T) {
+	withCmdStateRoot(t)
+	f := newAnalyticsCmdFixture(t)
+	f.reports = []analyticsCmdReport{
+		{ID: "RPT-1", Name: "App Usage", Category: asc.CategoryAppUsage},
+		{ID: "RPT-2", Name: "Commerce", Category: asc.CategoryCommerce},
+	}
+	state := asc.AsyncState{
+		BundleID:    "com.example.alpha",
+		ReportClass: asc.ReportClassAnalytics,
+		RequestID:   f.requestID,
+		SubmittedAt: time.Date(2026, 7, 20, 15, 42, 0, 0, time.UTC),
+		Status:      "queued",
+		Reports:     []asc.PersistedAnalyticsReport{},
+	}
+	if err := asc.PersistAsyncState(state); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	refreshed, err := refreshAnalyticsState(context.Background(), fixtureASCClient(t, f.srv), state)
+	if err != nil {
+		t.Fatalf("refreshAnalyticsState: %v", err)
+	}
+	if refreshed.Status != "reports_available" || len(refreshed.Reports) != 2 {
+		t.Fatalf("refreshed = %+v", refreshed)
+	}
+	refreshed, err = refreshAnalyticsState(context.Background(), fixtureASCClient(t, f.srv), refreshed)
+	if err != nil {
+		t.Fatalf("second refresh: %v", err)
+	}
+	if len(refreshed.Reports) != 2 {
+		t.Fatalf("second refresh duplicated reports: %+v", refreshed.Reports)
+	}
+	loaded, err := asc.LoadAsyncState("com.example.alpha", asc.ReportClassAnalytics)
+	if err != nil || loaded.Status != "reports_available" || len(loaded.Reports) != 2 {
+		t.Fatalf("persisted refresh = %+v err=%v", loaded, err)
+	}
+}
+
+func TestAnalytics_RequestGuardRequiresForceForActiveState(t *testing.T) {
+	withCmdStateRoot(t)
+	if err := asc.PersistAsyncState(asc.AsyncState{
+		BundleID: "com.example.alpha", ReportClass: asc.ReportClassAnalytics,
+		RequestID: "REQ-ACTIVE", Status: "queued",
+	}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if err := guardAnalyticsRequestReplacement("com.example.alpha", false); err == nil || !strings.Contains(err.Error(), "--force") {
+		t.Fatalf("guard error = %v", err)
+	}
+	if err := guardAnalyticsRequestReplacement("com.example.alpha", true); err != nil {
+		t.Fatalf("forced replacement: %v", err)
+	}
+}
+
 func TestAnalytics_JSONShape_RequestView(t *testing.T) {
 	t.Parallel()
 	v := AnalyticsRequestView{

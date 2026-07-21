@@ -15,8 +15,7 @@ import (
 
 func resetFinanceFlags() {
 	financeMonth = ""
-	financeYear = ""
-	financeRegion = "Z1"
+	financeRegion = ""
 	financeReportType = string(asc.FinanceReportTypeFinancial)
 }
 
@@ -31,7 +30,7 @@ func TestFinance_RegisteredOnRoot(t *testing.T) {
 	if found == nil {
 		t.Fatal("finance not registered on rootCmd")
 	}
-	for _, want := range []string{"month", "year", "region", "report-type"} {
+	for _, want := range []string{"month", "region", "report-type"} {
 		if found.Flag(want) == nil {
 			t.Errorf("finance: missing flag --%s", want)
 		}
@@ -50,31 +49,10 @@ func TestBuildFinanceDate_Month(t *testing.T) {
 	}
 }
 
-func TestBuildFinanceDate_Year(t *testing.T) {
-	resetFinanceFlags()
-	financeYear = "2026"
-	d, freq, err := buildFinanceDate()
-	if err != nil {
-		t.Fatalf("buildFinanceDate: %v", err)
-	}
-	if d != "2026" || freq != "YEARLY" {
-		t.Errorf("got date=%q freq=%q, want 2026 YEARLY", d, freq)
-	}
-}
-
-func TestBuildFinanceDate_RejectsConflict(t *testing.T) {
-	resetFinanceFlags()
-	financeMonth = "2026-04"
-	financeYear = "2026"
-	if _, _, err := buildFinanceDate(); err == nil {
-		t.Fatal("want error for --month + --year")
-	}
-}
-
 func TestBuildFinanceDate_RejectsMissing(t *testing.T) {
 	resetFinanceFlags()
 	if _, _, err := buildFinanceDate(); err == nil {
-		t.Fatal("want error when neither --month nor --year set")
+		t.Fatal("want error when --month is missing")
 	}
 }
 
@@ -84,13 +62,43 @@ func TestBuildFinanceDate_RejectsBadFormats(t *testing.T) {
 		setup func()
 	}{
 		{"month not YYYY-MM", func() { resetFinanceFlags(); financeMonth = "2026" }},
-		{"year not YYYY", func() { resetFinanceFlags(); financeYear = "26" }},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.setup()
 			if _, _, err := buildFinanceDate(); err == nil {
 				t.Fatal("want error")
+			}
+		})
+	}
+}
+
+func TestResolveFinanceScope_DefaultsAndValidation(t *testing.T) {
+	tests := []struct {
+		name       string
+		reportType string
+		region     string
+		wantType   asc.FinanceReportType
+		wantRegion string
+		wantErr    bool
+	}{
+		{"financial defaults ZZ", "FINANCIAL", "", asc.FinanceReportTypeFinancial, "ZZ", false},
+		{"detail defaults Z1", "FINANCE_DETAIL", "", asc.FinanceReportTypeFinanceDetail, "Z1", false},
+		{"financial rejects Z1", "FINANCIAL", "Z1", "", "", true},
+		{"detail rejects country", "FINANCE_DETAIL", "US", "", "", true},
+		{"invalid type", "banana", "", "", "", true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			gotType, gotRegion, err := resolveFinanceScope(tc.reportType, tc.region)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("want error")
+				}
+				return
+			}
+			if err != nil || gotType != tc.wantType || gotRegion != tc.wantRegion {
+				t.Fatalf("got %s/%s err=%v, want %s/%s", gotType, gotRegion, err, tc.wantType, tc.wantRegion)
 			}
 		})
 	}
@@ -153,10 +161,10 @@ func TestFinanceReport_TableRowsAndJSON(t *testing.T) {
 		},
 	}
 	headers, rows := rep.TableRows()
-	if headers[0] != "COUNTRY" {
-		t.Errorf("headers[0] = %q, want COUNTRY", headers[0])
+	if headers[0] != "PERIOD" {
+		t.Errorf("headers[0] = %q, want PERIOD", headers[0])
 	}
-	if len(rows) != 1 || rows[0][0] != "US" {
+	if len(rows) != 1 || rows[0][1] != "US" {
 		t.Errorf("rows = %+v", rows)
 	}
 
@@ -182,7 +190,7 @@ func TestFetchFinanceReport_DecodesAndFilters(t *testing.T) {
 	})
 	c := fixtureASCClient(t, srv)
 
-	rows, raw, err := fetchFinanceReport(context.Background(), c, financeFetchOpts{
+	got, err := fetchFinanceReport(context.Background(), c, financeFetchOpts{
 		vendor:      "99999999",
 		reportType:  asc.FinanceReportTypeFinancial,
 		region:      "Z1",
@@ -193,12 +201,12 @@ func TestFetchFinanceReport_DecodesAndFilters(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fetch: %v", err)
 	}
-	if len(raw) != 0 {
-		t.Errorf("raw = %d bytes, want 0 when captureRows", len(raw))
+	if len(got.raw) != 0 {
+		t.Errorf("raw = %d bytes, want 0 when captureRows", len(got.raw))
 	}
 	// Fixture has 4 rows, all matching the bundleId via VendorIdentifier prefix.
-	if len(rows) != 4 {
-		t.Fatalf("rows = %d, want 4", len(rows))
+	if len(got.rows) != 4 {
+		t.Fatalf("rows = %d, want 4", len(got.rows))
 	}
 }
 
@@ -208,7 +216,7 @@ func TestFetchFinanceReport_RawCapturePassthrough(t *testing.T) {
 	})
 	c := fixtureASCClient(t, srv)
 
-	_, raw, err := fetchFinanceReport(context.Background(), c, financeFetchOpts{
+	got, err := fetchFinanceReport(context.Background(), c, financeFetchOpts{
 		vendor:     "99999999",
 		reportType: asc.FinanceReportTypeFinancial,
 		region:     "Z1",
@@ -219,8 +227,8 @@ func TestFetchFinanceReport_RawCapturePassthrough(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fetch: %v", err)
 	}
-	if !bytes.HasPrefix(raw, []byte("Start Date\t")) {
-		t.Errorf("raw passthrough does not start with Apple finance TSV header: %q", raw[:min(40, len(raw))])
+	if !bytes.HasPrefix(got.raw, []byte("Start Date\t")) {
+		t.Errorf("raw passthrough does not start with Apple finance TSV header: %q", got.raw[:min(40, len(got.raw))])
 	}
 }
 
@@ -233,7 +241,7 @@ func TestFetchFinanceReport_PropagatesAPIError(t *testing.T) {
 	t.Cleanup(srv.Close)
 	c := fixtureASCClient(t, srv)
 
-	_, _, err := fetchFinanceReport(context.Background(), c, financeFetchOpts{
+	_, err := fetchFinanceReport(context.Background(), c, financeFetchOpts{
 		vendor:      "99999999",
 		reportType:  asc.FinanceReportTypeFinancial,
 		region:      "Z1",
@@ -246,5 +254,30 @@ func TestFetchFinanceReport_PropagatesAPIError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "NOT_AUTHORIZED") {
 		t.Errorf("err = %v, want to contain Apple's NOT_AUTHORIZED", err)
+	}
+}
+
+func TestFetchFinanceReport_ExpectedNoReportIsEmpty(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"errors":[{"status":"404","title":"Not Found","detail":"No report is available for the selected date"}]}`))
+	}))
+	t.Cleanup(srv.Close)
+	c := fixtureASCClient(t, srv)
+
+	got, err := fetchFinanceReport(context.Background(), c, financeFetchOpts{
+		vendor:      "99999999",
+		reportType:  asc.FinanceReportTypeFinancial,
+		region:      "ZZ",
+		reportDate:  "2026-06",
+		bundleID:    "com.example.testapp",
+		captureRows: true,
+	})
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if !got.unavailable || got.rows == nil || len(got.rows) != 0 {
+		t.Fatalf("got = %+v, want typed empty unavailable result", got)
 	}
 }

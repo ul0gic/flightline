@@ -73,6 +73,13 @@ type AnalyticsReport struct {
 	Category  AnalyticsCategory `json:"category,omitempty"`
 }
 
+// AnalyticsRequestSnapshot is one non-blocking refresh of an analytics
+// request and every currently available report page.
+type AnalyticsRequestSnapshot struct {
+	Attributes AnalyticsReportRequestAttributes
+	Reports    []AnalyticsReport
+}
+
 // AnalyticsReportInstanceAttributes mirrors AnalyticsReportInstance.attributes.
 type AnalyticsReportInstanceAttributes struct {
 	Granularity    AnalyticsGranularity `json:"granularity,omitempty"`
@@ -283,6 +290,27 @@ func (c *Client) runPollStep(
 	return false, nil
 }
 
+// RefreshAnalyticsRequest performs a single read of the request plus its
+// currently available reports. It is the resumable counterpart to the
+// blocking poller used by status and list-instances after a process restart.
+func (c *Client) RefreshAnalyticsRequest(ctx context.Context, id RequestID) (AnalyticsRequestSnapshot, error) {
+	if id == "" {
+		return AnalyticsRequestSnapshot{}, errors.New("asc: RefreshAnalyticsRequest: empty RequestID")
+	}
+	attrs, err := c.getAnalyticsRequest(ctx, id)
+	if err != nil {
+		return AnalyticsRequestSnapshot{}, err
+	}
+	reports, err := c.listReportsForRequest(ctx, id)
+	if err != nil {
+		return AnalyticsRequestSnapshot{}, err
+	}
+	if reports == nil {
+		reports = []AnalyticsReport{}
+	}
+	return AnalyticsRequestSnapshot{Attributes: attrs, Reports: reports}, nil
+}
+
 func yieldNewReports(
 	reports []AnalyticsReport,
 	seen map[ReportID]struct{},
@@ -332,7 +360,7 @@ func (c *Client) getAnalyticsRequest(ctx context.Context, id RequestID) (Analyti
 
 // listReportsForRequest walks every page; Apple paginates the reports collection.
 func (c *Client) listReportsForRequest(ctx context.Context, id RequestID) ([]AnalyticsReport, error) {
-	var out []AnalyticsReport
+	out := make([]AnalyticsReport, 0)
 	path := "/v1/analyticsReportRequests/" + url.PathEscape(string(id)) + "/reports"
 	for {
 		resp, err := Get[Collection[AnalyticsReportAttributes]](ctx, c, path, nil)
@@ -359,7 +387,7 @@ func (c *Client) ListAnalyticsInstances(ctx context.Context, reportID ReportID) 
 	if reportID == "" {
 		return nil, errors.New("asc: ListAnalyticsInstances: empty ReportID")
 	}
-	var out []AnalyticsReportInstance
+	out := make([]AnalyticsReportInstance, 0)
 	path := "/v1/analyticsReports/" + url.PathEscape(string(reportID)) + "/instances"
 	for {
 		resp, err := Get[Collection[AnalyticsReportInstanceAttributes]](ctx, c, path, nil)
@@ -387,7 +415,7 @@ func (c *Client) ListAnalyticsSegments(ctx context.Context, instanceID InstanceI
 	if instanceID == "" {
 		return nil, errors.New("asc: ListAnalyticsSegments: empty InstanceID")
 	}
-	var out []AnalyticsReportSegment
+	out := make([]AnalyticsReportSegment, 0)
 	path := "/v1/analyticsReportInstances/" + url.PathEscape(string(instanceID)) + "/segments"
 	for {
 		resp, err := Get[Collection[AnalyticsReportSegmentAttributes]](ctx, c, path, nil)
@@ -529,7 +557,7 @@ const (
 type FinanceReportParams struct {
 	VendorNumber string
 	ReportType   FinanceReportType
-	RegionCode   string // ISO region code, e.g. "US", "Z1" (worldwide)
+	RegionCode   string // e.g. "US", "ZZ" (consolidated), or "Z1" (finance detail)
 	ReportDate   string // YYYY-MM (Apple's finance reports are monthly)
 }
 
@@ -614,7 +642,7 @@ func validateFinanceParams(p FinanceReportParams) error {
 	case p.ReportType == "":
 		return errors.New("asc: FinanceReportParams.ReportType is required (FINANCIAL or FINANCE_DETAIL)")
 	case p.RegionCode == "":
-		return errors.New("asc: FinanceReportParams.RegionCode is required (ISO region, e.g. US or Z1 for worldwide)")
+		return errors.New("asc: FinanceReportParams.RegionCode is required (e.g. ZZ for consolidated or Z1 for finance detail)")
 	case p.ReportDate == "":
 		return errors.New("asc: FinanceReportParams.ReportDate is required (YYYY-MM)")
 	}

@@ -53,7 +53,7 @@ Flags, arguments, and defaults: `flightline age-rating --help`.
 
 ## `analytics`
 
-analytics drives Apple's asynchronous analytics report lifecycle: 1. request : submit an analyticsReportRequests entry to Apple 2. status : read the persisted state file for an in-flight request 3. list-instances: enumerate report instances for the active request 4. download: pull every segment of an instance to local CSV files State persists to $XDG_STATE_HOME/flightline/<bundleId>/analytics.json so a Ctrl-C between submit and download resumes cleanly on the next run.
+analytics drives Apple's asynchronous analytics report lifecycle: 1. request : submit an analyticsReportRequests entry to Apple 2. status : refresh Apple state and update the persisted checkpoint 3. list-instances: enumerate report instances for the active request 4. download: pull every segment of an instance to local CSV files State persists to $XDG_STATE_HOME/flightline/<bundleId>/analytics.json so a Ctrl-C between submit and download resumes cleanly on the next run.
 
 Flags, arguments, and defaults: `flightline analytics --help`.
 
@@ -113,7 +113,7 @@ Flags, arguments, and defaults: `flightline fetch --help`.
 
 ## `finance`
 
-finance pulls finance/settlement reports from /v1/financeReports. Finance reports are MONTHLY or YEARLY (Apple does not produce daily/weekly finance reports: daily granularity belongs to `flightline sales`). Each call is scoped to a region code: "US", "GB", "Z1" (worldwide), etc. Use --region to override the default ("Z1"). The bundleId argument filters typed output by Vendor Identifier so a single- vendor multi-app account stays focused. --output tsv streams Apple's raw wire format unfiltered. Vendor number is read from APP_STORE_CONNECT_VENDOR_NUMBER.
+finance pulls finance/settlement reports from /v1/financeReports. Apple indexes finance reports by fiscal year/month, not calendar month. Daily granularity belongs to `flightline sales`. FINANCIAL defaults to the consolidated region ZZ. FINANCE_DETAIL defaults to Z1. The bundleId argument filters typed output by Vendor Identifier so a single- vendor multi-app account stays focused. --output tsv streams Apple's raw wire format unfiltered. Vendor number is read from APP_STORE_CONNECT_VENDOR_NUMBER.
 
 Flags, arguments, and defaults: `flightline finance --help`.
 
@@ -191,7 +191,7 @@ Flags, arguments, and defaults: `flightline reviews --help`.
 
 ## `sales`
 
-sales pulls Sales and Trends reports from /v1/salesReports. Reports are vendor-wide: Apple does not filter by app on the wire. The bundleId argument scopes the typed table/JSON output by parent identifier so a single-vendor multi-app account stays focused. Use --output tsv to stream Apple's raw (gunzipped) wire format unfiltered for downstream tools. Frequency is inferred from the date flag (--days → DAILY, --week → WEEKLY, --month → MONTHLY, --year → YEARLY) and can be overridden with --frequency. Reports are fetched per-day for daily windows so a 30-day pull = 30 API calls; budget against Apple's 500 req/hr cap accordingly. Vendor number is read from APP_STORE_CONNECT_VENDOR_NUMBER. Refuses to run without one rather than erroring on the wire.
+sales pulls Sales and Trends reports from /v1/salesReports. Reports are vendor-wide: Apple does not filter by app on the wire. The bundleId argument resolves the app and scopes typed output by bundle ID, configured SKU, and Apple ID. Use --output tsv to stream Apple's raw (gunzipped) wire format unfiltered for downstream tools. Frequency is inferred from the date flag (--days → DAILY, --week → WEEKLY, --month → MONTHLY, --year → YEARLY). --frequency may be supplied as an explicit assertion but must match the selected date shape. Reports are fetched per-day for daily windows so a 30-day pull = 30 API calls; budget against Apple's 500 req/hr cap accordingly. Vendor number is read from APP_STORE_CONNECT_VENDOR_NUMBER. Refuses to run without one rather than erroring on the wire.
 
 Flags, arguments, and defaults: `flightline sales --help`.
 

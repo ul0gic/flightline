@@ -19,7 +19,7 @@ type PerformanceView struct {
 	BuildID     string                       `json:"buildId,omitempty"`
 	Version     string                       `json:"version,omitempty"`
 	Insights    *asc.PerfPowerMetricInsights `json:"insights,omitempty"`
-	ProductData []asc.PerfPowerProductData   `json:"productData,omitempty"`
+	ProductData []asc.PerfPowerProductData   `json:"productData"`
 	Note        string                       `json:"note,omitempty"`
 }
 
@@ -118,7 +118,8 @@ var performanceBuildCmd = &cobra.Command{
 	Args:         cobra.ExactArgs(1),
 	RunE:         runPerformanceBuild,
 	Example: `  flightline performance build com.example.myapp --build 42
-  flightline performance build com.example.myapp --build 42 --category HANG --output json`,
+	  flightline performance build com.example.myapp --build 2 --version 1.1 --platform IOS
+	  flightline performance build com.example.myapp --build 42 --category HANG --output json`,
 }
 
 var (
@@ -126,6 +127,7 @@ var (
 	performanceAppCategory string
 	performanceAppDevice   string
 	performanceBuildBuild  string
+	performanceBuildVer    string
 	performanceBuildPlat   string
 	performanceBuildCat    string
 	performanceBuildDev    string
@@ -137,6 +139,7 @@ func init() {
 	performanceAppCmd.Flags().StringVar(&performanceAppDevice, "device", "", "filter by device type (Apple model id, e.g. iPhone15,3)")
 
 	performanceBuildCmd.Flags().StringVar(&performanceBuildBuild, "build", "", "build number to inspect (CFBundleVersion, e.g. 42)")
+	performanceBuildCmd.Flags().StringVar(&performanceBuildVer, "version", "", "App Store version/train used to disambiguate duplicate build numbers")
 	performanceBuildCmd.Flags().StringVar(&performanceBuildPlat, "platform", "IOS", "filter by platform (Apple v4.3 only emits IOS)")
 	performanceBuildCmd.Flags().StringVar(&performanceBuildCat, "category", "", "filter by metric category")
 	performanceBuildCmd.Flags().StringVar(&performanceBuildDev, "device", "", "filter by device type")
@@ -159,9 +162,7 @@ func runPerformanceApp(cmd *cobra.Command, args []string) error {
 	}
 
 	q := perfPowerQuery(performanceAppPlatform, performanceAppCategory, performanceAppDevice)
-	resp, err := asc.Get[asc.PerfPowerMetricsResponse](
-		cmd.Context(), c, "/v1/apps/"+appID+"/perfPowerMetrics", q,
-	)
+	resp, err := c.FetchPerfPowerMetrics(cmd.Context(), "/v1/apps/"+appID+"/perfPowerMetrics", q)
 	if err != nil {
 		return err
 	}
@@ -172,7 +173,7 @@ func runPerformanceApp(cmd *cobra.Command, args []string) error {
 		Insights:    resp.Insights,
 		ProductData: resp.ProductData,
 	}
-	if len(resp.ProductData) == 0 && resp.Insights == nil {
+	if len(resp.ProductData) == 0 && !hasPerformanceInsights(resp.Insights) {
 		view.Note = "no performance metrics available for this app yet (Apple needs sufficient user telemetry; metrics surface 7-30 days after release)"
 	}
 	return Render(view, outputMode())
@@ -194,25 +195,16 @@ func runPerformanceBuild(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	bq := url.Values{
-		"filter[version]": {build},
-		"limit":           {"1"},
-	}
-	bpage, err := asc.Get[asc.Collection[asc.BuildAttributes]](
-		cmd.Context(), c, "/v1/apps/"+appID+"/builds", bq,
-	)
+	buildID, err := resolveBuildIDWithOptions(cmd.Context(), c, appID, bundleID, build, buildLookupOptions{
+		ReleaseVersion: performanceBuildVer,
+		Platform:       performanceBuildPlat,
+	})
 	if err != nil {
 		return err
 	}
-	if len(bpage.Data) == 0 {
-		return fmt.Errorf("performance: no build %q found for %q", build, bundleID)
-	}
-	buildID := bpage.Data[0].ID
 
 	q := perfPowerQuery(performanceBuildPlat, performanceBuildCat, performanceBuildDev)
-	resp, err := asc.Get[asc.PerfPowerMetricsResponse](
-		cmd.Context(), c, "/v1/builds/"+buildID+"/perfPowerMetrics", q,
-	)
+	resp, err := c.FetchPerfPowerMetrics(cmd.Context(), "/v1/builds/"+buildID+"/perfPowerMetrics", q)
 	if err != nil {
 		return err
 	}
@@ -225,10 +217,14 @@ func runPerformanceBuild(cmd *cobra.Command, args []string) error {
 		Insights:    resp.Insights,
 		ProductData: resp.ProductData,
 	}
-	if len(resp.ProductData) == 0 && resp.Insights == nil {
+	if len(resp.ProductData) == 0 && !hasPerformanceInsights(resp.Insights) {
 		view.Note = "no performance metrics available for this build (Apple may not have collected enough telemetry yet)"
 	}
 	return Render(view, outputMode())
+}
+
+func hasPerformanceInsights(insights *asc.PerfPowerMetricInsights) bool {
+	return insights != nil && (len(insights.Regressions) > 0 || len(insights.TrendingUp) > 0)
 }
 
 // perfPowerQuery builds the filter[] tuple for perfPowerMetrics; empty inputs default to no filter.

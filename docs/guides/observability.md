@@ -32,6 +32,9 @@ Two things to know about how Apple serves this data:
 
 - **Reports are vendor-wide.** Apple does not filter by app on the wire; the bundle ID argument scopes the typed output client-side so a multi-app account stays focused.
 - **Daily windows cost one API call per day.** A `--days 30` pull is 30 calls against Apple's 500 requests/hour cap. Data lags about one day, so windows end yesterday.
+- **No-report dates are normal.** Apple returns HTTP 404 for quiet or not-yet-ready dates. Flightline records those dates in `unavailableDates` and continues processing every available date in the window.
+
+Flightline resolves the app first and filters vendor-wide rows using its bundle ID, configured SKU, and Apple ID. This matters when the SKU does not equal the bundle ID. `--week` accepts any date in the desired week and normalizes it to Apple's required ending Sunday.
 
 `--report-type` selects the report (default `SALES`; also `SUBSCRIPTION`, `SUBSCRIPTION_EVENT`, `SUBSCRIBER`, `INSTALLS`), and `--report-sub-type` the granularity (default `SUMMARY`). For raw data, `--output tsv` streams Apple's gunzipped wire format unfiltered:
 
@@ -41,20 +44,20 @@ flightline sales app.tideterm.ios --days 1 --output tsv > today.tsv
 
 ## Finance reports
 
-Settlement reports from `/v1/financeReports`. Finance data is monthly or yearly only (daily granularity belongs to `sales`), and each call is scoped to a region code:
+Settlement reports from `/v1/financeReports`. Apple indexes each report by fiscal year/month, which may not match the calendar month represented by the report rows:
 
 ```bash
 flightline finance app.tideterm.ios --month 2026-05
 flightline finance app.tideterm.ios --month 2026-05 --region US
-flightline finance app.tideterm.ios --year 2025
+flightline finance app.tideterm.ios --month 2026-05 --report-type FINANCE_DETAIL
 ```
 
-Exactly one of `--month YYYY-MM` or `--year YYYY` is required. `--region` defaults to `Z1` (worldwide). The table summarizes by country and settlement currency:
+`--month YYYY-MM` is required and means Apple's fiscal year/month. `FINANCIAL` defaults to consolidated region `ZZ`; `FINANCE_DETAIL` defaults to `Z1`. The table includes the actual row period and summarizes by country and settlement currency:
 
 ```
-COUNTRY  CURRENCY  QTY  PARTNER_SHARE  EXT_PARTNER_SHARE
-DE       EUR       31   1.39           43.09
-US       USD       204  1.39           283.56
+PERIOD                  COUNTRY  CURRENCY  QTY  PARTNER_SHARE  EXT_PARTNER_SHARE
+05/01/2026..05/31/2026  DE       EUR       31   1.39           43.09
+05/01/2026..05/31/2026  US       USD       204  1.39           283.56
 ```
 
 `--report-type` accepts `FINANCIAL` (default) or `FINANCE_DETAIL`, and `--output tsv` passes through the raw report.
@@ -136,14 +139,14 @@ flightline analytics list-instances app.tideterm.ios --category APP_USAGE
 flightline analytics download app.tideterm.ios --instance INST-42 --out ./reports/
 ```
 
-`status` shows where the request stands:
+`status` refreshes the request and every available report page from Apple before rendering. Pass `--refresh=false` only when an offline view of the local checkpoint is required:
 
 ```
 FIELD                VALUE
 BUNDLE_ID            app.tideterm.ios
 STATE_FILE           /Users/dev/.local/state/flightline/app.tideterm.ios/analytics.json
 REQUEST_ID           d5f0a9c2-...
-STATUS               completed
+STATUS               reports_available
 SUBMITTED_AT         2026-07-02T14:03:11Z
 LAST_POLL_AT         2026-07-02T14:19:47Z
 REPORTS              12
@@ -165,7 +168,7 @@ flightline beta-feedback download CRASH-1234 --out crash.txt
 flightline beta-feedback download SHOT-5678 --type screenshot
 ```
 
-Both list commands take `--since` and `--limit`, plus `--build` to filter by build number (CFBundleVersion, the same value `diagnostics` and `performance` take). `download` fetches the crash log text or the first screenshot image for a submission; `--type` is `crash` (default) or `screenshot`, and `--out` names the destination file.
+Both list commands take `--since` and `--limit`, plus `--build` to filter by build number (CFBundleVersion, the same value `diagnostics` and `performance` take). If a build number was reused, add `--version` and `--platform` to identify the release train. `download` fetches the crash log text or the first screenshot image for a submission; `--type` is `crash` (default) or `screenshot`, and `--out` names the destination file.
 
 ## Crash and hang diagnostics
 
@@ -173,6 +176,7 @@ Apple deduplicates crash and hang reports into signatures: same call stack, one 
 
 ```bash
 flightline diagnostics list app.tideterm.ios --build 87
+flightline diagnostics list app.tideterm.ios --build 2 --version 1.1 --platform IOS
 flightline diagnostics list app.tideterm.ios --build 87 --type HANGS
 flightline diagnostics get DIAG-SIG-1234 --output json
 ```
@@ -187,9 +191,10 @@ The same battery, memory, hang, launch, and disk-write metrics as the Xcode Orga
 flightline performance app app.tideterm.ios
 flightline performance app app.tideterm.ios --category MEMORY
 flightline performance build app.tideterm.ios --build 87
+flightline performance build app.tideterm.ios --build 2 --version 1.1 --platform IOS
 ```
 
-`app` is the cross-build aggregate; `build` is build-specific and requires `--build` (the build number). Filter with `--category` (`HANG`, `LAUNCH`, `MEMORY`, `DISK`, `BATTERY`, `TERMINATION`, `ANIMATION`) and `--device` (Apple model ID, for example `iPhone15,3`). Apple needs enough user telemetry before metrics appear, typically 7 to 30 days after release; until then the command returns a typed `note` rather than an error.
+`app` is the cross-build aggregate; `build` is build-specific and requires `--build` (the build number). Reused build numbers require `--version` and `--platform`. Filter with `--category` (`HANG`, `LAUNCH`, `MEMORY`, `DISK`, `BATTERY`, `TERMINATION`, `ANIMATION`) and `--device` (Apple model ID, for example `iPhone15,3`). Apple needs enough user telemetry before metrics appear, typically 7 to 30 days after release; until then the command returns a typed `note` rather than an error.
 
 Watch for regressions Apple has flagged:
 

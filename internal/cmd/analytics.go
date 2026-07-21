@@ -132,7 +132,7 @@ var analyticsCmd = &cobra.Command{
 	Long: `analytics drives Apple's asynchronous analytics report lifecycle:
 
 	1. request : submit an analyticsReportRequests entry to Apple
-	2. status  : read the persisted state file for an in-flight request
+	2. status  : refresh Apple state and update the persisted checkpoint
 	3. list-instances: enumerate report instances for the active request
 	4. download: pull every segment of an instance to local CSV files
 
@@ -174,18 +174,20 @@ var analyticsDownloadCmd = &cobra.Command{
 
 var analyticsStatusCmd = &cobra.Command{
 	Use:          "status <bundleId>",
-	Short:        "Show the persisted state for an in-flight analytics request",
+	Short:        "Refresh and show state for an analytics request",
 	SilenceUsage: true,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runAnalyticsStatus,
 	Example: `  flightline analytics status com.example.myapp
-  flightline analytics status com.example.myapp --output json | jq .requestId`,
+	  flightline analytics status com.example.myapp --refresh=false
+	  flightline analytics status com.example.myapp --output json | jq .requestId`,
 }
 
 var (
 	analyticsRequestAccessType  string
 	analyticsRequestWait        bool
 	analyticsRequestMaxDuration time.Duration
+	analyticsRequestForce       bool
 
 	analyticsListReportID     string
 	analyticsListCategory     string
@@ -193,6 +195,7 @@ var (
 
 	analyticsDownloadInstance string
 	analyticsDownloadOut      string
+	analyticsStatusRefresh    bool
 
 	// Tests override with shorter intervals so the lifecycle runs in
 	// sub-second wall time without leaving the production code path.
@@ -207,6 +210,8 @@ func init() {
 	analyticsRequestCmd.Flags().DurationVar(&analyticsRequestMaxDuration, "max-duration", 0,
 		"upper bound on --wait (e.g. 10m); 0 = no bound: required for ONGOING with --wait")
 	_ = analyticsRequestCmd.MarkFlagRequired("access-type")
+	analyticsRequestCmd.Flags().BoolVar(&analyticsRequestForce, "force", false,
+		"replace the locally tracked active request with a new Apple request")
 
 	analyticsListInstancesCmd.Flags().StringVar(&analyticsListReportID, "report-id", "",
 		"single report ID to expand instances for (default: every report in state)")
@@ -220,6 +225,8 @@ func init() {
 	analyticsDownloadCmd.Flags().StringVar(&analyticsDownloadOut, "out", "",
 		"output directory or file prefix; default is the working directory")
 	_ = analyticsDownloadCmd.MarkFlagRequired("instance")
+	analyticsStatusCmd.Flags().BoolVar(&analyticsStatusRefresh, "refresh", true,
+		"read current request and report state from Apple before rendering")
 
 	analyticsCmd.AddCommand(analyticsRequestCmd)
 	analyticsCmd.AddCommand(analyticsListInstancesCmd)
@@ -237,6 +244,9 @@ func runAnalyticsRequest(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if err := validateWaitFlags(access, analyticsRequestWait, analyticsRequestMaxDuration); err != nil {
+		return err
+	}
+	if err := guardAnalyticsRequestReplacement(bundleID, analyticsRequestForce); err != nil {
 		return err
 	}
 
@@ -361,6 +371,10 @@ func runAnalyticsListInstances(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	state, err = refreshAnalyticsState(cmd.Context(), c, state)
+	if err != nil {
+		return fmt.Errorf("analytics: refresh request %s: %w", state.RequestID, err)
+	}
 
 	reports := filterReportsForList(state.Reports, analyticsListReportID, analyticsListCategory, analyticsListNameContains)
 	view := AnalyticsInstancesView{
@@ -477,11 +491,21 @@ func writeSegmentFile(bundleID, instanceID string, index int, body []byte, out s
 	return path, nil
 }
 
-func runAnalyticsStatus(_ *cobra.Command, args []string) error {
+func runAnalyticsStatus(cmd *cobra.Command, args []string) error {
 	bundleID := args[0]
 	state, err := loadAnalyticsState(bundleID)
 	if err != nil {
 		return err
+	}
+	if analyticsStatusRefresh {
+		c, err := newClient()
+		if err != nil {
+			return err
+		}
+		state, err = refreshAnalyticsState(cmd.Context(), c, state)
+		if err != nil {
+			return fmt.Errorf("analytics: refresh request %s: %w", state.RequestID, err)
+		}
 	}
 	path, err := asc.StateFilePath(bundleID, asc.ReportClassAnalytics)
 	if err != nil {
@@ -508,6 +532,71 @@ func runAnalyticsStatus(_ *cobra.Command, args []string) error {
 		view.Downloaded = []string{}
 	}
 	return Render(view, outputMode())
+}
+
+func refreshAnalyticsState(ctx context.Context, c *asc.Client, state asc.AsyncState) (asc.AsyncState, error) {
+	snapshot, err := c.RefreshAnalyticsRequest(ctx, state.RequestID)
+	if err != nil {
+		return state, err
+	}
+
+	merged := make([]asc.PersistedAnalyticsReport, 0, len(state.Reports)+len(snapshot.Reports))
+	seen := make(map[asc.ReportID]bool, len(state.Reports)+len(snapshot.Reports))
+	for _, report := range state.Reports {
+		if report.ID == "" || seen[report.ID] {
+			continue
+		}
+		seen[report.ID] = true
+		merged = append(merged, report)
+	}
+	for _, report := range snapshot.Reports {
+		if report.ID == "" || seen[report.ID] {
+			continue
+		}
+		seen[report.ID] = true
+		merged = append(merged, asc.PersistedAnalyticsReport{
+			ID: report.ID, Name: report.Name, Category: report.Category,
+		})
+	}
+	state.Reports = merged
+	state.LastPollAt = time.Now().UTC()
+	switch {
+	case snapshot.Attributes.StoppedDueToInactivity:
+		state.Status = "stopped"
+	case len(state.Reports) > 0:
+		state.Status = "reports_available"
+	default:
+		state.Status = "processing"
+	}
+	if state.DownloadedSegments == nil {
+		state.DownloadedSegments = []string{}
+	}
+	if err := asc.PersistAsyncState(state); err != nil {
+		return state, fmt.Errorf("persist refreshed state: %w", err)
+	}
+	return state, nil
+}
+
+func guardAnalyticsRequestReplacement(bundleID string, force bool) error {
+	if force {
+		return nil
+	}
+	state, err := asc.LoadAsyncState(bundleID, asc.ReportClassAnalytics)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("analytics: inspect existing request state: %w", err)
+	}
+	switch state.Status {
+	case "queued", "processing", "timeout", "cancelled", "reports_available":
+		return fmt.Errorf(
+			"analytics: request %s is already tracked with status %s; run `flightline analytics status %s` to resume it or pass --force to replace it",
+			state.RequestID, state.Status, bundleID,
+		)
+	default:
+		return nil
+	}
 }
 
 // All readers bottleneck through this so the no-prior-request hint stays

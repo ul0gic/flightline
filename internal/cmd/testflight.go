@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/url"
 	"strconv"
 	"strings"
@@ -165,7 +164,8 @@ var testflightBetaReviewGetCmd = &cobra.Command{
 	Args:         cobra.ExactArgs(1),
 	RunE:         runTestflightBetaReviewGet,
 	Example: `  flightline testflight beta-review get com.example.myapp --build 42
-  flightline testflight beta-review get com.example.myapp --build 42 --output json`,
+	  flightline testflight beta-review get com.example.myapp --build 2 --version 1.1 --platform IOS
+	  flightline testflight beta-review get com.example.myapp --build 42 --output json`,
 }
 
 var testflightGroupsCreateCmd = &cobra.Command{
@@ -246,12 +246,17 @@ Apple's beta review is one-shot per build: if a submission already
 exists for the build, the command surfaces the existing submission ID
 with changed=false rather than erroring.`,
 	Example: `  flightline testflight beta-review submit com.example.myapp --build 42
-  flightline testflight beta-review submit com.example.myapp --build 42 --output json`,
+	  flightline testflight beta-review submit com.example.myapp --build 2 --version 1.1 --platform IOS
+	  flightline testflight beta-review submit com.example.myapp --build 42 --output json`,
 }
 
 var (
 	testflightBetaReviewGetBuild    string
+	testflightBetaReviewGetVersion  string
+	testflightBetaReviewGetPlatform string
 	testflightBetaReviewSubmitBuild string
+	testflightBetaReviewSubmitVer   string
+	testflightBetaReviewSubmitPlat  string
 
 	testflightGroupsCreateName            string
 	testflightGroupsCreateInternal        bool
@@ -275,6 +280,8 @@ func init() {
 	testflightTestersListCmd.Flags().IntVar(&testflightTestersListLimit, "limit", 0, "max testers to emit (0 = no cap)")
 
 	testflightBetaReviewGetCmd.Flags().StringVar(&testflightBetaReviewGetBuild, "build", "", "build number to inspect (CFBundleVersion, e.g. 42)")
+	testflightBetaReviewGetCmd.Flags().StringVar(&testflightBetaReviewGetVersion, "version", "", "App Store version/train used to disambiguate duplicate build numbers")
+	testflightBetaReviewGetCmd.Flags().StringVar(&testflightBetaReviewGetPlatform, "platform", "IOS", "platform used to disambiguate duplicate build numbers")
 	_ = testflightBetaReviewGetCmd.MarkFlagRequired("build")
 
 	testflightGroupsCreateCmd.Flags().StringVar(&testflightGroupsCreateName, "name", "", "group name (must be unique per app)")
@@ -296,6 +303,8 @@ func init() {
 	_ = testflightTestersRemoveCmd.MarkFlagRequired("tester")
 
 	testflightBetaReviewSubmitCmd.Flags().StringVar(&testflightBetaReviewSubmitBuild, "build", "", "build number to submit (CFBundleVersion, e.g. 42)")
+	testflightBetaReviewSubmitCmd.Flags().StringVar(&testflightBetaReviewSubmitVer, "version", "", "App Store version/train used to disambiguate duplicate build numbers")
+	testflightBetaReviewSubmitCmd.Flags().StringVar(&testflightBetaReviewSubmitPlat, "platform", "IOS", "platform used to disambiguate duplicate build numbers")
 	_ = testflightBetaReviewSubmitCmd.MarkFlagRequired("build")
 
 	testflightGroupsCmd.AddCommand(testflightGroupsListCmd)
@@ -356,7 +365,8 @@ func runTestflightTestersList(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		path = "/v1/apps/" + appID + "/betaTesters"
+		path = "/v1/betaTesters"
+		q.Set("filter[apps]", appID)
 	}
 
 	views, err := collectBetaTesters(cmd.Context(), c, path, q, testflightTestersListLimit)
@@ -382,20 +392,13 @@ func runTestflightBetaReviewGet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	bq := url.Values{
-		"filter[version]": {build},
-		"limit":           {"1"},
-	}
-	bpage, err := asc.Get[asc.Collection[asc.BuildAttributes]](
-		cmd.Context(), c, "/v1/apps/"+appID+"/builds", bq,
-	)
+	buildID, err := resolveBuildIDWithOptions(cmd.Context(), c, appID, bundleID, build, buildLookupOptions{
+		ReleaseVersion: testflightBetaReviewGetVersion,
+		Platform:       testflightBetaReviewGetPlatform,
+	})
 	if err != nil {
 		return err
 	}
-	if len(bpage.Data) == 0 {
-		return fmt.Errorf("testflight: no build %q found for %q", build, bundleID)
-	}
-	buildID := bpage.Data[0].ID
 
 	view := &BetaReviewView{
 		BundleID:    bundleID,
@@ -954,20 +957,13 @@ func runTestflightBetaReviewSubmit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	bq := url.Values{
-		"filter[version]": {build},
-		"limit":           {"1"},
-	}
-	bpage, err := asc.Get[asc.Collection[asc.BuildAttributes]](
-		cmd.Context(), c, "/v1/apps/"+appID+"/builds", bq,
-	)
+	buildID, err := resolveBuildIDWithOptions(cmd.Context(), c, appID, bundleID, build, buildLookupOptions{
+		ReleaseVersion: testflightBetaReviewSubmitVer,
+		Platform:       testflightBetaReviewSubmitPlat,
+	})
 	if err != nil {
 		return err
 	}
-	if len(bpage.Data) == 0 {
-		return fmt.Errorf("testflight: no build %q found for %q", build, bundleID)
-	}
-	buildID := bpage.Data[0].ID
 
 	// Idempotency check: does the build already have a submission?
 	existing, err := asc.Get[asc.Single[asc.BetaAppReviewSubmissionAttributes]](

@@ -178,9 +178,9 @@ func TestExportCompliance_JSONOutputStability(t *testing.T) {
 func TestExportCompliance_FixtureReplay_Happy(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
-		"GET /v1/apps/1234567890/appStoreVersions":          {File: "export_compliance_version"},
-		"GET /v1/appStoreVersions/8000000001/build":         {File: "export_compliance_version_build"},
-		"GET /v1/apps/1234567890/appEncryptionDeclarations": {File: "export_compliance_declaration"},
+		"GET /v1/apps/1234567890/appStoreVersions":  {File: "export_compliance_version"},
+		"GET /v1/appStoreVersions/8000000001/build": {File: "export_compliance_version_build"},
+		"GET /v1/appEncryptionDeclarations":         {File: "export_compliance_declaration"},
 	})
 	c := fixtureASCClient(t, srv)
 	ctx := context.Background()
@@ -219,8 +219,8 @@ func TestExportCompliance_FixtureReplay_Happy(t *testing.T) {
 // where an app has only the per-build boolean answer (no full declaration).
 func TestExportCompliance_FixtureReplay_NoDeclarations(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
-		"GET /v1/apps": {File: "apps_get_byBundleId"},
-		"GET /v1/apps/1234567890/appEncryptionDeclarations": {File: "export_compliance_no_declarations"},
+		"GET /v1/apps":                      {File: "apps_get_byBundleId"},
+		"GET /v1/appEncryptionDeclarations": {File: "export_compliance_no_declarations"},
 	})
 	c := fixtureASCClient(t, srv)
 	ctx := context.Background()

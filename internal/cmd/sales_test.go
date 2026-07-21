@@ -148,11 +148,7 @@ func TestBuildSalesPlan_RejectsBadDateFormats(t *testing.T) {
 		{"month not YYYY-MM", func() { resetSalesFlags(); salesMonth = "2026" }},
 		{"week not YYYY-MM-DD", func() { resetSalesFlags(); salesWeek = "2026/05" }},
 		{"year not YYYY", func() { resetSalesFlags(); salesYear = "26" }},
-		{"days zero", func() { resetSalesFlags(); salesDays = 0; salesMonth = ""; salesYear = ""; salesWeek = "" }},
 	}
-	// `days zero` is the no-flag default → falls back to 7 days, not an error.
-	// Drop it from the table and just exercise the format errors.
-	tests = tests[:3]
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.setup()
@@ -160,6 +156,42 @@ func TestBuildSalesPlan_RejectsBadDateFormats(t *testing.T) {
 				t.Fatalf("%s: want error", tc.name)
 			}
 		})
+	}
+}
+
+func TestBuildSalesPlan_RejectsExplicitNonPositiveDays(t *testing.T) {
+	resetSalesFlags()
+	if _, err := buildSalesPlan(time.Now(), true); err == nil {
+		t.Fatal("explicit --days 0 must fail")
+	}
+	salesDays = -1
+	if _, err := buildSalesPlan(time.Now(), true); err == nil {
+		t.Fatal("explicit negative --days must fail")
+	}
+}
+
+func TestBuildSalesPlan_AlignsWeekToEndingSunday(t *testing.T) {
+	resetSalesFlags()
+	salesWeek = "2026-05-15"
+	plan, err := buildSalesPlan(time.Now())
+	if err != nil {
+		t.Fatalf("buildSalesPlan: %v", err)
+	}
+	if got := plan.dates[0]; got != "2026-05-17" {
+		t.Errorf("weekly report date = %q, want 2026-05-17", got)
+	}
+}
+
+func TestBuildSalesPlan_RejectsInvalidOrConflictingFrequency(t *testing.T) {
+	resetSalesFlags()
+	salesMonth = "2026-05"
+	salesFrequency = "banana"
+	if _, err := buildSalesPlan(time.Now()); err == nil {
+		t.Fatal("invalid frequency must fail locally")
+	}
+	salesFrequency = "DAILY"
+	if _, err := buildSalesPlan(time.Now()); err == nil {
+		t.Fatal("DAILY must conflict with a monthly date")
 	}
 }
 
@@ -183,6 +215,22 @@ func TestSalesRowMatchesBundle(t *testing.T) {
 				t.Errorf("got %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestSalesRowMatchesResolvedAppIdentity(t *testing.T) {
+	app := salesAppIdentity{BundleID: "io.corelift.simplecycle", SKU: "simplecycle", AppleID: "6757202305"}
+	for _, row := range []asc.SalesReportRow{
+		{SKU: "simplecycle", AppleIdentifier: "6757202305"},
+		{SKU: "io.corelift.simplecycle.lifetime", ParentIdentifier: "io.corelift.simplecycle"},
+	} {
+		if !salesRowMatchesApp(&row, app) {
+			t.Errorf("resolved identity did not match row: %+v", row)
+		}
+	}
+	wrong := asc.SalesReportRow{SKU: "other-app", AppleIdentifier: "123"}
+	if salesRowMatchesApp(&wrong, app) {
+		t.Fatal("unrelated app row matched resolved identity")
 	}
 }
 
@@ -276,24 +324,24 @@ func TestFetchSalesAcrossDates_DecodesAndFilters(t *testing.T) {
 	})
 	c := fixtureASCClient(t, srv)
 
-	rows, raw, err := fetchSalesAcrossDates(context.Background(), c, salesFetchOpts{
+	got, err := fetchSalesAcrossDates(context.Background(), c, salesFetchOpts{
 		vendor:      "99999999",
 		reportType:  asc.SalesReportTypeSales,
 		reportSub:   asc.SalesReportSubTypeSummary,
 		frequency:   asc.SalesFrequencyDaily,
 		dates:       []string{"2026-05-01"},
-		bundleID:    "com.example.testapp",
+		app:         salesAppIdentity{BundleID: "com.example.testapp", SKU: "com.example.testapp", AppleID: "1234567890"},
 		captureRows: true,
 	})
 	if err != nil {
 		t.Fatalf("fetch: %v", err)
 	}
-	if len(raw) != 0 {
-		t.Errorf("raw = %d bytes, want 0 when captureRows", len(raw))
+	if len(got.raw) != 0 {
+		t.Errorf("raw = %d bytes, want 0 when captureRows", len(got.raw))
 	}
 	// Fixture has 4 rows; 3 match the bundleId via SKU prefix or parent.
-	if len(rows) < 3 {
-		t.Fatalf("rows = %d, want >= 3 (filter must keep matching SKUs)", len(rows))
+	if len(got.rows) < 3 {
+		t.Fatalf("rows = %d, want >= 3 (filter must keep matching SKUs)", len(got.rows))
 	}
 }
 
@@ -303,20 +351,20 @@ func TestFetchSalesAcrossDates_RawCapturePassthrough(t *testing.T) {
 	})
 	c := fixtureASCClient(t, srv)
 
-	_, raw, err := fetchSalesAcrossDates(context.Background(), c, salesFetchOpts{
+	got, err := fetchSalesAcrossDates(context.Background(), c, salesFetchOpts{
 		vendor:     "99999999",
 		reportType: asc.SalesReportTypeSales,
 		reportSub:  asc.SalesReportSubTypeSummary,
 		frequency:  asc.SalesFrequencyDaily,
 		dates:      []string{"2026-05-01"},
-		bundleID:   "com.example.testapp",
+		app:        salesAppIdentity{BundleID: "com.example.testapp", SKU: "com.example.testapp", AppleID: "1234567890"},
 		captureRaw: true,
 	})
 	if err != nil {
 		t.Fatalf("fetch: %v", err)
 	}
-	if !bytes.HasPrefix(raw, []byte("Provider\t")) {
-		t.Errorf("raw passthrough does not start with Apple TSV header: %q", raw[:min(40, len(raw))])
+	if !bytes.HasPrefix(got.raw, []byte("Provider\t")) {
+		t.Errorf("raw passthrough does not start with Apple TSV header: %q", got.raw[:min(40, len(got.raw))])
 	}
 }
 
@@ -329,13 +377,13 @@ func TestFetchSalesAcrossDates_PropagatesAPIError(t *testing.T) {
 	t.Cleanup(srv.Close)
 	c := fixtureASCClient(t, srv)
 
-	_, _, err := fetchSalesAcrossDates(context.Background(), c, salesFetchOpts{
+	_, err := fetchSalesAcrossDates(context.Background(), c, salesFetchOpts{
 		vendor:      "99999999",
 		reportType:  asc.SalesReportTypeSales,
 		reportSub:   asc.SalesReportSubTypeSummary,
 		frequency:   asc.SalesFrequencyDaily,
 		dates:       []string{"2026-05-01"},
-		bundleID:    "com.example.testapp",
+		app:         salesAppIdentity{BundleID: "com.example.testapp", SKU: "com.example.testapp", AppleID: "1234567890"},
 		captureRows: true,
 	})
 	if err == nil {
@@ -343,6 +391,53 @@ func TestFetchSalesAcrossDates_PropagatesAPIError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "FORBIDDEN") {
 		t.Errorf("err = %v, want to contain Apple's FORBIDDEN code", err)
+	}
+}
+
+func TestFetchSalesAcrossDates_SkipsExpectedNoReport404(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("filter[reportDate]") == "2026-05-01" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"errors":[{"status":"404","title":"Not Found","detail":"There were no sales for the date specified"}]}`))
+			return
+		}
+		var buf bytes.Buffer
+		gz := gzip.NewWriter(&buf)
+		_, _ = gz.Write([]byte("Provider\tProvider Country\tSKU\tUnits\tDeveloper Proceeds\nAPPLE\tUS\tsimplecycle\t1\t0.00\n"))
+		_ = gz.Close()
+		w.Header().Set("Content-Type", "application/a-gzip")
+		_, _ = w.Write(buf.Bytes())
+	}))
+	t.Cleanup(srv.Close)
+	c := fixtureASCClient(t, srv)
+
+	got, err := fetchSalesAcrossDates(context.Background(), c, salesFetchOpts{
+		vendor:      "99999999",
+		reportType:  asc.SalesReportTypeSales,
+		reportSub:   asc.SalesReportSubTypeSummary,
+		frequency:   asc.SalesFrequencyDaily,
+		dates:       []string{"2026-05-01", "2026-05-02"},
+		app:         salesAppIdentity{BundleID: "io.corelift.simplecycle", SKU: "simplecycle", AppleID: "6757202305"},
+		captureRows: true,
+	})
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if len(got.unavailableDates) != 1 || got.unavailableDates[0] != "2026-05-01" {
+		t.Fatalf("unavailableDates = %v", got.unavailableDates)
+	}
+	if len(got.rows) != 1 {
+		t.Fatalf("rows = %d, want later available date to survive", len(got.rows))
+	}
+}
+
+func TestExpectedNoReport_RecognizesNotAvailableYet(t *testing.T) {
+	err := &asc.APIError{HTTPStatus: http.StatusNotFound, Errors: []asc.ErrorItem{{
+		Code: "NOT_FOUND", Detail: "Report is not available yet. Daily reports are available later.",
+	}}}
+	if !isExpectedNoReport(err) {
+		t.Fatal("confirmed Apple not-available-yet response must be an expected empty state")
 	}
 }
 
@@ -380,13 +475,13 @@ func TestFetchSalesAcrossDates_SendsCorrectQuery(t *testing.T) {
 	})
 	c := fixtureASCClient(t, srv)
 
-	_, _, err := fetchSalesAcrossDates(context.Background(), c, salesFetchOpts{
+	_, err := fetchSalesAcrossDates(context.Background(), c, salesFetchOpts{
 		vendor:      "99999999",
 		reportType:  asc.SalesReportTypeSales,
 		reportSub:   asc.SalesReportSubTypeSummary,
 		frequency:   asc.SalesFrequencyDaily,
 		dates:       []string{"2026-05-01"},
-		bundleID:    "com.example.testapp",
+		app:         salesAppIdentity{BundleID: "com.example.testapp", SKU: "com.example.testapp", AppleID: "1234567890"},
 		captureRows: true,
 	})
 	if err != nil {

@@ -252,24 +252,43 @@ func runVersionsGet(cmd *cobra.Command, args []string) error {
 // resolveAppID resolves a bundleId — or a numeric ASC app ID — to the app ID,
 // returning a typed error that names the argument when none is found.
 func resolveAppID(ctx context.Context, c *asc.Client, bundleID string) (string, error) {
-	if isNumericAppID(bundleID) {
-		if _, err := asc.Get[asc.Single[AppAttributes]](ctx, c, "/v1/apps/"+bundleID, nil); err != nil {
-			return "", fmt.Errorf("apps: no app found with id %s: %w", bundleID, err)
+	app, err := resolveApp(ctx, c, bundleID)
+	if err != nil {
+		return "", err
+	}
+	return app.ID, nil
+}
+
+// resolveApp resolves either a bundle ID or numeric ASC app ID and retains
+// the full identity. Vendor-wide reports need the SKU and Apple ID as well as
+// the bundle ID to filter rows without silently dropping valid app data.
+func resolveApp(ctx context.Context, c *asc.Client, identifier string) (*AppView, error) {
+	if isNumericAppID(identifier) {
+		resp, err := asc.Get[asc.Single[AppAttributes]](ctx, c, "/v1/apps/"+identifier, nil)
+		if err != nil {
+			return nil, fmt.Errorf("apps: no app found with id %s: %w", identifier, err)
 		}
-		return bundleID, nil
+		if resp.Data.ID == "" {
+			return nil, fmt.Errorf("apps: no app found with id %s", identifier)
+		}
+		return &AppView{ID: resp.Data.ID, Type: resp.Data.Type, Attributes: resp.Data.Attributes}, nil
 	}
 	q := url.Values{
-		"filter[bundleId]": {bundleID},
+		"filter[bundleId]": {identifier},
 		"limit":            {"1"},
 	}
 	page, err := asc.Get[asc.Collection[AppAttributes]](ctx, c, "/v1/apps", q)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if len(page.Data) == 0 {
-		return "", fmt.Errorf("apps: no app found with bundleId %q", bundleID)
+		return nil, fmt.Errorf("apps: no app found with bundleId %q", identifier)
 	}
-	return page.Data[0].ID, nil
+	return &AppView{
+		ID:         page.Data[0].ID,
+		Type:       page.Data[0].Type,
+		Attributes: page.Data[0].Attributes,
+	}, nil
 }
 
 // isNumericAppID reports whether the argument looks like an ASC app ID rather than a bundleId.

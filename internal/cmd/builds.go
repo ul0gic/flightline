@@ -90,7 +90,8 @@ var buildsGetCmd = &cobra.Command{
 	Args:         cobra.ExactArgs(1),
 	RunE:         runBuildsGet,
 	Example: `  flightline builds get com.example.myapp --build 42
-  flightline builds get com.example.myapp --build 42 --output json | jq .attributes.processingState`,
+	  flightline builds get com.example.myapp --build 2 --version 1.1 --platform IOS
+	  flightline builds get com.example.myapp --build 42 --output json | jq .attributes.processingState`,
 }
 
 var buildsAttachCmd = &cobra.Command{
@@ -106,6 +107,8 @@ var buildsAttachCmd = &cobra.Command{
 var (
 	buildsListLimit      int
 	buildsGetBuild       string
+	buildsGetVersion     string
+	buildsGetPlatform    string
 	buildsAttachVersion  string
 	buildsAttachBuild    string
 	buildsAttachPlatform string
@@ -115,6 +118,8 @@ func init() {
 	buildsListCmd.Flags().IntVar(&buildsListLimit, "limit", 0, "max builds to emit (0 = no cap)")
 
 	buildsGetCmd.Flags().StringVar(&buildsGetBuild, "build", "", "build number to fetch (CFBundleVersion, e.g. 42)")
+	buildsGetCmd.Flags().StringVar(&buildsGetVersion, "version", "", "App Store version/train used to disambiguate duplicate build numbers")
+	buildsGetCmd.Flags().StringVar(&buildsGetPlatform, "platform", "", "platform used to disambiguate duplicate build numbers")
 	_ = buildsGetCmd.MarkFlagRequired("build")
 
 	buildsAttachCmd.Flags().StringVar(&buildsAttachVersion, "version", "", "App Store version string the build is attached to (e.g. 1.0.1)")
@@ -166,24 +171,15 @@ func runBuildsGet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	q := url.Values{
-		"filter[version]": {build},
-		"limit":           {"1"},
-	}
-	page, err := asc.Get[asc.Collection[asc.BuildAttributes]](
-		cmd.Context(), c, "/v1/apps/"+appID+"/builds", q,
-	)
+	view, err := lookupBuild(cmd.Context(), c, appID, build, buildLookupOptions{
+		ReleaseVersion: buildsGetVersion,
+		Platform:       buildsGetPlatform,
+	})
 	if err != nil {
 		return err
 	}
-	if len(page.Data) == 0 {
+	if view == nil {
 		return fmt.Errorf("builds: no build %q found for %q", build, bundleID)
-	}
-
-	view := &BuildView{
-		ID:         page.Data[0].ID,
-		Type:       page.Data[0].Type,
-		Attributes: page.Data[0].Attributes,
 	}
 	return Render(view, outputMode())
 }
@@ -275,7 +271,10 @@ func runBuildsAttach(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("builds: no version %q found for %q (platform=%s)", versionStr, bundleID, platform)
 	}
 
-	buildView, err := lookupBuild(cmd.Context(), c, appID, buildNum)
+	buildView, err := lookupBuild(cmd.Context(), c, appID, buildNum, buildLookupOptions{
+		ReleaseVersion: versionStr,
+		Platform:       platform,
+	})
 	if err != nil {
 		return err
 	}
@@ -312,52 +311,64 @@ func runBuildsAttach(cmd *cobra.Command, args []string) error {
 }
 
 // lookupBuild returns (nil, nil) when no build with version=<num> exists.
-func lookupBuild(ctx context.Context, c *asc.Client, appID, buildNum string) (*BuildView, error) {
+type buildLookupOptions struct {
+	ReleaseVersion string
+	Platform       string
+}
+
+func lookupBuild(ctx context.Context, c *asc.Client, appID, buildNum string, options ...buildLookupOptions) (*BuildView, error) {
 	q := url.Values{
+		"filter[app]":     {appID},
 		"filter[version]": {buildNum},
-		"limit":           {"1"},
+		"limit":           {"200"},
 	}
-	page, err := asc.Get[asc.Collection[asc.BuildAttributes]](
-		ctx, c, "/v1/apps/"+appID+"/builds", q,
-	)
+	var opts buildLookupOptions
+	if len(options) > 0 {
+		opts = options[0]
+	}
+	if releaseVersion := strings.TrimSpace(opts.ReleaseVersion); releaseVersion != "" {
+		q.Set("filter[preReleaseVersion.version]", releaseVersion)
+	}
+	if platform := strings.TrimSpace(opts.Platform); platform != "" {
+		q.Set("filter[preReleaseVersion.platform]", strings.ToUpper(platform))
+	}
+	views, err := collectBuilds(ctx, c, "/v1/builds", q, 0)
 	if err != nil {
 		return nil, err
 	}
-	if len(page.Data) == 0 {
+	if len(views) == 0 {
 		return nil, nil
 	}
-	return &BuildView{
-		ID:         page.Data[0].ID,
-		Type:       page.Data[0].Type,
-		Attributes: page.Data[0].Attributes,
-	}, nil
+	if len(views) > 1 {
+		parts := make([]string, 0, len(views))
+		for i := range views {
+			parts = append(parts, fmt.Sprintf("%s (uploaded %s)", views[i].ID, views[i].Attributes.UploadedDate))
+		}
+		return nil, fmt.Errorf("build number %q is ambiguous for app %s: %s", buildNum, appID, strings.Join(parts, ", "))
+	}
+	return &views[0], nil
 }
 
 // resolveBuildID maps a build number (CFBundleVersion) to Apple's build
 // resource id; an ambiguous number errors with the candidates instead of guessing.
 func resolveBuildID(ctx context.Context, c *asc.Client, appID, bundleID, buildNum string) (string, error) {
-	q := url.Values{
-		"filter[version]": {buildNum},
-		"limit":           {"2"},
-	}
-	page, err := asc.Get[asc.Collection[asc.BuildAttributes]](
-		ctx, c, "/v1/apps/"+appID+"/builds", q,
-	)
+	return resolveBuildIDWithOptions(ctx, c, appID, bundleID, buildNum, buildLookupOptions{})
+}
+
+func resolveBuildIDWithOptions(
+	ctx context.Context,
+	c *asc.Client,
+	appID, bundleID, buildNum string,
+	opts buildLookupOptions,
+) (string, error) {
+	view, err := lookupBuild(ctx, c, appID, buildNum, opts)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("resolve build %q for %q: %w; run `flightline builds list %s` to inspect candidates", buildNum, bundleID, err, bundleID)
 	}
-	switch len(page.Data) {
-	case 0:
+	if view == nil {
 		return "", fmt.Errorf("no build %q found for %q: run `flightline builds list %s` to see uploaded builds", buildNum, bundleID, bundleID)
-	case 1:
-		return page.Data[0].ID, nil
-	default:
-		a, b := &page.Data[0], &page.Data[1]
-		return "", fmt.Errorf(
-			"build number %q is ambiguous for %q: matches build %s (uploaded %s) and build %s (uploaded %s); run `flightline builds list %s` to inspect them",
-			buildNum, bundleID, a.ID, a.Attributes.UploadedDate, b.ID, b.Attributes.UploadedDate, bundleID,
-		)
 	}
+	return view.ID, nil
 }
 
 // getAttachedBuild returns nil when Apple's response is data:null (none attached).

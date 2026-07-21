@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strconv"
 	"testing"
+
+	"github.com/ul0gic/flightline/internal/asc"
 )
 
 // TestJSONStability_AllCommands locks the top-level JSON keys for every read
@@ -505,4 +507,40 @@ func indexInto(t *testing.T, arr []any, seg string, path []string) any {
 		return nil
 	}
 	return arr[idx]
+}
+
+func TestJSONStability_EmptyCollectionsAreArrays(t *testing.T) {
+	cases := []struct {
+		name string
+		view any
+		keys []string
+	}{
+		{"sales", SalesReport{ReportDates: []string{}, Unavailable: []string{}, Rows: []asc.SalesReportRow{}, Summary: []SalesDailySummary{}}, []string{"reportDates", "unavailableDates", "rows", "summary"}},
+		{"finance", FinanceReport{Rows: []asc.FinanceReportRow{}, Summary: []FinanceRegionSummary{}}, []string{"rows", "summary"}},
+		{"subscription reports", SubscriptionReport{ReportDates: []string{}, Unavailable: []string{}, Rows: []asc.SalesReportRow{}}, []string{"reportDates", "unavailableDates", "rows"}},
+		{"review summary", ReviewSummaryView{Summarizations: []ReviewSummarizationItem{}}, []string{"summarizations"}},
+		{"analytics status", AnalyticsStatusView{Reports: []asc.PersistedAnalyticsReport{}, Downloaded: []string{}}, []string{"reports", "downloadedSegments"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body, err := json.Marshal(tc.view)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			var decoded map[string]any
+			if err := json.Unmarshal(body, &decoded); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			for _, key := range tc.keys {
+				value, ok := decoded[key]
+				if !ok {
+					t.Errorf("missing collection key %q: %s", key, body)
+					continue
+				}
+				if _, ok := value.([]any); !ok {
+					t.Errorf("collection %q decoded as %T, want array: %s", key, value, body)
+				}
+			}
+		})
+	}
 }

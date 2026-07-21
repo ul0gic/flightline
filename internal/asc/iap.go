@@ -37,6 +37,12 @@ type IAPAttributes struct {
 	ContentHosting    *bool  `json:"contentHosting,omitempty"`
 }
 
+// IAPVersionAttributes is returned by the undocumented public IAP versions relationship.
+type IAPVersionAttributes struct {
+	State   string `json:"state,omitempty"`
+	Version int    `json:"version,omitempty"`
+}
+
 // IAPLocalizationAttributes is the subset of Apple's InAppPurchaseLocalization.attributes Flightline reads.
 // Per-locale display name + description; State follows the localization review lifecycle (narrower than IAPState).
 type IAPLocalizationAttributes struct {

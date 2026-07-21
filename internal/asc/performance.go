@@ -1,5 +1,16 @@
 package asc
 
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
+)
+
+const xcodeMetricsMediaType = "application/vnd.apple.xcode-metrics+json"
+
 // perfPowerMetrics returns Apple's xcodeMetrics envelope (NOT JSON:API); standard JSON decoding works.
 const (
 	MetricCategoryHang        = "HANG"
@@ -82,4 +93,28 @@ type PerfPowerMetricGoal struct {
 type PerfPowerMetricUnit struct {
 	Identifier  string `json:"identifier,omitempty"`
 	DisplayName string `json:"displayName,omitempty"`
+}
+
+// FetchPerfPowerMetrics reads Apple's custom xcodeMetrics envelope. These
+// endpoints reject the normal JSON Accept header used by JSON:API resources.
+func (c *Client) FetchPerfPowerMetrics(ctx context.Context, path string, query url.Values) (PerfPowerMetricsResponse, error) {
+	if !strings.HasSuffix(path, "/perfPowerMetrics") {
+		return PerfPowerMetricsResponse{}, fmt.Errorf("asc: performance path must end in /perfPowerMetrics, got %q", path)
+	}
+	resp, err := c.do(ctx, http.MethodGet, path, query, nil, xcodeMetricsMediaType)
+	if err != nil {
+		return PerfPowerMetricsResponse{}, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return PerfPowerMetricsResponse{}, c.errorFromResponse(resp)
+	}
+	var out PerfPowerMetricsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return PerfPowerMetricsResponse{}, fmt.Errorf("asc: decode performance response: %w", err)
+	}
+	if out.ProductData == nil {
+		out.ProductData = []PerfPowerProductData{}
+	}
+	return out, nil
 }

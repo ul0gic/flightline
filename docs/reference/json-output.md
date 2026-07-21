@@ -164,7 +164,7 @@ Report commands carry the fetch parameters in the envelope plus both the raw row
 }
 ```
 
-`rows` passes through every column of Apple's report as camelCase fields (rows omit columns Apple left blank); `summary` folds them by date and currency, and amounts in different currencies are never summed together. The async `analytics` commands follow the same pattern: `analytics status --output json` returns the request parameters (`bundleId`, `requestId`, `status`, `stateFile`) alongside the observed `reports` and `downloadedSegments` arrays.
+`rows` passes through every column of Apple's report as camelCase fields (rows omit columns Apple left blank); `summary` folds them by date and currency, and amounts in different currencies are never summed together. Dates for which Apple has no report appear in `unavailableDates` without aborting the remaining window. Collection fields are always arrays, including when empty; they are never omitted or rendered as `null`. The async `analytics` commands follow the same pattern: `analytics status --output json` returns the request parameters (`bundleId`, `requestId`, `status`, `stateFile`) alongside the observed `reports` and `downloadedSegments` arrays.
 
 ## TSV passthrough
 

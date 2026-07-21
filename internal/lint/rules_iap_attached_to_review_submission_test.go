@@ -2,6 +2,8 @@ package lint
 
 import (
 	"context"
+	"encoding/base64"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -28,6 +30,8 @@ func TestIAPAttachedToReviewSubmission_FiresWhenIAPNotInSubmission(t *testing.T)
 			_, _ = w.Write([]byte(`{"data":[
 				{"id":"iap-A","type":"inAppPurchases","attributes":{"productId":"com.example.x.lifetime","state":"READY_TO_SUBMIT"}}
 			]}`))
+		case r.URL.Path == "/v2/inAppPurchases/iap-A/versions":
+			_, _ = w.Write([]byte(`{"data":[{"id":"iap-version-A","type":"inAppPurchaseVersions","attributes":{"version":1,"state":"READY_FOR_REVIEW"}}]}`))
 		case r.URL.Path == "/v1/reviewSubmissions":
 			_, _ = w.Write([]byte(`{"data":[{"id":"sub-1","type":"reviewSubmissions","attributes":{"state":"READY_FOR_REVIEW"}}]}`))
 		case strings.HasSuffix(r.URL.Path, "/items"):
@@ -61,6 +65,7 @@ func TestIAPAttachedToReviewSubmission_FiresWhenIAPNotInSubmission(t *testing.T)
 }
 
 func TestIAPAttachedToReviewSubmission_NoOpWhenAttached(t *testing.T) {
+	itemID := base64.RawStdEncoding.EncodeToString([]byte("sub-1|17|iap-version-A"))
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		switch {
@@ -70,11 +75,12 @@ func TestIAPAttachedToReviewSubmission_NoOpWhenAttached(t *testing.T) {
 			_, _ = w.Write([]byte(`{"data":[
 				{"id":"iap-A","type":"inAppPurchases","attributes":{"productId":"com.example.x.lifetime","state":"READY_TO_SUBMIT"}}
 			]}`))
+		case r.URL.Path == "/v2/inAppPurchases/iap-A/versions":
+			_, _ = w.Write([]byte(`{"data":[{"id":"iap-version-A","type":"inAppPurchaseVersions","attributes":{"version":1,"state":"READY_FOR_REVIEW"}}]}`))
 		case r.URL.Path == "/v1/reviewSubmissions":
 			_, _ = w.Write([]byte(`{"data":[{"id":"sub-1","type":"reviewSubmissions","attributes":{"state":"WAITING_FOR_REVIEW"}}]}`))
 		case strings.HasSuffix(r.URL.Path, "/items"):
-			// item references the IAP itself
-			_, _ = w.Write([]byte(`{"data":[{"id":"item-1","type":"reviewSubmissionItems","attributes":{"state":"READY_FOR_REVIEW"},"relationships":{"inAppPurchaseV2":{"data":{"type":"inAppPurchaseV2","id":"iap-A"}}}}]}`))
+			_, _ = fmt.Fprintf(w, `{"data":[{"id":%q,"type":"reviewSubmissionItems","attributes":{"state":"READY_FOR_REVIEW"}}]}`, itemID)
 		default:
 			http.NotFound(w, r)
 		}
@@ -88,5 +94,41 @@ func TestIAPAttachedToReviewSubmission_NoOpWhenAttached(t *testing.T) {
 	})
 	if len(got) != 0 {
 		t.Errorf("got %d diagnostics, want 0 when IAP is attached: %+v", len(got), got)
+	}
+}
+
+func TestIAPAttachedToReviewSubmission_UnknownItemWarnsInsteadOfCryingWolf(t *testing.T) {
+	itemID := base64.RawStdEncoding.EncodeToString([]byte("sub-1|99|unknown-native-id"))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		switch {
+		case r.URL.Path == "/v1/apps":
+			_, _ = w.Write([]byte(`{"data":[{"id":"app-1","type":"apps","attributes":{"bundleId":"com.example.x"}}]}`))
+		case strings.HasSuffix(r.URL.Path, "/inAppPurchasesV2"):
+			_, _ = w.Write([]byte(`{"data":[{"id":"iap-A","type":"inAppPurchases","attributes":{"productId":"com.example.x.lifetime","state":"READY_TO_SUBMIT"}}]}`))
+		case r.URL.Path == "/v2/inAppPurchases/iap-A/versions":
+			_, _ = w.Write([]byte(`{"data":[{"id":"iap-version-A","type":"inAppPurchaseVersions"}]}`))
+		case r.URL.Path == "/v1/reviewSubmissions":
+			_, _ = w.Write([]byte(`{"data":[{"id":"sub-1","type":"reviewSubmissions","attributes":{"state":"READY_FOR_REVIEW"}}]}`))
+		case strings.HasSuffix(r.URL.Path, "/items"):
+			_, _ = fmt.Fprintf(w, `{"data":[{"id":%q,"type":"reviewSubmissionItems","attributes":{"state":"READY_FOR_REVIEW"}}]}`, itemID)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	c := newTestClient(t, srv)
+	got := (iapAttachedToReviewSubmissionRule{}).Check(CheckContext{
+		Ctx: context.Background(), Client: c, BundleID: "com.example.x", Live: true,
+	})
+	if len(got) != 1 {
+		t.Fatalf("got %d diagnostics, want 1: %+v", len(got), got)
+	}
+	if got[0].Severity != SeverityWarning {
+		t.Errorf("severity = %v, want warning", got[0].Severity)
+	}
+	if !strings.Contains(got[0].Message, "could not verify") {
+		t.Errorf("message = %q, want unverifiable warning", got[0].Message)
 	}
 }

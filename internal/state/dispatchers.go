@@ -40,10 +40,11 @@ func applyBuildAttach(ctx context.Context, c *asc.Client, actx ApplyContext, ch 
 		return fmt.Errorf("apply build.number: expected string, got %T", ch.To)
 	}
 	q := url.Values{
-		"filter[app]":                       {appID},
-		"filter[preReleaseVersion.version]": {actx.Version},
-		"filter[version]":                   {target},
-		"limit":                             {"1"},
+		"filter[app]":                        {appID},
+		"filter[preReleaseVersion.version]":  {actx.Version},
+		"filter[preReleaseVersion.platform]": {platform},
+		"filter[version]":                    {target},
+		"limit":                              {"2"},
 	}
 	bp, err := asc.Get[asc.Collection[asc.BuildAttributes]](ctx, c, "/v1/builds", q)
 	if err != nil {
@@ -51,6 +52,9 @@ func applyBuildAttach(ctx context.Context, c *asc.Client, actx ApplyContext, ch 
 	}
 	if len(bp.Data) == 0 {
 		return fmt.Errorf("apply build.number: no build %q for version %s (uploaded yet?)", target, actx.Version)
+	}
+	if len(bp.Data) > 1 {
+		return fmt.Errorf("apply build.number: build %q is ambiguous for version %s on %s", target, actx.Version, platform)
 	}
 	buildID := bp.Data[0].ID
 

@@ -45,9 +45,9 @@ type SubscriptionDetailView struct {
 	Type               string                              `json:"type"`
 	Attributes         asc.SubscriptionAttributes          `json:"attributes"`
 	Group              *SubscriptionGroupSummary           `json:"group,omitempty"`
-	Localizations      []SubscriptionLocalizationItem      `json:"localizations,omitempty"`
-	IntroductoryOffers []SubscriptionIntroductoryOfferItem `json:"introductoryOffers,omitempty"`
-	Prices             []SubscriptionPriceItem             `json:"prices,omitempty"`
+	Localizations      []SubscriptionLocalizationItem      `json:"localizations"`
+	IntroductoryOffers []SubscriptionIntroductoryOfferItem `json:"introductoryOffers"`
+	Prices             []SubscriptionPriceItem             `json:"prices"`
 }
 
 type SubscriptionGroupSummary struct {
@@ -236,11 +236,14 @@ func runSubscriptionsGet(cmd *cobra.Command, args []string) error {
 	}
 
 	view := &SubscriptionDetailView{
-		BundleID:   bundleID,
-		ID:         subID,
-		Type:       subType,
-		Attributes: subAttrs,
-		Group:      groupRef,
+		BundleID:           bundleID,
+		ID:                 subID,
+		Type:               subType,
+		Attributes:         subAttrs,
+		Group:              groupRef,
+		Localizations:      []SubscriptionLocalizationItem{},
+		IntroductoryOffers: []SubscriptionIntroductoryOfferItem{},
+		Prices:             []SubscriptionPriceItem{},
 	}
 
 	if err := loadSubscriptionLocalizations(cmd.Context(), c, subID, view); err != nil {

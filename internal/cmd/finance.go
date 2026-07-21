@@ -21,10 +21,13 @@ type FinanceReport struct {
 	ReportType   string                 `json:"reportType"`
 	Frequency    string                 `json:"frequency"`
 	ReportDate   string                 `json:"reportDate"`
+	PeriodStart  string                 `json:"periodStart,omitempty"`
+	PeriodEnd    string                 `json:"periodEnd,omitempty"`
 	RegionCode   string                 `json:"regionCode"`
 	RowCount     int                    `json:"rowCount"`
 	Rows         []asc.FinanceReportRow `json:"rows"`
-	Summary      []FinanceRegionSummary `json:"summary,omitempty"`
+	Summary      []FinanceRegionSummary `json:"summary"`
+	Note         string                 `json:"note,omitempty"`
 }
 
 // FinanceRegionSummary collapses rows by (CountryOfSale, PartnerShareCurrency),
@@ -38,13 +41,14 @@ type FinanceRegionSummary struct {
 }
 
 func (r FinanceReport) TableRows() (headers []string, rows [][]string) {
-	headers = []string{"COUNTRY", "CURRENCY", "QTY", "PARTNER_SHARE", "EXT_PARTNER_SHARE"}
+	headers = []string{"PERIOD", "COUNTRY", "CURRENCY", "QTY", "PARTNER_SHARE", "EXT_PARTNER_SHARE"}
 	if len(r.Summary) == 0 {
 		return headers, nil
 	}
 	rows = make([][]string, 0, len(r.Summary))
 	for _, s := range r.Summary {
 		rows = append(rows, []string{
+			financePeriodLabel(r.PeriodStart, r.PeriodEnd),
 			s.CountryOfSale,
 			s.Currency,
 			strconv.Itoa(s.Quantity),
@@ -60,10 +64,9 @@ var financeCmd = &cobra.Command{
 	Short: "Fetch App Store Connect finance (settlement) reports",
 	Long: `finance pulls finance/settlement reports from /v1/financeReports.
 
-Finance reports are MONTHLY or YEARLY (Apple does not produce daily/weekly
-finance reports: daily granularity belongs to ` + "`flightline sales`" + `).
-Each call is scoped to a region code: "US", "GB", "Z1" (worldwide), etc.
-Use --region to override the default ("Z1").
+Apple indexes finance reports by fiscal year/month, not calendar month.
+Daily granularity belongs to ` + "`flightline sales`" + `. FINANCIAL defaults
+to the consolidated region ZZ. FINANCE_DETAIL defaults to Z1.
 
 The bundleId argument filters typed output by Vendor Identifier so a single-
 vendor multi-app account stays focused. --output tsv streams Apple's raw
@@ -74,23 +77,21 @@ Vendor number is read from APP_STORE_CONNECT_VENDOR_NUMBER.`,
 	Args:         cobra.ExactArgs(1),
 	RunE:         runFinance,
 	Example: `  flightline finance com.example.myapp --month 2026-04
-  flightline finance com.example.myapp --year 2026
-  flightline finance com.example.myapp --month 2026-04 --region US
+	  flightline finance com.example.myapp --month 2026-04 --region US
+	  flightline finance com.example.myapp --month 2026-04 --report-type FINANCE_DETAIL
   flightline finance com.example.myapp --month 2026-04 --output json | jq '.summary'
   flightline finance com.example.myapp --month 2026-04 --output tsv > finance.tsv`,
 }
 
 var (
 	financeMonth      string
-	financeYear       string
 	financeRegion     string
 	financeReportType string
 )
 
 func init() {
-	financeCmd.Flags().StringVar(&financeMonth, "month", "", "MONTHLY report for YYYY-MM (mutually exclusive with --year)")
-	financeCmd.Flags().StringVar(&financeYear, "year", "", "YEARLY report for YYYY (mutually exclusive with --month)")
-	financeCmd.Flags().StringVar(&financeRegion, "region", "Z1", "ISO region code (Z1 = worldwide)")
+	financeCmd.Flags().StringVar(&financeMonth, "month", "", "Apple fiscal year/month in YYYY-MM format")
+	financeCmd.Flags().StringVar(&financeRegion, "region", "", "financial region code (default: ZZ for FINANCIAL, Z1 for FINANCE_DETAIL)")
 	financeCmd.Flags().StringVar(&financeReportType, "report-type", string(asc.FinanceReportTypeFinancial),
 		"reportType filter (FINANCIAL or FINANCE_DETAIL)")
 
@@ -107,12 +108,16 @@ func runFinance(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	region := strings.TrimSpace(financeRegion)
-	if region == "" {
-		return errors.New("finance: --region is required (use Z1 for worldwide)")
+	reportType, region, err := resolveFinanceScope(financeReportType, financeRegion)
+	if err != nil {
+		return err
 	}
 
 	c, err := newClient()
+	if err != nil {
+		return err
+	}
+	app, err := resolveApp(cmd.Context(), c, bundleID)
 	if err != nil {
 		return err
 	}
@@ -120,12 +125,12 @@ func runFinance(cmd *cobra.Command, args []string) error {
 	mode := outputMode()
 	rawMode := mode == "tsv"
 
-	rows, raw, err := fetchFinanceReport(cmd.Context(), c, financeFetchOpts{
+	fetched, err := fetchFinanceReport(cmd.Context(), c, financeFetchOpts{
 		vendor:      vendor,
-		reportType:  asc.FinanceReportType(strings.TrimSpace(financeReportType)),
+		reportType:  reportType,
 		region:      region,
 		reportDate:  reportDate,
-		bundleID:    bundleID,
+		bundleID:    app.Attributes.BundleID,
 		captureRaw:  rawMode,
 		captureRows: !rawMode,
 	})
@@ -134,24 +139,36 @@ func runFinance(cmd *cobra.Command, args []string) error {
 	}
 
 	if rawMode {
-		if _, err := os.Stdout.Write(raw); err != nil {
+		if _, err := os.Stdout.Write(fetched.raw); err != nil {
 			return fmt.Errorf("finance: write tsv: %w", err)
 		}
 		return nil
 	}
 
+	periodStart, periodEnd := financeReportPeriod(fetched.rows)
 	report := FinanceReport{
-		BundleID:     bundleID,
+		BundleID:     app.Attributes.BundleID,
 		VendorNumber: vendor,
-		ReportType:   financeReportType,
+		ReportType:   string(reportType),
 		Frequency:    freq,
 		ReportDate:   reportDate,
 		RegionCode:   region,
-		RowCount:     len(rows),
-		Rows:         rows,
-		Summary:      summarizeFinanceByRegion(rows),
+		PeriodStart:  periodStart,
+		PeriodEnd:    periodEnd,
+		RowCount:     len(fetched.rows),
+		Rows:         fetched.rows,
+		Summary:      summarizeFinanceByRegion(fetched.rows),
+	}
+	if fetched.unavailable {
+		report.Note = "Apple has no financial report for this fiscal period"
 	}
 	return Render(report, mode)
+}
+
+type financeFetchResult struct {
+	rows        []asc.FinanceReportRow
+	raw         []byte
+	unavailable bool
 }
 
 type financeFetchOpts struct {
@@ -166,7 +183,7 @@ type financeFetchOpts struct {
 
 // fetchFinanceReport returns either typed rows (filtered by VendorIdentifier
 // prefix) or raw TSV bytes, per the capture flags.
-func fetchFinanceReport(ctx context.Context, c *asc.Client, opts financeFetchOpts) ([]asc.FinanceReportRow, []byte, error) {
+func fetchFinanceReport(ctx context.Context, c *asc.Client, opts financeFetchOpts) (financeFetchResult, error) {
 	body, err := c.FetchFinanceReport(ctx, asc.FinanceReportParams{
 		VendorNumber: opts.vendor,
 		ReportType:   opts.reportType,
@@ -174,17 +191,20 @@ func fetchFinanceReport(ctx context.Context, c *asc.Client, opts financeFetchOpt
 		ReportDate:   opts.reportDate,
 	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("finance: fetch %s/%s: %w", opts.region, opts.reportDate, err)
+		if isExpectedNoReport(err) {
+			return financeFetchResult{rows: []asc.FinanceReportRow{}, raw: []byte{}, unavailable: true}, nil
+		}
+		return financeFetchResult{}, fmt.Errorf("finance: fetch %s/%s: %w", opts.region, opts.reportDate, err)
 	}
 	if opts.captureRaw {
-		return nil, body, nil
+		return financeFetchResult{rows: []asc.FinanceReportRow{}, raw: body}, nil
 	}
 	if !opts.captureRows {
-		return nil, nil, nil
+		return financeFetchResult{rows: []asc.FinanceReportRow{}, raw: []byte{}}, nil
 	}
 	decoded, err := asc.DecodeFinanceTSV(body)
 	if err != nil {
-		return nil, nil, fmt.Errorf("finance: decode %s/%s: %w", opts.region, opts.reportDate, err)
+		return financeFetchResult{}, fmt.Errorf("finance: decode %s/%s: %w", opts.region, opts.reportDate, err)
 	}
 	rows := make([]asc.FinanceReportRow, 0, len(decoded))
 	for i := range decoded {
@@ -192,7 +212,7 @@ func fetchFinanceReport(ctx context.Context, c *asc.Client, opts financeFetchOpt
 			rows = append(rows, decoded[i])
 		}
 	}
-	return rows, nil, nil
+	return financeFetchResult{rows: rows, raw: []byte{}}, nil
 }
 
 // financeRowMatchesBundle matches against the Vendor Identifier column (the
@@ -240,24 +260,61 @@ func summarizeFinanceByRegion(rows []asc.FinanceReportRow) []FinanceRegionSummar
 	return out
 }
 
-// buildFinanceDate returns reportDate + frequency; exactly one of --month / --year must be set.
+// buildFinanceDate returns Apple's fiscal reportDate. The API accepts YYYY-MM only.
 func buildFinanceDate() (reportDate, frequency string, err error) {
 	month := strings.TrimSpace(financeMonth)
-	year := strings.TrimSpace(financeYear)
-	switch {
-	case month != "" && year != "":
-		return "", "", errors.New("finance: --month and --year are mutually exclusive")
-	case month != "":
-		if _, err := time.Parse("2006-01", month); err != nil {
-			return "", "", fmt.Errorf("finance: --month must be YYYY-MM, got %q", financeMonth)
-		}
-		return month, "MONTHLY", nil
-	case year != "":
-		if _, err := time.Parse("2006", year); err != nil {
-			return "", "", fmt.Errorf("finance: --year must be YYYY, got %q", financeYear)
-		}
-		return year, "YEARLY", nil
-	default:
-		return "", "", errors.New("finance: one of --month YYYY-MM or --year YYYY is required")
+	if month == "" {
+		return "", "", errors.New("finance: --month YYYY-MM is required (Apple fiscal year/month)")
 	}
+	if _, err := time.Parse("2006-01", month); err != nil {
+		return "", "", fmt.Errorf("finance: --month must be YYYY-MM, got %q", financeMonth)
+	}
+	return month, "MONTHLY", nil
+}
+
+func resolveFinanceScope(rawType, rawRegion string) (asc.FinanceReportType, string, error) {
+	reportType := asc.FinanceReportType(strings.ToUpper(strings.TrimSpace(rawType)))
+	region := strings.ToUpper(strings.TrimSpace(rawRegion))
+	switch reportType {
+	case asc.FinanceReportTypeFinancial:
+		if region == "" {
+			region = "ZZ"
+		}
+		if region == "Z1" {
+			return "", "", errors.New("finance: FINANCIAL does not use Z1; omit --region for consolidated ZZ or choose a supported financial region")
+		}
+	case asc.FinanceReportTypeFinanceDetail:
+		if region == "" {
+			region = "Z1"
+		}
+		if region != "Z1" {
+			return "", "", fmt.Errorf("finance: FINANCE_DETAIL requires region Z1, got %q", rawRegion)
+		}
+	default:
+		return "", "", fmt.Errorf("finance: --report-type must be FINANCIAL or FINANCE_DETAIL; got %q", rawType)
+	}
+	return reportType, region, nil
+}
+
+func financeReportPeriod(rows []asc.FinanceReportRow) (start, end string) {
+	if len(rows) == 0 {
+		return "", ""
+	}
+	start, end = rows[0].StartDate, rows[0].EndDate
+	for i := 1; i < len(rows); i++ {
+		if rows[i].StartDate != "" && (start == "" || rows[i].StartDate < start) {
+			start = rows[i].StartDate
+		}
+		if rows[i].EndDate > end {
+			end = rows[i].EndDate
+		}
+	}
+	return start, end
+}
+
+func financePeriodLabel(start, end string) string {
+	if start == "" && end == "" {
+		return ""
+	}
+	return start + ".." + end
 }

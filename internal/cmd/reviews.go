@@ -282,7 +282,7 @@ func runReviewsSummary(cmd *cobra.Command, args []string) error {
 	}
 
 	q := url.Values{"limit": {"200"}}
-	view := &ReviewSummaryView{BundleID: bundleID}
+	view := &ReviewSummaryView{BundleID: bundleID, Summarizations: []ReviewSummarizationItem{}}
 
 	for page, err := range asc.Pages[asc.CustomerReviewSummarizationAttributes](
 		cmd.Context(), c, "/v1/apps/"+appID+"/customerReviewSummarizations", q,
