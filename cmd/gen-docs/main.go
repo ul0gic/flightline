@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"github.com/ul0gic/flightline/internal/cmd"
 	"github.com/ul0gic/flightline/internal/lint"
@@ -44,36 +45,77 @@ func run(args []string) error {
 }
 
 func renderCLI(root *cobra.Command) string {
-	groups := make([]*cobra.Command, 0, len(root.Commands()))
+	var b strings.Builder
+	b.WriteString(banner + "\n\n# CLI reference\n\n")
+	b.WriteString("Commands, arguments, flags and examples below are generated from the CLI definitions. Run `flightline <command> --help` to check your installed version. Placeholders such as `<bundleId>` must be replaced with your own values.\n\n")
+	b.WriteString("## Global options\n\nThese options are inherited by subcommands unless overridden.\n\n")
+	renderFlags(&b, root.PersistentFlags())
+	b.WriteString("## Command groups\n\n| Group | Summary |\n|---|---|\n")
 	for _, c := range root.Commands() {
-		if c.Hidden || c.Name() == "help" || c.Name() == "completion" {
+		if skipCommand(c) {
 			continue
 		}
-		groups = append(groups, c)
-	}
-	sort.Slice(groups, func(i, j int) bool { return groups[i].Name() < groups[j].Name() })
-
-	var b strings.Builder
-	b.WriteString(banner)
-	b.WriteString("\n\n# CLI reference\n\n")
-	b.WriteString("This is a command-group index. The source of truth for flags, arguments, and defaults is the built-in help: run `flightline <group> --help` (or `flightline <group> <subcommand> --help`). The help text is generated from the code, so it never drifts. This page deliberately does not duplicate flags.\n\n")
-	b.WriteString("```bash\n")
-	b.WriteString("flightline --help              # top-level command tree\n")
-	b.WriteString("flightline <group> --help      # a command group and its subcommands\n")
-	b.WriteString("```\n\n")
-	b.WriteString("Every command supports `--output table` (default) and `--output json`. JSON is a stable contract for pipes and LLM consumers.\n\n")
-	b.WriteString("| Group | Summary |\n")
-	b.WriteString("|-------|---------|\n")
-	for _, c := range groups {
-		fmt.Fprintf(&b, "| [`%s`](#%s) | %s |\n", c.Name(), c.Name(), c.Short)
+		fmt.Fprintf(&b, "| [`%s`](#%s) | %s |\n", c.Name(), c.Name(), tableText(c.Short))
 	}
 	b.WriteString("\n")
-	for _, c := range groups {
-		fmt.Fprintf(&b, "## `%s`\n\n", c.Name())
-		fmt.Fprintf(&b, "%s\n\n", groupBlurb(c))
-		fmt.Fprintf(&b, "Flags, arguments, and defaults: `flightline %s --help`.\n\n", c.Name())
+	for _, c := range root.Commands() {
+		if !skipCommand(c) {
+			renderCommand(&b, c, 2)
+		}
 	}
 	return b.String()
+}
+
+func skipCommand(c *cobra.Command) bool {
+	return c.Hidden || c.Name() == "help" || c.Name() == "completion"
+}
+func tableText(s string) string {
+	return strings.NewReplacer("|", "&#124;", "\n", " ", "\r", "").Replace(s)
+}
+func renderFlags(b *strings.Builder, flags *pflag.FlagSet) {
+	var rows strings.Builder
+	flags.VisitAll(func(f *pflag.Flag) {
+		if f.Hidden {
+			return
+		}
+		name := "--" + f.Name
+		if f.Shorthand != "" {
+			name += ", -" + f.Shorthand
+		}
+		required := "No"
+		if len(f.Annotations[cobra.BashCompOneRequiredFlag]) > 0 {
+			required = "Yes"
+		}
+		value := f.DefValue
+		if value == "" {
+			value = "(empty)"
+		}
+		fmt.Fprintf(&rows, "| `%s` | `%s` | %s | `%s` | %s |\n", name, f.Value.Type(), required, tableText(value), tableText(f.Usage))
+	})
+	if rows.Len() == 0 {
+		return
+	}
+	b.WriteString("| Flag | Type | Required | Default | Description |\n|---|---|---|---|---|\n" + rows.String() + "\n")
+}
+func renderCommand(b *strings.Builder, c *cobra.Command, depth int) {
+	flags := c.LocalFlags()
+	title := strings.TrimPrefix(c.CommandPath(), c.Root().Name()+" ")
+	fmt.Fprintf(b, "%s `%s`\n\n%s\n\n", strings.Repeat("#", depth), title, groupBlurb(c))
+	fmt.Fprintf(b, "**Usage**\n\n```text\n%s\n```\n\n", c.UseLine())
+	if c.Example != "" {
+		fmt.Fprintf(b, "**Examples**\n\n```bash\n%s\n```\n\n", strings.TrimSpace(c.Example))
+	}
+	// Local flags include persistent flags defined on this command; inherited ones
+	// are documented on their ancestor rather than repeated for every leaf.
+	renderFlags(b, flags)
+	if c.Deprecated != "" {
+		fmt.Fprintf(b, "Deprecated: %s\n\n", c.Deprecated)
+	}
+	for _, child := range c.Commands() {
+		if !skipCommand(child) {
+			renderCommand(b, child, 3)
+		}
+	}
 }
 
 // groupBlurb prefers the cobra Long help collapsed to one paragraph, falling back to Short.
@@ -91,15 +133,15 @@ func renderRules(rules []lint.Rule) string {
 	var b strings.Builder
 	b.WriteString(banner)
 	b.WriteString("\n\n# Preflight rules\n\n")
-	b.WriteString("Flightline's L3 layer catches the clerical mistakes that cause Apple to reject a release. Each rule encodes a real rejection pattern. The `ruleId` is a stable JSON contract; renaming one is a breaking change.\n\n")
+	b.WriteString("Flightline checks supported schema, consistency and release-readiness requirements. Passing these checks does not guarantee App Review approval. The `ruleId` is a stable JSON contract; renaming one is a breaking change.\n\n")
 	b.WriteString("Two commands run the rules: `flightline lint <state.yaml>` (offline) and `flightline preflight <bundleId> --version <v>` (live). Both emit a stable JSON contract via `--output json`.\n\n")
 
 	b.WriteString("## Severity and exit codes\n\n")
 	b.WriteString("| Severity | Meaning | Exit code |\n")
 	b.WriteString("|----------|---------|-----------|\n")
-	b.WriteString("| `error` | Known rejection cause or structural problem that blocks `apply`. Preflight exits non-zero. | `1` |\n")
-	b.WriteString("| `warning` | Worth fixing; Apple is unlikely to hard-reject for it. | `2` (when no errors present) |\n")
-	b.WriteString("| `info` | A reminder or hint. Never gates submission. | `0` |\n\n")
+	b.WriteString("| `error` | A validation or readiness issue. The command exits nonzero. | `1` |\n")
+	b.WriteString("| `warning` | A finding to review. Warnings produce a nonzero exit when no errors are present. | `2` (when no errors present) |\n")
+	b.WriteString("| `info` | Additional context. Info-only results exit successfully. | `0` |\n\n")
 	b.WriteString("When both errors and warnings are present, exit code is `1`.\n\n")
 
 	b.WriteString("## Quick index\n\n")

@@ -11,7 +11,7 @@ func (paidAppsAgreementRule) Severity() Severity { return SeverityInfo }
 func (paidAppsAgreementRule) Mode() Mode         { return ModeLive }
 func (paidAppsAgreementRule) Doc() string {
 	return "Reminds you to confirm the Paid Apps Agreement whenever the app sells in-app purchases. " +
-		"Apple exposes no API for agreement status, and a lapsed or re-issued agreement makes every IAP silently invisible to the reviewer's sandbox — the rejection reads \"IAP product not found\" with nothing wrong in ASC. " +
+		"Apple exposes no API for agreement status, and a lapsed or re-issued agreement makes every IAP silently invisible to the reviewer's sandbox; the rejection reads \"IAP product not found\" with nothing wrong in ASC. " +
 		"Confirm the agreement is Active under Business in App Store Connect before submitting; this diagnostic is informational and never fails preflight."
 }
 

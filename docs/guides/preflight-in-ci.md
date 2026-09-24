@@ -1,6 +1,6 @@
 # Preflight in CI
 
-Flightline's preflight rules catch the clerical mistakes that get releases rejected. Running them in CI means a broken state file fails the pull request and an unsubmittable version fails the release pipeline, before anyone clicks Submit for Review. This guide covers wiring; the rules themselves are documented in the [preflight rules reference](../reference/preflight-rules.md).
+Run lint and preflight in CI to check state files and live release configuration. Use their exit codes to decide whether a pipeline should continue. The [preflight rules reference](../reference/preflight-rules.md) describes each check.
 
 ## lint vs preflight
 

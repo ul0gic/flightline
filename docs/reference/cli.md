@@ -2,17 +2,23 @@
 
 # CLI reference
 
-This is a command-group index. The source of truth for flags, arguments, and defaults is the built-in help: run `flightline <group> --help` (or `flightline <group> <subcommand> --help`). The help text is generated from the code, so it never drifts. This page deliberately does not duplicate flags.
+Commands, arguments, flags and examples below are generated from the CLI definitions. Run `flightline <command> --help` to check your installed version. Placeholders such as `<bundleId>` must be replaced with your own values.
 
-```bash
-flightline --help              # top-level command tree
-flightline <group> --help      # a command group and its subcommands
-```
+## Global options
 
-Every command supports `--output table` (default) and `--output json`. JSON is a stable contract for pipes and LLM consumers.
+These options are inherited by subcommands unless overridden.
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--config` | `string` | No | `(empty)` | config file (default $HOME/.config/flightline/config.yaml) |
+| `--issuer-id` | `string` | No | `(empty)` | App Store Connect issuer ID |
+| `--key-id` | `string` | No | `(empty)` | App Store Connect API key ID |
+| `--output` | `string` | No | `table` | output format: table &#124; json (report commands also accept tsv) |
+
+## Command groups
 
 | Group | Summary |
-|-------|---------|
+|---|---|
 | [`accessibility-declarations`](#accessibility-declarations) | Manage per-device accessibility declarations |
 | [`age-rating`](#age-rating) | Inspect Apple age-rating declarations |
 | [`analytics`](#analytics) | Request, track, and download Apple analytics reports |
@@ -63,269 +69,4098 @@ Every command supports `--output table` (default) and `--output json`. JSON is a
 
 Manage per-device accessibility declarations
 
-Flags, arguments, and defaults: `flightline accessibility-declarations --help`.
+**Usage**
+
+```text
+flightline accessibility-declarations [flags]
+```
+
+### `accessibility-declarations create`
+
+Create a declaration draft with explicit support answers
+
+**Usage**
+
+```text
+flightline accessibility-declarations create <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm declaration creation |
+| `--device-family` | `string` | No | `(empty)` | IPHONE, IPAD, APPLE_TV, APPLE_WATCH, MAC, or VISION |
+| `--supports-audio-descriptions` | `bool` | No | `false` | explicit accessibility support answer |
+| `--supports-captions` | `bool` | No | `false` | explicit accessibility support answer |
+| `--supports-dark-interface` | `bool` | No | `false` | explicit accessibility support answer |
+| `--supports-differentiate-without-color-alone` | `bool` | No | `false` | explicit accessibility support answer |
+| `--supports-larger-text` | `bool` | No | `false` | explicit accessibility support answer |
+| `--supports-reduced-motion` | `bool` | No | `false` | explicit accessibility support answer |
+| `--supports-sufficient-contrast` | `bool` | No | `false` | explicit accessibility support answer |
+| `--supports-voice-control` | `bool` | No | `false` | explicit accessibility support answer |
+| `--supports-voiceover` | `bool` | No | `false` | explicit accessibility support answer |
+
+### `accessibility-declarations delete`
+
+Delete a draft declaration
+
+**Usage**
+
+```text
+flightline accessibility-declarations delete <declarationId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm draft deletion |
+
+### `accessibility-declarations get`
+
+Read one accessibility declaration
+
+**Usage**
+
+```text
+flightline accessibility-declarations get <declarationId> [flags]
+```
+
+### `accessibility-declarations list`
+
+List accessibility declarations for an app
+
+**Usage**
+
+```text
+flightline accessibility-declarations list <bundleId> [flags]
+```
+
+### `accessibility-declarations publish`
+
+Publish a draft declaration
+
+**Usage**
+
+```text
+flightline accessibility-declarations publish <declarationId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm immediate publication |
+
+### `accessibility-declarations update`
+
+Update explicit support answers on a draft
+
+**Usage**
+
+```text
+flightline accessibility-declarations update <declarationId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm draft answer update |
+| `--supports-audio-descriptions` | `bool` | No | `false` | explicit accessibility support answer |
+| `--supports-captions` | `bool` | No | `false` | explicit accessibility support answer |
+| `--supports-dark-interface` | `bool` | No | `false` | explicit accessibility support answer |
+| `--supports-differentiate-without-color-alone` | `bool` | No | `false` | explicit accessibility support answer |
+| `--supports-larger-text` | `bool` | No | `false` | explicit accessibility support answer |
+| `--supports-reduced-motion` | `bool` | No | `false` | explicit accessibility support answer |
+| `--supports-sufficient-contrast` | `bool` | No | `false` | explicit accessibility support answer |
+| `--supports-voice-control` | `bool` | No | `false` | explicit accessibility support answer |
+| `--supports-voiceover` | `bool` | No | `false` | explicit accessibility support answer |
 
 ## `age-rating`
 
 age-rating reads the questionnaire Apple uses to compute a version's age rating. The declaration lives on the per-version appInfo resource; Flightline resolves bundleId + versionString to the right appInfo and fetches its ageRatingDeclaration. L3 preflight will flag declarations with unanswered questions: surface the same data here for manual inspection.
 
-Flags, arguments, and defaults: `flightline age-rating --help`.
+**Usage**
+
+```text
+flightline age-rating [flags]
+```
+
+### `age-rating get`
+
+Get the age-rating declaration for a version
+
+**Usage**
+
+```text
+flightline age-rating get <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline age-rating get com.example.myapp --version 1.0.1
+  flightline age-rating get com.example.myapp --version 1.0.1 --output json | jq .attributes
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--platform` | `string` | No | `IOS` | platform (IOS&#124;MAC_OS&#124;TV_OS&#124;VISION_OS) |
+| `--version` | `string` | Yes | `(empty)` | version string to look up (e.g. 1.0.1) |
+
+### `age-rating set`
+
+set PATCHes the age-rating declaration for a version with the answers loaded from --from. Accepts JSON (.json) or YAML (.yaml/.yml). Top-level keys must match Apple's wire names (e.g. `alcoholTobaccoOrDrugUseOrReferences: NONE`). Idempotent: the file is diffed against the current declaration; only fields that actually differ go in the PATCH body. When everything already matches, returns noop=true without issuing a PATCH. Validation: every key must be a recognized field on the declaration; an unknown key surfaces as a typed error naming the offending key. Frequency enums must be one of NONE | INFREQUENT_OR_MILD | FREQUENT_OR_INTENSE | INFREQUENT | FREQUENT. Boolean fields must be true/false.
+
+**Usage**
+
+```text
+flightline age-rating set <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline age-rating set com.example.myapp --version 1.0.1 --from age-rating.yaml
+  flightline age-rating set com.example.myapp --version 1.0.1 --from age-rating.json --output json
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--from` | `string` | Yes | `(empty)` | path to YAML/JSON file containing the questionnaire answers |
+| `--platform` | `string` | No | `IOS` | platform (IOS&#124;MAC_OS&#124;TV_OS&#124;VISION_OS) |
+| `--version` | `string` | Yes | `(empty)` | version string to look up (e.g. 1.0.1) |
 
 ## `analytics`
 
 analytics drives Apple's asynchronous analytics report lifecycle: 1. request : submit an analyticsReportRequests entry to Apple 2. status : refresh Apple state and update the persisted checkpoint 3. list-instances: enumerate report instances for the active request 4. download: pull every segment of an instance to local CSV files State persists to $XDG_STATE_HOME/flightline/<bundleId>/analytics.json so a Ctrl-C between submit and download resumes cleanly on the next run.
 
-Flags, arguments, and defaults: `flightline analytics --help`.
+**Usage**
+
+```text
+flightline analytics [flags]
+```
+
+### `analytics download`
+
+Download every segment of an analytics report instance
+
+**Usage**
+
+```text
+flightline analytics download <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline analytics download com.example.myapp --instance INST-1
+  flightline analytics download com.example.myapp --instance INST-1 --out ./reports/
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--instance` | `string` | Yes | `(empty)` | instance ID to download segments from |
+| `--out` | `string` | No | `(empty)` | output directory or file prefix; default is the working directory |
+
+### `analytics list-instances`
+
+List instances of analytics reports for the active request
+
+**Usage**
+
+```text
+flightline analytics list-instances <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline analytics list-instances com.example.myapp
+  flightline analytics list-instances com.example.myapp --report-id RPT-1
+  flightline analytics list-instances com.example.myapp --category APP_USAGE --name-contains daily
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--category` | `string` | No | `(empty)` | filter reports by category (e.g. APP_USAGE, COMMERCE) |
+| `--name-contains` | `string` | No | `(empty)` | filter reports whose name contains this substring (case-insensitive) |
+| `--report-id` | `string` | No | `(empty)` | single report ID to expand instances for (default: every report in state) |
+
+### `analytics request`
+
+Submit a new analytics report request
+
+**Usage**
+
+```text
+flightline analytics request <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline analytics request com.example.myapp --access-type ONE_TIME_SNAPSHOT
+  flightline analytics request com.example.myapp --access-type ONE_TIME_SNAPSHOT --wait
+  flightline analytics request com.example.myapp --access-type ONGOING --wait --max-duration 10m
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--access-type` | `string` | Yes | `(empty)` | access type: ONE_TIME_SNAPSHOT or ONGOING |
+| `--force` | `bool` | No | `false` | replace the locally tracked active request with a new Apple request |
+| `--max-duration` | `duration` | No | `0s` | upper bound on --wait (e.g. 10m); 0 = no bound: required for ONGOING with --wait |
+| `--wait` | `bool` | No | `false` | block until reports are available; pair with --max-duration for ONGOING |
+
+### `analytics status`
+
+Refresh and show state for an analytics request
+
+**Usage**
+
+```text
+flightline analytics status <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline analytics status com.example.myapp
+	  flightline analytics status com.example.myapp --refresh=false
+	  flightline analytics status com.example.myapp --output json | jq .requestId
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--refresh` | `bool` | No | `true` | read current request and report state from Apple before rendering |
 
 ## `app-availability`
 
 Inspect app availability by territory
 
-Flags, arguments, and defaults: `flightline app-availability --help`.
+**Usage**
+
+```text
+flightline app-availability [flags]
+```
+
+### `app-availability get`
+
+Show availability, pre-order state, and blockers for every territory
+
+**Usage**
+
+```text
+flightline app-availability get <bundleId> [flags]
+```
+
+### `app-availability preorders`
+
+Manage explicit app pre-order actions
+
+**Usage**
+
+```text
+flightline app-availability preorders [flags]
+```
+
+### `app-availability preorders end`
+
+End active pre-orders for the selected territories and release the app immediately. This action cannot be reconciled through state apply. Flightline re-reads each selected territory and requires an active pre-order before sending the request.
+
+**Usage**
+
+```text
+flightline app-availability preorders end <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | Yes | `false` | confirm immediate release in the selected territories |
+| `--territory` | `stringArray` | Yes | `[]` | App Store territory ID to release (repeatable) |
 
 ## `app-eula`
 
 Inspect and manage the custom app EULA
 
-Flags, arguments, and defaults: `flightline app-eula --help`.
+**Usage**
+
+```text
+flightline app-eula [flags]
+```
+
+### `app-eula delete`
+
+Delete the app's custom EULA
+
+**Usage**
+
+```text
+flightline app-eula delete <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm deletion of the custom legal agreement |
+
+### `app-eula get`
+
+Show the observed custom EULA and complete territory set
+
+**Usage**
+
+```text
+flightline app-eula get <bundleId> [flags]
+```
+
+### `app-eula set`
+
+Create or update the custom EULA from an agreement file and exact territories
+
+**Usage**
+
+```text
+flightline app-eula set <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm the custom legal agreement and territory scope |
+| `--territory` | `stringArray` | No | `[]` | territory ID covered by the custom EULA (repeatable; exact set) |
+| `--text-file` | `string` | No | `(empty)` | file containing the authored agreement text |
 
 ## `app-tags`
 
 Inspect assigned App Store tags and manage their visibility
 
-Flags, arguments, and defaults: `flightline app-tags --help`.
+**Usage**
+
+```text
+flightline app-tags [flags]
+```
+
+### `app-tags list`
+
+List tags assigned to an app
+
+**Usage**
+
+```text
+flightline app-tags list <bundleId> [flags]
+```
+
+### `app-tags set-visibility`
+
+Set visibility for a tag already assigned to an app
+
+**Usage**
+
+```text
+flightline app-tags set-visibility <bundleId> <tagId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | Yes | `false` | confirm the visibility update |
+| `--visible-in-app-store` | `string` | Yes | `(empty)` | required target visibility: true or false |
 
 ## `apply`
 
 Loads <state.yaml>, validates it against the schema, fetches live state, computes the diff, and writes the changes back to ASC. Without --confirm, apply prints the plan and refuses to write: same guardrail as terraform plan. With --confirm, every leaf-level change dispatches to its L1 writer, with a checkpoint persisted after every success so a Ctrl-C / crash mid-apply resumes cleanly via --resume. --dry-run fetches live state and validates every planned dispatch, but sends no mutating API requests. Output lists planned changes, never applied changes. It requires credentials and network access. Examples: flightline apply state.yaml # plan only, refuses to write flightline apply state.yaml --confirm # write changes flightline apply state.yaml --confirm --resume # continue after Ctrl-C flightline apply state.yaml --dry-run --output json
 
-Flags, arguments, and defaults: `flightline apply --help`.
+**Usage**
+
+```text
+flightline apply <state.yaml> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | actually write changes (without this, apply is a plan) |
+| `--dry-run` | `bool` | No | `false` | fetch live state and compute dispatch without mutating ASC |
+| `--platform` | `string` | No | `(empty)` | override metadata.platform from the state file |
+| `--resume` | `bool` | No | `false` | resume from a previous interrupted apply |
+| `--version` | `string` | No | `(empty)` | override metadata.version from the state file |
 
 ## `apps`
 
 apps groups read commands over the /v1/apps resource.
 
-Flags, arguments, and defaults: `flightline apps --help`.
+**Usage**
+
+```text
+flightline apps [flags]
+```
+
+### `apps get`
+
+Get a single app by bundle ID
+
+**Usage**
+
+```text
+flightline apps get <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline apps get com.example.myapp
+  flightline apps get com.example.myapp --output json | jq .attributes.name
+```
+
+### `apps list`
+
+List apps visible to the configured ASC key
+
+**Usage**
+
+```text
+flightline apps list [flags]
+```
+
+**Examples**
+
+```bash
+flightline apps list
+  flightline apps list --output json | jq -r '.apps[].attributes.bundleId'
+  flightline apps list --limit 50
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--limit` | `int` | No | `0` | max number of apps to emit (0 = no cap) |
 
 ## `beta-feedback`
 
 beta-feedback groups read commands over Apple's TestFlight feedback resources: - crash <bundleId> : list crash submissions, optionally filtered by build - screenshot <bundleId> : list screenshot submissions, optionally filtered by build - download <feedbackId> : download the crash log or screenshot to disk Feedback is tester-authored, so this command group is read-only.
 
-Flags, arguments, and defaults: `flightline beta-feedback --help`.
+**Usage**
+
+```text
+flightline beta-feedback [flags]
+```
+
+### `beta-feedback crash`
+
+List TestFlight crash submissions for an app
+
+**Usage**
+
+```text
+flightline beta-feedback crash <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline beta-feedback crash com.example.myapp
+	  flightline beta-feedback crash com.example.myapp --build 42
+	  flightline beta-feedback crash com.example.myapp --build 2 --version 1.1 --platform IOS
+	  flightline beta-feedback crash com.example.myapp --output json | jq '.submissions[].attributes.deviceModel'
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--build` | `string` | No | `(empty)` | filter by build number (CFBundleVersion, e.g. 42) |
+| `--limit` | `int` | No | `0` | max submissions to emit (0 = no cap) |
+| `--platform` | `string` | No | `IOS` | platform used to disambiguate duplicate build numbers |
+| `--since` | `string` | No | `(empty)` | only submissions newer than this duration (e.g. 30d) or ISO date (2026-04-01) |
+| `--version` | `string` | No | `(empty)` | App Store version/train used to disambiguate duplicate build numbers |
+
+### `beta-feedback download`
+
+Download the crash log or screenshot for a feedback submission
+
+**Usage**
+
+```text
+flightline beta-feedback download <feedbackId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline beta-feedback download CRASH-1234 --out crash.txt
+  flightline beta-feedback download SCREENSHOT-5678 --type screenshot --out shot.png
+  flightline beta-feedback download CRASH-1234 --output json
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--out` | `string` | No | `(empty)` | destination path for the downloaded bytes (default: <feedbackId>.<ext>) |
+| `--type` | `string` | No | `crash` | feedback type: crash &#124; screenshot |
+
+### `beta-feedback screenshot`
+
+List TestFlight screenshot submissions for an app
+
+**Usage**
+
+```text
+flightline beta-feedback screenshot <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline beta-feedback screenshot com.example.myapp
+	  flightline beta-feedback screenshot com.example.myapp --build 2 --version 1.1 --platform IOS
+	  flightline beta-feedback screenshot com.example.myapp --build 42 --output json
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--build` | `string` | No | `(empty)` | filter by build number (CFBundleVersion, e.g. 42) |
+| `--limit` | `int` | No | `0` | max submissions to emit (0 = no cap) |
+| `--platform` | `string` | No | `IOS` | platform used to disambiguate duplicate build numbers |
+| `--since` | `string` | No | `(empty)` | only submissions newer than this duration (e.g. 30d) or ISO date (2026-04-01) |
+| `--version` | `string` | No | `(empty)` | App Store version/train used to disambiguate duplicate build numbers |
 
 ## `builds`
 
 builds groups read commands over the /v1/builds resource.
 
-Flags, arguments, and defaults: `flightline builds --help`.
+**Usage**
+
+```text
+flightline builds [flags]
+```
+
+### `builds attach`
+
+Attach a build to an App Store version (idempotent: skip if already attached)
+
+**Usage**
+
+```text
+flightline builds attach <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline builds attach com.example.myapp --version 1.0.1 --build 42
+  flightline builds attach com.example.myapp --version 1.0.1 --build 42 --platform IOS --output json
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--build` | `string` | Yes | `(empty)` | build number to attach (CFBundleVersion, e.g. 42) |
+| `--platform` | `string` | No | `IOS` | platform of the App Store version (IOS&#124;MAC_OS&#124;TV_OS&#124;VISION_OS) |
+| `--version` | `string` | Yes | `(empty)` | App Store version string the build is attached to (e.g. 1.0.1) |
+
+### `builds get`
+
+Get a single build by build number (CFBundleVersion)
+
+**Usage**
+
+```text
+flightline builds get <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline builds get com.example.myapp --build 42
+	  flightline builds get com.example.myapp --build 2 --version 1.1 --platform IOS
+	  flightline builds get com.example.myapp --build 42 --output json | jq .attributes.processingState
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--build` | `string` | Yes | `(empty)` | build number to fetch (CFBundleVersion, e.g. 42) |
+| `--platform` | `string` | No | `(empty)` | platform used to disambiguate duplicate build numbers |
+| `--version` | `string` | No | `(empty)` | App Store version/train used to disambiguate duplicate build numbers |
+
+### `builds list`
+
+List builds for an app
+
+**Usage**
+
+```text
+flightline builds list <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline builds list com.example.myapp
+  flightline builds list com.example.myapp --limit 20
+  flightline builds list com.example.myapp --output json | jq -r '.builds[].version'
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--limit` | `int` | No | `0` | max builds to emit (0 = no cap) |
 
 ## `categories`
 
 categories groups read commands over the /v1/appCategories resource. categories list dumps Apple's catalog of top-level categories. Filterable by --platform; defaults to IOS to match Flightline's default platform. categories get <bundleId> shows the category assignments on the app's editable appInfo (primary + secondary plus their subcategories). Unassigned slots are a frequent rejection cause: surface them visibly.
 
-Flags, arguments, and defaults: `flightline categories --help`.
+**Usage**
+
+```text
+flightline categories [flags]
+```
+
+### `categories get`
+
+Show the category assignments on an app's editable appInfo
+
+**Usage**
+
+```text
+flightline categories get <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline categories get com.example.myapp
+  flightline categories get com.example.myapp --output json | jq .primaryCategory
+```
+
+### `categories list`
+
+List top-level App Store categories
+
+**Usage**
+
+```text
+flightline categories list [flags]
+```
+
+**Examples**
+
+```bash
+flightline categories list
+  flightline categories list --platform MAC_OS
+  flightline categories list --output json | jq -r '.categories[].id'
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--platform` | `string` | No | `IOS` | platform filter (IOS&#124;MAC_OS&#124;TV_OS&#124;VISION_OS); empty = all |
+
+### `categories set`
+
+categories set updates an app's primary/secondary category assignments. Apple stores the assignments on the app's editable appInfo as 6 to-one relationships (primaryCategory, primarySubcategoryOne, primarySubcategoryTwo, secondaryCategory, secondarySubcategoryOne, secondarySubcategoryTwo). The categories must come from /v1/appCategories: see `flightline categories list`. Only flags that are explicitly passed are written; omitted flags are left untouched. To clear a slot pass --clear-secondary or one of its sub-equivalents. Idempotent: the command first reads the current assignments and only PATCHes when at least one requested value differs from current.
+
+**Usage**
+
+```text
+flightline categories set <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline categories set com.example.myapp --primary PRODUCTIVITY --primary-subcat BUSINESS
+  flightline categories set com.example.myapp --secondary UTILITIES
+  flightline categories set com.example.myapp --clear-secondary
+  flightline categories set com.example.myapp --primary GAMES --output json
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--clear-primary-subcat` | `bool` | No | `false` | clear both primary subcategory slots |
+| `--clear-secondary` | `bool` | No | `false` | clear the secondary category and its subcategories |
+| `--clear-secondary-subcat` | `bool` | No | `false` | clear both secondary subcategory slots |
+| `--primary` | `string` | No | `(empty)` | primary category id (e.g. PRODUCTIVITY) |
+| `--primary-subcat` | `string` | No | `(empty)` | primary subcategory (slot one) |
+| `--primary-subcat-two` | `string` | No | `(empty)` | primary subcategory (slot two) |
+| `--secondary` | `string` | No | `(empty)` | secondary category id (e.g. UTILITIES) |
+| `--secondary-subcat` | `string` | No | `(empty)` | secondary subcategory (slot one) |
+| `--secondary-subcat-two` | `string` | No | `(empty)` | secondary subcategory (slot two) |
 
 ## `content-rights`
 
 Inspect and set the app content rights declaration
 
-Flags, arguments, and defaults: `flightline content-rights --help`.
+**Usage**
+
+```text
+flightline content-rights [flags]
+```
+
+### `content-rights get`
+
+Show the observed content rights declaration
+
+**Usage**
+
+```text
+flightline content-rights get <bundleId> [flags]
+```
+
+### `content-rights set`
+
+Set an explicit content rights declaration
+
+**Usage**
+
+```text
+flightline content-rights set <bundleId> <declaration> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm the explicit legal declaration |
 
 ## `custom-product-pages`
 
 custom-product-pages groups read commands over Apple's AppCustomProductPage resources: alternate App Store listings used to target ad-driven traffic with different screenshots and descriptions. list <bundleId> : list all configured pages with current state get <bundleId> --page <id> : detail for one page (versions + localizations)
 
-Flags, arguments, and defaults: `flightline custom-product-pages --help`.
+**Usage**
+
+```text
+flightline custom-product-pages [flags]
+```
+
+### `custom-product-pages create`
+
+Create a custom product page (idempotent on name)
+
+**Usage**
+
+```text
+flightline custom-product-pages create <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline custom-product-pages create com.example.myapp --name "Holiday Promo"
+  flightline custom-product-pages create com.example.myapp --name "Spring 2026" --output json
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--name` | `string` | Yes | `(empty)` | developer-friendly page name (must be unique per app) |
+
+### `custom-product-pages delete`
+
+Delete a custom product page (idempotent)
+
+**Usage**
+
+```text
+flightline custom-product-pages delete <pageId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline custom-product-pages delete CPP-1
+```
+
+### `custom-product-pages get`
+
+Detail for one custom product page (versions + localizations)
+
+**Usage**
+
+```text
+flightline custom-product-pages get <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline custom-product-pages get com.example.myapp --page 8000000001
+  flightline custom-product-pages get com.example.myapp --page 8000000001 --output json
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--page` | `string` | Yes | `(empty)` | AppCustomProductPage ID to fetch |
+
+### `custom-product-pages list`
+
+List custom product pages for an app
+
+**Usage**
+
+```text
+flightline custom-product-pages list <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline custom-product-pages list com.example.myapp
+  flightline custom-product-pages list com.example.myapp --output json | jq -r '.pages[].attributes.name'
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--limit` | `int` | No | `0` | max pages to emit (0 = no cap) |
+
+### `custom-product-pages update`
+
+Update a custom product page's mutable attributes (idempotent)
+
+**Usage**
+
+```text
+flightline custom-product-pages update <pageId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline custom-product-pages update CPP-1 --visible
+  flightline custom-product-pages update CPP-1 --name "Updated Holiday"
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--name` | `string` | No | `(empty)` | rename the page |
+| `--visible` | `bool` | No | `false` | set visibility (true = public) |
 
 ## `diagnostics`
 
 diagnostics groups read commands over Apple's diagnostic signatures resource. Apple deduplicates crash and hang reports into signatures: same call stack, same crash, regardless of how many users hit it. Apple v4.5 only exposes diagnostic signatures scoped to a build: - list <bundleId> --build <number> : list signatures for a build - get <signatureId> : fetch the full log payload There is no app-wide aggregation API in v4.5; --build is required on list.
 
-Flags, arguments, and defaults: `flightline diagnostics --help`.
+**Usage**
+
+```text
+flightline diagnostics [flags]
+```
+
+### `diagnostics get`
+
+Fetch the full log payload for a diagnostic signature
+
+**Usage**
+
+```text
+flightline diagnostics get <signatureId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline diagnostics get DIAG-SIG-1234
+  flightline diagnostics get DIAG-SIG-1234 --output json
+```
+
+### `diagnostics list`
+
+List diagnostic signatures for a specific build
+
+**Usage**
+
+```text
+flightline diagnostics list <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline diagnostics list com.example.myapp --build 42
+	  flightline diagnostics list com.example.myapp --build 2 --version 1.1 --platform IOS
+	  flightline diagnostics list com.example.myapp --build 42 --type HANGS
+  flightline diagnostics list com.example.myapp --build 42 --output json | jq '.signatures[].attributes.weight'
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--build` | `string` | Yes | `(empty)` | build number to inspect (CFBundleVersion, e.g. 42) |
+| `--limit` | `int` | No | `0` | max signatures to emit (0 = no cap) |
+| `--platform` | `string` | No | `IOS` | platform used to disambiguate duplicate build numbers |
+| `--type` | `string` | No | `(empty)` | filter by diagnostic type: DISK_WRITES &#124; HANGS &#124; LAUNCHES |
+| `--version` | `string` | No | `(empty)` | App Store version/train used to disambiguate duplicate build numbers |
 
 ## `events`
 
 Manage In-App Events
 
-Flags, arguments, and defaults: `flightline events --help`.
+**Usage**
+
+```text
+flightline events [flags]
+```
+
+### `events create`
+
+Create a draft In-App Event
+
+**Usage**
+
+```text
+flightline events create <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--badge` | `string` | No | `(empty)` | event badge enum |
+| `--confirm` | `bool` | No | `false` | confirm event creation |
+| `--deep-link` | `string` | No | `(empty)` | event absolute deep link |
+| `--primary-locale` | `string` | No | `(empty)` | primary localization locale |
+| `--priority` | `string` | No | `(empty)` | HIGH or NORMAL |
+| `--purchase-requirement` | `string` | No | `(empty)` | purchase requirement text |
+| `--purpose` | `string` | No | `(empty)` | event purpose enum |
+| `--reference-name` | `string` | No | `(empty)` | internal event reference name |
+| `--territory-schedules` | `string` | No | `(empty)` | JSON array of territories and RFC3339 publishStart/eventStart/eventEnd |
+
+### `events delete`
+
+Delete a draft, archived, or approved In-App Event
+
+**Usage**
+
+```text
+flightline events delete <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm event deletion |
+| `--event` | `string` | No | `(empty)` | In-App Event ID |
+
+### `events get`
+
+Read one owned In-App Event
+
+**Usage**
+
+```text
+flightline events get <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--event` | `string` | No | `(empty)` | In-App Event ID |
+
+### `events list`
+
+List all In-App Events
+
+**Usage**
+
+```text
+flightline events list <bundleId> [flags]
+```
+
+### `events localizations`
+
+Manage event localizations
+
+**Usage**
+
+```text
+flightline events localizations [flags]
+```
+
+### `events localizations create`
+
+Create a draft event localization
+
+**Usage**
+
+```text
+flightline events localizations create <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm localization creation |
+| `--event` | `string` | No | `(empty)` | In-App Event ID |
+| `--locale` | `string` | No | `(empty)` | locale code |
+| `--long-description` | `string` | No | `(empty)` | event details description |
+| `--name` | `string` | No | `(empty)` | event display name |
+| `--short-description` | `string` | No | `(empty)` | event card description |
+
+### `events localizations delete`
+
+Delete a draft event localization
+
+**Usage**
+
+```text
+flightline events localizations delete <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm localization deletion |
+| `--event` | `string` | No | `(empty)` | In-App Event ID |
+| `--localization` | `string` | No | `(empty)` | event localization ID |
+
+### `events localizations get`
+
+Read one event localization
+
+**Usage**
+
+```text
+flightline events localizations get <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--event` | `string` | No | `(empty)` | In-App Event ID |
+| `--localization` | `string` | No | `(empty)` | event localization ID |
+
+### `events localizations list`
+
+List every localization for an owned event
+
+**Usage**
+
+```text
+flightline events localizations list <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--event` | `string` | No | `(empty)` | In-App Event ID |
+
+### `events localizations update`
+
+Update draft event localization text
+
+**Usage**
+
+```text
+flightline events localizations update <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm localization update |
+| `--event` | `string` | No | `(empty)` | In-App Event ID |
+| `--locale` | `string` | No | `(empty)` | locale code |
+| `--localization` | `string` | No | `(empty)` | event localization ID |
+| `--long-description` | `string` | No | `(empty)` | event details description |
+| `--name` | `string` | No | `(empty)` | event display name |
+| `--short-description` | `string` | No | `(empty)` | event card description |
+
+### `events media`
+
+Manage event card and detail images or videos
+
+**Usage**
+
+```text
+flightline events media [flags]
+```
+
+### `events media delete`
+
+Delete one owned draft event image or video
+
+**Usage**
+
+```text
+flightline events media delete <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm event media deletion |
+| `--event` | `string` | No | `(empty)` | In-App Event ID |
+| `--localization` | `string` | No | `(empty)` | event localization ID |
+| `--media` | `string` | No | `(empty)` | event media ID |
+
+### `events media get`
+
+Read one owned event image or video
+
+**Usage**
+
+```text
+flightline events media get <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--event` | `string` | No | `(empty)` | In-App Event ID |
+| `--localization` | `string` | No | `(empty)` | event localization ID |
+| `--media` | `string` | No | `(empty)` | event media ID |
+
+### `events media list`
+
+List all event images and videos in a localization
+
+**Usage**
+
+```text
+flightline events media list <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--event` | `string` | No | `(empty)` | In-App Event ID |
+| `--localization` | `string` | No | `(empty)` | event localization ID |
+
+### `events media upload`
+
+Upload one event card or detail image or video and wait for processing
+
+**Usage**
+
+```text
+flightline events media upload <bundleId> <file> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--asset-type` | `string` | No | `(empty)` | EVENT_CARD or EVENT_DETAILS_PAGE |
+| `--confirm` | `bool` | No | `false` | confirm event media upload |
+| `--event` | `string` | No | `(empty)` | In-App Event ID |
+| `--localization` | `string` | No | `(empty)` | event localization ID |
+| `--max-polls` | `int` | No | `20` | maximum processing status reads |
+| `--poll-interval` | `duration` | No | `3s` | time between processing status reads |
+| `--preview-frame-time-code` | `string` | No | `(empty)` | video preview frame time code |
+| `--resume` | `bool` | No | `false` | resume a matching pending upload checkpoint |
+| `--video` | `bool` | No | `false` | upload video instead of image |
+
+### `events media wait`
+
+Wait for existing event media without uploading again
+
+**Usage**
+
+```text
+flightline events media wait <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--event` | `string` | No | `(empty)` | In-App Event ID |
+| `--localization` | `string` | No | `(empty)` | event localization ID |
+| `--max-polls` | `int` | No | `20` | maximum processing status reads |
+| `--media` | `string` | No | `(empty)` | event media ID |
+| `--poll-interval` | `duration` | No | `3s` | time between processing status reads |
+
+### `events propose-submission-item`
+
+Check event review readiness and return an item proposal
+
+**Usage**
+
+```text
+flightline events propose-submission-item <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--event` | `string` | No | `(empty)` | In-App Event ID |
+
+### `events update`
+
+Update a draft In-App Event
+
+**Usage**
+
+```text
+flightline events update <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--badge` | `string` | No | `(empty)` | event badge enum |
+| `--confirm` | `bool` | No | `false` | confirm event update |
+| `--deep-link` | `string` | No | `(empty)` | event absolute deep link |
+| `--event` | `string` | No | `(empty)` | In-App Event ID |
+| `--primary-locale` | `string` | No | `(empty)` | primary localization locale |
+| `--priority` | `string` | No | `(empty)` | HIGH or NORMAL |
+| `--purchase-requirement` | `string` | No | `(empty)` | purchase requirement text |
+| `--purpose` | `string` | No | `(empty)` | event purpose enum |
+| `--reference-name` | `string` | No | `(empty)` | internal event reference name |
+| `--territory-schedules` | `string` | No | `(empty)` | JSON array of territories and RFC3339 publishStart/eventStart/eventEnd |
 
 ## `experiments`
 
 Manage App Store product page experiments
 
-Flags, arguments, and defaults: `flightline experiments --help`.
+**Usage**
+
+```text
+flightline experiments [flags]
+```
+
+### `experiments create`
+
+Create an app-bound v2 experiment
+
+**Usage**
+
+```text
+flightline experiments create <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm this write |
+| `--name` | `string` | No | `(empty)` | internal experiment name |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--traffic` | `int` | No | `0` | traffic proportion, 1..100 |
+| `--version` | `string` | No | `(empty)` | selected App Store version string |
+
+### `experiments delete`
+
+Delete an unstarted experiment
+
+**Usage**
+
+```text
+flightline experiments delete <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm this write |
+| `--experiment` | `string` | No | `(empty)` | v2 experiment ID |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--version` | `string` | No | `(empty)` | selected App Store version string |
+
+### `experiments get`
+
+Read a selected v2 experiment
+
+**Usage**
+
+```text
+flightline experiments get <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--experiment` | `string` | No | `(empty)` | v2 experiment ID |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--version` | `string` | No | `(empty)` | selected App Store version string |
+
+### `experiments list`
+
+List v2 experiments for one version
+
+**Usage**
+
+```text
+flightline experiments list <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--version` | `string` | No | `(empty)` | selected App Store version string |
+
+### `experiments proposal`
+
+Read a review item proposal; does not attach or submit
+
+**Usage**
+
+```text
+flightline experiments proposal <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--experiment` | `string` | No | `(empty)` | v2 experiment ID |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--version` | `string` | No | `(empty)` | selected App Store version string |
+
+### `experiments start`
+
+start a selected experiment
+
+**Usage**
+
+```text
+flightline experiments start <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm this write |
+| `--experiment` | `string` | No | `(empty)` | v2 experiment ID |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--version` | `string` | No | `(empty)` | selected App Store version string |
+
+### `experiments stop`
+
+stop a selected experiment
+
+**Usage**
+
+```text
+flightline experiments stop <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm this write |
+| `--experiment` | `string` | No | `(empty)` | v2 experiment ID |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--version` | `string` | No | `(empty)` | selected App Store version string |
+
+### `experiments treatments`
+
+Manage experiment variants
+
+**Usage**
+
+```text
+flightline experiments treatments [flags]
+```
+
+### `experiments treatments create`
+
+Create a treatment
+
+**Usage**
+
+```text
+flightline experiments treatments create <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--app-icon-name` | `string` | No | `(empty)` | optional icon in current app binary |
+| `--confirm` | `bool` | No | `false` | confirm this write |
+| `--experiment` | `string` | No | `(empty)` | v2 experiment ID |
+| `--name` | `string` | No | `(empty)` | treatment name |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--version` | `string` | No | `(empty)` | selected App Store version string |
+
+### `experiments treatments delete`
+
+Delete an unstarted treatment
+
+**Usage**
+
+```text
+flightline experiments treatments delete <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm this write |
+| `--experiment` | `string` | No | `(empty)` | v2 experiment ID |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--treatment` | `string` | No | `(empty)` | treatment ID |
+| `--version` | `string` | No | `(empty)` | selected App Store version string |
+
+### `experiments treatments list`
+
+List variants for a selected experiment
+
+**Usage**
+
+```text
+flightline experiments treatments list <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--experiment` | `string` | No | `(empty)` | v2 experiment ID |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--version` | `string` | No | `(empty)` | selected App Store version string |
+
+### `experiments treatments localizations`
+
+Manage treatment locales
+
+**Usage**
+
+```text
+flightline experiments treatments localizations [flags]
+```
+
+### `experiments treatments localizations assets`
+
+Manage treatment screenshots and previews
+
+**Usage**
+
+```text
+flightline experiments treatments localizations assets [flags]
+```
+
+### `experiments treatments localizations assets delete`
+
+Delete selected treatment media
+
+**Usage**
+
+```text
+flightline experiments treatments localizations assets delete <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--asset` | `string` | No | `(empty)` | asset ID |
+| `--confirm` | `bool` | No | `false` | confirm this write |
+| `--display-type` | `string` | No | `(empty)` | screenshot display type or preview type |
+| `--experiment` | `string` | No | `(empty)` | v2 experiment ID |
+| `--kind` | `string` | No | `(empty)` | screenshot or preview |
+| `--locale` | `string` | No | `(empty)` | treatment locale |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--treatment` | `string` | No | `(empty)` | treatment ID |
+| `--version` | `string` | No | `(empty)` | selected App Store version string |
+
+### `experiments treatments localizations assets list`
+
+List all sets and media under a selected treatment locale
+
+**Usage**
+
+```text
+flightline experiments treatments localizations assets list <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--experiment` | `string` | No | `(empty)` | v2 experiment ID |
+| `--locale` | `string` | No | `(empty)` | treatment locale |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--treatment` | `string` | No | `(empty)` | treatment ID |
+| `--version` | `string` | No | `(empty)` | selected App Store version string |
+
+### `experiments treatments localizations assets upload`
+
+Upload a treatment screenshot or preview
+
+**Usage**
+
+```text
+flightline experiments treatments localizations assets upload <bundleId> <file> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm this write |
+| `--display-type` | `string` | No | `(empty)` | screenshot display type or preview type |
+| `--experiment` | `string` | No | `(empty)` | v2 experiment ID |
+| `--kind` | `string` | No | `(empty)` | screenshot or preview |
+| `--locale` | `string` | No | `(empty)` | treatment locale |
+| `--max-polls` | `int` | No | `20` | maximum processing status reads |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--poll-interval` | `duration` | No | `3s` | time between status reads |
+| `--resume` | `bool` | No | `false` | resume exact matching pending upload checkpoint |
+| `--treatment` | `string` | No | `(empty)` | treatment ID |
+| `--version` | `string` | No | `(empty)` | selected App Store version string |
+
+### `experiments treatments localizations assets wait`
+
+Wait for selected treatment media processing
+
+**Usage**
+
+```text
+flightline experiments treatments localizations assets wait <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--asset` | `string` | No | `(empty)` | asset ID |
+| `--display-type` | `string` | No | `(empty)` | screenshot display type or preview type |
+| `--experiment` | `string` | No | `(empty)` | v2 experiment ID |
+| `--kind` | `string` | No | `(empty)` | screenshot or preview |
+| `--locale` | `string` | No | `(empty)` | treatment locale |
+| `--max-polls` | `int` | No | `20` | maximum processing status reads |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--poll-interval` | `duration` | No | `3s` | time between status reads |
+| `--treatment` | `string` | No | `(empty)` | treatment ID |
+| `--version` | `string` | No | `(empty)` | selected App Store version string |
+
+### `experiments treatments localizations create`
+
+Create a treatment locale
+
+**Usage**
+
+```text
+flightline experiments treatments localizations create <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm this write |
+| `--experiment` | `string` | No | `(empty)` | v2 experiment ID |
+| `--locale` | `string` | No | `(empty)` | treatment locale |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--treatment` | `string` | No | `(empty)` | treatment ID |
+| `--version` | `string` | No | `(empty)` | selected App Store version string |
+
+### `experiments treatments localizations delete`
+
+Delete a treatment locale
+
+**Usage**
+
+```text
+flightline experiments treatments localizations delete <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm this write |
+| `--experiment` | `string` | No | `(empty)` | v2 experiment ID |
+| `--locale` | `string` | No | `(empty)` | treatment locale |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--treatment` | `string` | No | `(empty)` | treatment ID |
+| `--version` | `string` | No | `(empty)` | selected App Store version string |
+
+### `experiments treatments localizations list`
+
+List treatment locales
+
+**Usage**
+
+```text
+flightline experiments treatments localizations list <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--experiment` | `string` | No | `(empty)` | v2 experiment ID |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--treatment` | `string` | No | `(empty)` | treatment ID |
+| `--version` | `string` | No | `(empty)` | selected App Store version string |
+
+### `experiments treatments update`
+
+Update treatment name or app icon
+
+**Usage**
+
+```text
+flightline experiments treatments update <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--app-icon-name` | `string` | No | `(empty)` | new app icon name |
+| `--confirm` | `bool` | No | `false` | confirm this write |
+| `--experiment` | `string` | No | `(empty)` | v2 experiment ID |
+| `--name` | `string` | No | `(empty)` | new name |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--treatment` | `string` | No | `(empty)` | treatment ID |
+| `--version` | `string` | No | `(empty)` | selected App Store version string |
+
+### `experiments update`
+
+Update draft experiment name or traffic
+
+**Usage**
+
+```text
+flightline experiments update <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm this write |
+| `--experiment` | `string` | No | `(empty)` | v2 experiment ID |
+| `--name` | `string` | No | `(empty)` | new name |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--traffic` | `int` | No | `0` | new traffic proportion |
+| `--version` | `string` | No | `(empty)` | selected App Store version string |
 
 ## `export-compliance`
 
 export-compliance reads Apple's two-tier export-compliance surface: 1. The per-build boolean `usesNonExemptEncryption` (lives on the Build attached to the version, not on the version itself). 2. The per-app `appEncryptionDeclaration` resources for full ECCN classification when the boolean is not sufficient. L3 preflight will gate submissions on a missing build-level answer; this verb surfaces the same data for manual inspection.
 
-Flags, arguments, and defaults: `flightline export-compliance --help`.
+**Usage**
+
+```text
+flightline export-compliance [flags]
+```
+
+### `export-compliance get`
+
+Get export-compliance state for a version
+
+**Usage**
+
+```text
+flightline export-compliance get <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline export-compliance get com.example.myapp --version 1.0.1
+  flightline export-compliance get com.example.myapp --version 1.0.1 --output json | jq .build
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--platform` | `string` | No | `IOS` | platform (IOS&#124;MAC_OS&#124;TV_OS&#124;VISION_OS) |
+| `--version` | `string` | Yes | `(empty)` | version string to look up (e.g. 1.0.1) |
+
+### `export-compliance set`
+
+set PATCHes the build attached to a version with the export-compliance boolean Apple requires before review. Apple's two-tier model: 1. Per-build boolean: `usesNonExemptEncryption` on the Build attached to the version. This verb writes that field. 2. Per-app AppEncryptionDeclaration: for full ECCN classification. The `--exempt` and `--documentation-url` flags target this surface and are reserved for a follow-up command; they currently return a typed error. Idempotent: reads the build's current answer; PATCH only when the requested value differs.
+
+**Usage**
+
+```text
+flightline export-compliance set <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline export-compliance set com.example.myapp --version 1.0.1 --uses-encryption false
+  flightline export-compliance set com.example.myapp --version 1.0.1 --uses-encryption true --output json
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--documentation-url` | `string` | No | `(empty)` | (reserved) AppEncryptionDeclaration documentation URL: see follow-up |
+| `--exempt` | `bool` | No | `false` | (reserved) AppEncryptionDeclaration exemption: see follow-up |
+| `--platform` | `string` | No | `IOS` | platform (IOS&#124;MAC_OS&#124;TV_OS&#124;VISION_OS) |
+| `--uses-encryption` | `string` | Yes | `(empty)` | true &#124; false: whether the build uses non-exempt encryption |
+| `--version` | `string` | Yes | `(empty)` | version string to look up (e.g. 1.0.1) |
 
 ## `fetch`
 
 Pulls every L2 surface Flightline supports for the given bundleId and writes the result as a Flightline state file. Beta build metadata is scoped to the attached build; --include-beta-builds adds complete group membership sets. Default output is YAML with a yaml-language-server schema directive prepended for editor autocomplete. Surfaces absent from the state file are not managed. The diff engine leaves those surfaces untouched on subsequent applies. Examples: flightline fetch app.tideterm.ios > state.yaml flightline fetch app.tideterm.ios -o state.yaml --version 1.0.1 flightline fetch app.tideterm.ios --output json | jq '.spec.version'
 
-Flags, arguments, and defaults: `flightline fetch --help`.
+**Usage**
+
+```text
+flightline fetch <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--include-beta-builds` | `bool` | No | `false` | include complete beta group build memberships as managed state |
+| `--output-file, -o` | `string` | No | `(empty)` | write to file instead of stdout (YAML only) |
+| `--platform` | `string` | No | `IOS` | Apple platform: IOS &#124; MAC_OS &#124; TV_OS &#124; VISION_OS |
+| `--version` | `string` | No | `(empty)` | App Store version string (default: latest editable) |
 
 ## `finance`
 
 finance pulls finance/settlement reports from /v1/financeReports. Apple indexes finance reports by fiscal year/month, not calendar month. Daily granularity belongs to `flightline sales`. FINANCIAL defaults to the consolidated region ZZ. FINANCE_DETAIL defaults to Z1. The bundleId argument filters typed output by Vendor Identifier so a single- vendor multi-app account stays focused. --output tsv streams Apple's raw wire format unfiltered. Vendor number is read from APP_STORE_CONNECT_VENDOR_NUMBER.
 
-Flags, arguments, and defaults: `flightline finance --help`.
+**Usage**
+
+```text
+flightline finance <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline finance com.example.myapp --month 2026-04
+	  flightline finance com.example.myapp --month 2026-04 --region US
+	  flightline finance com.example.myapp --month 2026-04 --report-type FINANCE_DETAIL
+  flightline finance com.example.myapp --month 2026-04 --output json | jq '.summary'
+  flightline finance com.example.myapp --month 2026-04 --output tsv > finance.tsv
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--month` | `string` | No | `(empty)` | Apple fiscal year/month in YYYY-MM format |
+| `--region` | `string` | No | `(empty)` | financial region code (default: ZZ for FINANCIAL, Z1 for FINANCE_DETAIL) |
+| `--report-type` | `string` | No | `FINANCIAL` | reportType filter (FINANCIAL or FINANCE_DETAIL) |
 
 ## `iap`
 
 iap groups read commands over the /v2/inAppPurchases resource. Auto-renewable subscriptions live under a separate /v1/subscriptionGroups resource and are not handled here: see `flightline subscriptions`.
 
-Flags, arguments, and defaults: `flightline iap --help`.
+**Usage**
+
+```text
+flightline iap [flags]
+```
+
+### `iap commerce`
+
+Inspect and set non-subscription IAP pricing and availability
+
+**Usage**
+
+```text
+flightline iap commerce [flags]
+```
+
+### `iap commerce availability`
+
+Inspect IAP territory availability
+
+**Usage**
+
+```text
+flightline iap commerce availability <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--product` | `string` | No | `(empty)` | IAP product ID |
+
+### `iap commerce price-points`
+
+List price points for one IAP
+
+**Usage**
+
+```text
+flightline iap commerce price-points <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--product` | `string` | No | `(empty)` | IAP product ID |
+| `--territory` | `string` | No | `(empty)` | optional territory ID filter |
+
+### `iap commerce pricing`
+
+Inspect complete IAP manual price windows
+
+**Usage**
+
+```text
+flightline iap commerce pricing <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--product` | `string` | No | `(empty)` | IAP product ID |
+
+### `iap commerce set-availability`
+
+Set IAP territory availability as an explicit complete set
+
+**Usage**
+
+```text
+flightline iap commerce set-availability <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--clear-territories` | `bool` | No | `false` | explicitly clear all available territories |
+| `--confirm` | `bool` | No | `false` | confirm IAP availability change |
+| `--new-territories` | `bool` | No | `false` | make the IAP available in newly added territories |
+| `--product` | `string` | No | `(empty)` | IAP product ID |
+| `--territory` | `stringArray` | No | `[]` | available territory ID; repeat for the complete set |
+
+### `iap commerce set-price`
+
+Set the current IAP base price while preserving manual windows
+
+**Usage**
+
+```text
+flightline iap commerce set-price <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--base-territory` | `string` | No | `(empty)` | base territory ID |
+| `--confirm` | `bool` | No | `false` | confirm IAP price change |
+| `--price-point` | `string` | No | `(empty)` | IAP price point ID in the base territory |
+| `--product` | `string` | No | `(empty)` | IAP product ID |
+
+### `iap create`
+
+create reserves a new In-App Purchase under the given app. Idempotent: if an IAP with --product-id already exists for this app, returns the existing record with noop=true rather than failing or creating a duplicate.
+
+**Usage**
+
+```text
+flightline iap create <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline iap create com.example.myapp --product-id com.example.myapp.lifetime --type NON_CONSUMABLE --name "Lifetime Pro"
+  flightline iap create com.example.myapp --product-id com.example.myapp.coins --type CONSUMABLE --name Coins --review-note "Currency for the in-app store"
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--family-sharable` | `string` | No | `(empty)` | true &#124; false; omit to leave unset |
+| `--name` | `string` | Yes | `(empty)` | internal reference name (visible in App Store Connect, not to users) |
+| `--product-id` | `string` | Yes | `(empty)` | developer-chosen StoreKit identifier (e.g. com.example.myapp.lifetime) |
+| `--review-note` | `string` | No | `(empty)` | note to App Review explaining how to test |
+| `--type` | `string` | Yes | `(empty)` | IAP type (CONSUMABLE &#124; NON_CONSUMABLE &#124; NON_RENEWING_SUBSCRIPTION) |
+
+### `iap delete`
+
+delete removes an In-App Purchase. Destructive: requires --yes to confirm. Idempotent: if the IAP doesn't exist, returns noop=true without issuing a DELETE. Apple may refuse deletion of an IAP that has been APPROVED and is visible on the store; that case surfaces as a typed APIError.
+
+**Usage**
+
+```text
+flightline iap delete <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline iap delete com.example.myapp --product com.example.myapp.lifetime --yes
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--product` | `string` | Yes | `(empty)` | productId of the IAP to delete |
+| `--yes` | `bool` | No | `false` | skip confirmation prompt (required for non-interactive runs) |
+
+### `iap get`
+
+Get a single in-app purchase by productId
+
+**Usage**
+
+```text
+flightline iap get <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline iap get com.example.myapp --product com.example.myapp.lifetime
+  flightline iap get com.example.myapp --product com.example.myapp.lifetime --output json
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--product` | `string` | Yes | `(empty)` | productId of the IAP to fetch (e.g. com.example.myapp.lifetime) |
+
+### `iap list`
+
+List in-app purchases for an app
+
+**Usage**
+
+```text
+flightline iap list <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline iap list com.example.myapp
+  flightline iap list com.example.myapp --type CONSUMABLE
+  flightline iap list com.example.myapp --output json | jq -r '.iaps[].attributes.productId'
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--limit` | `int` | No | `0` | max IAPs to emit (0 = no cap) |
+| `--type` | `string` | No | `(empty)` | filter by IAP type (CONSUMABLE&#124;NON_CONSUMABLE&#124;NON_RENEWING_SUBSCRIPTION); empty = all |
+
+### `iap localizations`
+
+Manage and inspect IAP localizations
+
+**Usage**
+
+```text
+flightline iap localizations [flags]
+```
+
+### `iap localizations list`
+
+List localizations for an in-app purchase
+
+**Usage**
+
+```text
+flightline iap localizations list <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline iap localizations list com.example.myapp --product com.example.myapp.lifetime
+  flightline iap localizations list com.example.myapp --product com.example.myapp.lifetime --output json
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--limit` | `int` | No | `0` | max localizations to emit (0 = no cap) |
+| `--product` | `string` | Yes | `(empty)` | productId of the parent IAP |
+
+### `iap localizations set`
+
+set creates the localization for --locale if it does not exist, or PATCHes the mutable fields (name, description) if it does. Idempotent: when the existing localization already matches the supplied flags, returns noop=true.
+
+**Usage**
+
+```text
+flightline iap localizations set <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline iap localizations set com.example.myapp --product com.example.myapp.lifetime --locale en-US --name "Lifetime Pro" --description "Unlock everything, forever."
+  flightline iap localizations set com.example.myapp --product com.example.myapp.lifetime --locale fr-FR --name "Pro à vie" --description "Tout débloquer, pour toujours."
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--description` | `string` | No | `(empty)` | user-visible description in this locale |
+| `--locale` | `string` | Yes | `(empty)` | BCP-47 locale code (e.g. en-US, fr-FR) |
+| `--name` | `string` | Yes | `(empty)` | user-visible IAP name in this locale |
+| `--product` | `string` | Yes | `(empty)` | productId of the parent IAP |
+
+### `iap offer-codes`
+
+Inspect and deliberately issue non-subscription IAP offer codes
+
+**Usage**
+
+```text
+flightline iap offer-codes [flags]
+```
+
+### `iap offer-codes create-custom`
+
+Create a custom code batch for an existing offer
+
+**Usage**
+
+```text
+flightline iap offer-codes create-custom <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--code-file` | `string` | No | `(empty)` | 0600 file containing the custom code |
+| `--confirm` | `bool` | No | `false` | confirm custom code creation |
+| `--count` | `int` | No | `0` | number of codes |
+| `--expires` | `string` | No | `(empty)` | optional future expiration date, YYYY-MM-DD |
+| `--offer` | `string` | No | `(empty)` | offer definition ID |
+| `--product` | `string` | No | `(empty)` | IAP product ID |
+
+### `iap offer-codes create-definition`
+
+Create an IAP offer definition with explicit prices
+
+**Usage**
+
+```text
+flightline iap offer-codes create-definition <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm offer definition creation |
+| `--eligibility` | `stringArray` | No | `[]` | customer eligibility; repeat NON_SPENDER, ACTIVE_SPENDER, or CHURNED_SPENDER |
+| `--name` | `string` | No | `(empty)` | offer name |
+| `--price` | `stringArray` | No | `[]` | territory=IAP price-point ID; repeat per territory |
+| `--product` | `string` | No | `(empty)` | IAP product ID |
+
+### `iap offer-codes create-one-time`
+
+Issue a one-time code batch for an existing offer
+
+**Usage**
+
+```text
+flightline iap offer-codes create-one-time <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm one-time batch issuance |
+| `--count` | `int` | No | `0` | number of codes |
+| `--environment` | `string` | No | `(empty)` | PRODUCTION or SANDBOX |
+| `--expires` | `string` | No | `(empty)` | future expiration date, YYYY-MM-DD |
+| `--offer` | `string` | No | `(empty)` | offer definition ID |
+| `--product` | `string` | No | `(empty)` | IAP product ID |
+
+### `iap offer-codes download`
+
+Download one-time code values to a new private CSV file
+
+**Usage**
+
+```text
+flightline iap offer-codes download <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--batch` | `string` | No | `(empty)` | one-time batch ID |
+| `--confirm` | `bool` | No | `false` | confirm code value download |
+| `--file` | `string` | No | `(empty)` | new destination CSV path; existing files are never overwritten |
+| `--offer` | `string` | No | `(empty)` | offer definition ID |
+| `--product` | `string` | No | `(empty)` | IAP product ID |
+
+### `iap offer-codes get`
+
+Inspect an offer and its complete prices and batches
+
+**Usage**
+
+```text
+flightline iap offer-codes get <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--offer` | `string` | No | `(empty)` | offer definition ID |
+| `--product` | `string` | No | `(empty)` | IAP product ID |
+
+### `iap offer-codes list`
+
+List offer definitions for one IAP
+
+**Usage**
+
+```text
+flightline iap offer-codes list <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--product` | `string` | No | `(empty)` | IAP product ID |
+
+### `iap promotion`
+
+Manage non-subscription IAP promotional images and promoted purchases
+
+**Usage**
+
+```text
+flightline iap promotion [flags]
+```
+
+### `iap promotion images`
+
+Manage IAP promotional images
+
+**Usage**
+
+```text
+flightline iap promotion images [flags]
+```
+
+### `iap promotion images delete`
+
+Delete a confirmed promotional image
+
+**Usage**
+
+```text
+flightline iap promotion images delete <bundleId> <productId> <imageId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm promotional image deletion |
+
+### `iap promotion images list`
+
+List IAP promotional images
+
+**Usage**
+
+```text
+flightline iap promotion images list <bundleId> <productId> [flags]
+```
+
+### `iap promotion images upload`
+
+Upload and process a promotional image
+
+**Usage**
+
+```text
+flightline iap promotion images upload <bundleId> <productId> <file> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm promotional image upload |
+| `--poll-attempts` | `int` | No | `3` | processing status reads after upload |
+| `--poll-interval` | `duration` | No | `1s` | time between processing reads |
+| `--resume` | `bool` | No | `false` | resume a matching upload checkpoint |
+
+### `iap promotion images wait`
+
+Inspect promotional image processing
+
+**Usage**
+
+```text
+flightline iap promotion images wait <bundleId> <productId> <imageId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--poll-attempts` | `int` | No | `10` | processing status reads |
+| `--poll-interval` | `duration` | No | `1s` | time between processing reads |
+
+### `iap promotion promoted`
+
+Manage app promoted purchases
+
+**Usage**
+
+```text
+flightline iap promotion promoted [flags]
+```
+
+### `iap promotion promoted delete`
+
+Delete a confirmed IAP promotion
+
+**Usage**
+
+```text
+flightline iap promotion promoted delete <bundleId> <productId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm promoted purchase deletion |
+
+### `iap promotion promoted list`
+
+List promoted purchases
+
+**Usage**
+
+```text
+flightline iap promotion promoted list <bundleId> [flags]
+```
+
+### `iap promotion promoted order`
+
+Set the complete promoted purchase order
+
+**Usage**
+
+```text
+flightline iap promotion promoted order <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm full promoted purchase order |
+| `--id` | `stringArray` | No | `[]` | promoted purchase ID in desired order (repeatable; complete app set) |
+
+### `iap promotion promoted set`
+
+Create or update a confirmed IAP promotion
+
+**Usage**
+
+```text
+flightline iap promotion promoted set <bundleId> <productId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm promoted purchase change |
+| `--enabled` | `bool` | No | `false` | enable promotion |
+| `--visible-for-all-users` | `bool` | No | `false` | show promotion to all users |
+
+### `iap review-screenshot`
+
+Manage IAP App Store review screenshots
+
+**Usage**
+
+```text
+flightline iap review-screenshot [flags]
+```
+
+### `iap review-screenshot upload`
+
+upload reserves a new IAP review screenshot, PUTs the file in chunks to Apple's CDN, and commits the upload with the local MD5. Idempotent: if a screenshot with the same sourceFileChecksum is already attached to this IAP, returns noop=true without re-uploading. Use --resume to pick up a partial upload from the on-disk checkpoint.
+
+**Usage**
+
+```text
+flightline iap review-screenshot upload <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline iap review-screenshot upload com.example.myapp --product com.example.myapp.lifetime --file ./review/lifetime.png
+  flightline iap review-screenshot upload com.example.myapp --product com.example.myapp.lifetime --file ./review/lifetime.png --resume
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--file` | `string` | Yes | `(empty)` | path to the screenshot file (PNG/JPEG) |
+| `--product` | `string` | Yes | `(empty)` | productId of the parent IAP |
+| `--resume` | `bool` | No | `false` | resume from on-disk upload checkpoint if present |
+
+### `iap update`
+
+update PATCHes the mutable attributes (name, reviewNote, familySharable) on an existing In-App Purchase. Idempotent: if every flag matches the current value, returns noop=true without issuing a PATCH. productId and inAppPurchaseType are immutable post-create: to change either, delete and recreate.
+
+**Usage**
+
+```text
+flightline iap update <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline iap update com.example.myapp --product com.example.myapp.lifetime --name "Lifetime Pro v2"
+  flightline iap update com.example.myapp --product com.example.myapp.lifetime --review-note "updated reviewer steps"
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--family-sharable` | `string` | No | `(empty)` | true &#124; false; omit to leave unchanged |
+| `--name` | `string` | No | `(empty)` | new internal reference name |
+| `--product` | `string` | Yes | `(empty)` | productId of the IAP to update |
+| `--review-note` | `string` | No | `(empty)` | new review note |
 
 ## `lint`
 
 lint runs every Flightline preflight rule that does not require live ASC access against the supplied state.yaml. The check covers schema gaps the JSON Schema validator cannot express (yes/no coercion, required-but-empty fields, format: email shape) plus structural rules (localizations completeness, screenshots required-devices). Exit codes: 0 clean (no diagnostics, or info-only) 1 at least one error-severity diagnostic 2 only warnings (no errors) Use `--output json` for stable LLM/CI consumption; the table form is for humans.
 
-Flags, arguments, and defaults: `flightline lint --help`.
+**Usage**
+
+```text
+flightline lint <state.yaml> [flags]
+```
+
+**Examples**
+
+```bash
+flightline lint state.yaml
+  flightline lint state.yaml --output json | jq '.diagnostics[] | select(.severity=="error")'
+  flightline lint state.yaml --output json | jq -r '.summary'
+```
 
 ## `metadata`
 
 metadata writes per-locale strings into appStoreVersionLocalizations (description, keywords, whatsNew, promotionalText, marketing/support URLs) and appInfoLocalizations (name, subtitle). Both resources are diff-then-PATCH idempotent: re-running with the same arguments is a no-op.
 
-Flags, arguments, and defaults: `flightline metadata --help`.
+**Usage**
+
+```text
+flightline metadata [flags]
+```
+
+### `metadata set`
+
+Set per-locale metadata fields (idempotent diff-then-PATCH)
+
+**Usage**
+
+```text
+flightline metadata set <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline metadata set com.example.myapp --version 1.0.1 --locale en-US --name "MyApp" --subtitle "Slogan"
+  flightline metadata set com.example.myapp --version 1.0.1 --locale en-US --description "..." --keywords "..."
+  flightline metadata set com.example.myapp --version 1.0.1 --locale en-US --whats-new "Bug fixes."
+  flightline metadata set com.example.myapp --version 1.0.1 --locale en-US --output json
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--description` | `string` | No | `(empty)` | app description (versionLocalization) |
+| `--keywords` | `string` | No | `(empty)` | comma-separated keywords (versionLocalization) |
+| `--locale` | `string` | Yes | `(empty)` | BCP-47 locale code (e.g. en-US) |
+| `--marketing-url` | `string` | No | `(empty)` | marketing URL (versionLocalization) |
+| `--name` | `string` | No | `(empty)` | app name (appInfoLocalization) |
+| `--platform` | `string` | No | `IOS` | platform (IOS&#124;MAC_OS&#124;TV_OS&#124;VISION_OS) |
+| `--promotional-text` | `string` | No | `(empty)` | promotional text (versionLocalization) |
+| `--subtitle` | `string` | No | `(empty)` | app subtitle (appInfoLocalization) |
+| `--support-url` | `string` | No | `(empty)` | support URL (versionLocalization) |
+| `--version` | `string` | Yes | `(empty)` | App Store version string (e.g. 1.0.1) |
+| `--whats-new` | `string` | No | `(empty)` | release notes (versionLocalization) |
 
 ## `performance`
 
 performance groups read commands over Apple's perfPowerMetrics endpoints: the same battery / memory / hangs / launches / disk-writes metrics the Xcode Organizer "Metrics" tab shows. - app <bundleId> : app-level (cross-build aggregate) - build <bundleId> --build <number>: build-specific metrics Filter by --platform, --category (HANG | LAUNCH | MEMORY | DISK | BATTERY | TERMINATION | ANIMATION | STORAGE), and --device.
 
-Flags, arguments, and defaults: `flightline performance --help`.
+**Usage**
+
+```text
+flightline performance [flags]
+```
+
+### `performance app`
+
+Read app-level performance metrics (cross-build aggregate)
+
+**Usage**
+
+```text
+flightline performance app <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline performance app com.example.myapp
+  flightline performance app com.example.myapp --category MEMORY
+  flightline performance app com.example.myapp --output json | jq '.insights.regressions'
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--category` | `string` | No | `(empty)` | filter by metric category: HANG &#124; LAUNCH &#124; MEMORY &#124; DISK &#124; BATTERY &#124; TERMINATION &#124; ANIMATION &#124; STORAGE |
+| `--device` | `string` | No | `(empty)` | filter by device type (Apple model id, e.g. iPhone15,3) |
+| `--platform` | `string` | No | `IOS` | filter by platform (Apple v4.5 only emits IOS) |
+
+### `performance build`
+
+Read build-specific performance metrics
+
+**Usage**
+
+```text
+flightline performance build <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline performance build com.example.myapp --build 42
+	  flightline performance build com.example.myapp --build 2 --version 1.1 --platform IOS
+	  flightline performance build com.example.myapp --build 42 --category HANG --output json
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--build` | `string` | Yes | `(empty)` | build number to inspect (CFBundleVersion, e.g. 42) |
+| `--category` | `string` | No | `(empty)` | filter by metric category |
+| `--device` | `string` | No | `(empty)` | filter by device type |
+| `--platform` | `string` | No | `IOS` | filter by platform (Apple v4.5 only emits IOS) |
+| `--version` | `string` | No | `(empty)` | App Store version/train used to disambiguate duplicate build numbers |
+
+### `performance overview`
+
+Read app performance overview
+
+**Usage**
+
+```text
+flightline performance overview <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline performance overview com.example.myapp
+  flightline performance overview com.example.myapp --device-type iPhone15,3 --output json
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--device-type` | `stringSlice` | No | `[]` | filter by device type (Apple model id) |
 
 ## `phased-release`
 
 Inspect and control phased release for an app update
 
-Flags, arguments, and defaults: `flightline phased-release --help`.
+**Usage**
+
+```text
+flightline phased-release [flags]
+```
+
+### `phased-release enable`
+
+Enable inactive phased release for an eligible update
+
+**Usage**
+
+```text
+flightline phased-release enable <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm enabling phased release |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--version` | `string` | Yes | `(empty)` | App Store version string |
+
+### `phased-release get`
+
+Show a version's phased-release state
+
+**Usage**
+
+```text
+flightline phased-release get <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--version` | `string` | Yes | `(empty)` | App Store version string |
+
+### `phased-release pause`
+
+pause an active or paused phased release
+
+**Usage**
+
+```text
+flightline phased-release pause <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm phased release pause |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--version` | `string` | Yes | `(empty)` | App Store version string |
+
+### `phased-release resume`
+
+resume an active or paused phased release
+
+**Usage**
+
+```text
+flightline phased-release resume <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm phased release resume |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--version` | `string` | Yes | `(empty)` | App Store version string |
 
 ## `plan`
 
 Loads <state.yaml>, validates it against the embedded JSON Schema, fetches live ASC state for the same bundleId/version, and prints the change set the apply command would make. Read-only: never writes. Exit code 0 always (diffs aren't errors) unless --exit-on-changes is set, in which case the command returns exit code 2 when changes exist (useful in CI hooks). Examples: flightline plan state.yaml flightline plan state.yaml --output json | jq '.changes | length' flightline plan state.yaml --exit-on-changes
 
-Flags, arguments, and defaults: `flightline plan --help`.
+**Usage**
+
+```text
+flightline plan <state.yaml> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--exit-on-changes` | `bool` | No | `false` | exit 2 when changes exist (for CI) |
+| `--platform` | `string` | No | `(empty)` | override metadata.platform from the state file |
+| `--version` | `string` | No | `(empty)` | override metadata.version from the state file |
 
 ## `preflight`
 
 preflight runs every Flightline rejection-prevention rule against a live App Store version. Live rules query the ASC API for IAP attachment, build state, age-rating completeness, and screenshot device coverage. Offline rules run too when --state-file is provided so authoring mistakes are caught alongside live ones. Without --state-file the live state is fetched and used as the rule input: useful for "is the version actually submittable right now?" checks against any app you have credentials for. With --state-file the user-authored YAML is the input for offline rules and the live ASC state is consulted for live rules. When --state-file is used, its bundleId, version, and platform must match the command coordinates. An omitted state-file platform inherits the command platform (IOS by default); mismatches fail before rules run. Exit codes: 0 clean (no diagnostics, or info-only) 1 at least one error-severity diagnostic 2 only warnings (no errors)
 
-Flags, arguments, and defaults: `flightline preflight --help`.
+**Usage**
+
+```text
+flightline preflight <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline preflight com.example.myapp --version 1.0.1
+  flightline preflight com.example.myapp --version 1.0.1 --state-file state.yaml
+  flightline preflight com.example.myapp --version 1.0.1 --output json | jq '.summary'
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--platform` | `string` | No | `IOS` | platform (IOS&#124;MAC_OS&#124;TV_OS&#124;VISION_OS) |
+| `--state-file` | `string` | No | `(empty)` | optional state.yaml; offline rules also run against it |
+| `--version` | `string` | Yes | `(empty)` | App Store version string (e.g. 1.0.1) |
 
 ## `previews`
 
 Manage App Store preview videos
 
-Flags, arguments, and defaults: `flightline previews --help`.
+**Usage**
+
+```text
+flightline previews [flags]
+```
+
+### `previews delete`
+
+Delete one preview from its verified listing
+
+**Usage**
+
+```text
+flightline previews delete <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm preview deletion |
+| `--locale` | `string` | No | `(empty)` | listing locale |
+| `--page` | `string` | No | `(empty)` | custom product page name; omit for the main listing |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--preview` | `string` | No | `(empty)` | preview resource ID |
+| `--version` | `string` | No | `(empty)` | App Store version string for the main listing |
+
+### `previews list`
+
+List preview sets and videos for a main or custom page locale
+
+**Usage**
+
+```text
+flightline previews list <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--locale` | `string` | No | `(empty)` | listing locale |
+| `--page` | `string` | No | `(empty)` | custom product page name; omit for the main listing |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--version` | `string` | No | `(empty)` | App Store version string for the main listing |
+
+### `previews upload`
+
+Upload one preview and wait for video processing
+
+**Usage**
+
+```text
+flightline previews upload <bundleId> <file> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm preview upload |
+| `--frame-time-code` | `string` | No | `(empty)` | optional preview frame time code, applied after upload |
+| `--locale` | `string` | No | `(empty)` | listing locale |
+| `--max-polls` | `int` | No | `20` | maximum processing status reads |
+| `--page` | `string` | No | `(empty)` | custom product page name; omit for the main listing |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--poll-interval` | `duration` | No | `3s` | time between processing status reads |
+| `--resume` | `bool` | No | `false` | resume a matching upload checkpoint |
+| `--type` | `string` | No | `(empty)` | PreviewType such as IPHONE_67 or IPAD_PRO_3GEN_129 |
+| `--version` | `string` | No | `(empty)` | App Store version string for the main listing |
+
+### `previews wait`
+
+Wait for an existing preview by ID without uploading again
+
+**Usage**
+
+```text
+flightline previews wait <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--locale` | `string` | No | `(empty)` | listing locale |
+| `--max-polls` | `int` | No | `20` | maximum processing status reads |
+| `--page` | `string` | No | `(empty)` | custom product page name; omit for the main listing |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--poll-interval` | `duration` | No | `3s` | time between processing status reads |
+| `--preview` | `string` | No | `(empty)` | preview resource ID |
+| `--version` | `string` | No | `(empty)` | App Store version string for the main listing |
 
 ## `price-points`
 
 Discover app price points and equalizations
 
-Flags, arguments, and defaults: `flightline price-points --help`.
+**Usage**
+
+```text
+flightline price-points [flags]
+```
+
+### `price-points equalizations`
+
+List territory equalizations for a price point
+
+**Usage**
+
+```text
+flightline price-points equalizations <pricePointId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--territory` | `string` | No | `(empty)` | filter to an App Store territory ID |
+
+### `price-points list`
+
+List selectable price points for an app
+
+**Usage**
+
+```text
+flightline price-points list <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--territory` | `string` | No | `(empty)` | filter to an App Store territory ID |
 
 ## `pricing`
 
 pricing groups read commands over the /v1/appPriceSchedules and /v1/apps/{id}/appAvailabilityV2 resources. Apple's pricing model uses AppPriceSchedule (one per app) carrying manual/automatic price windows that link to AppPricePointV3 entries (customerPrice + proceeds per territory). AppPriceTier is deprecated. Availability lives in a separate resource: a flag for new-territory auto-release plus the per-territory availability set.
 
-Flags, arguments, and defaults: `flightline pricing --help`.
+**Usage**
+
+```text
+flightline pricing [flags]
+```
+
+### `pricing get`
+
+Show the price schedule and availability summary for an app
+
+**Usage**
+
+```text
+flightline pricing get <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline pricing get com.example.myapp
+  flightline pricing get com.example.myapp --output json | jq .basePrice
+  flightline pricing get com.example.myapp --output json | jq '.availability.availableCount'
+```
+
+### `pricing set`
+
+pricing set creates a new AppPriceSchedule for the app. Apple's pricing model is replace-by-create: the new schedule supersedes any prior one. L1 supports a single base-territory + appPricePoint pairing. Pass: --base-territory <code> ISO-3 territory code (e.g. USA, GBR, JPN) --tier <pricePointId> AppPricePointV3 id Preserves unrelated manual prices and scheduled windows. Optional dates select a price window; conflicting future schedules fail before writing. An already matching requested window sends no POST and reports changed=false.
+
+**Usage**
+
+```text
+flightline pricing set <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline pricing set com.example.myapp --base-territory USA --tier PP-USA-999
+  flightline pricing set com.example.myapp --base-territory USA --tier PP-USA-999 --output json
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--base-territory` | `string` | Yes | `(empty)` | ISO-3 territory code (e.g. USA) |
+| `--end-date` | `string` | No | `(empty)` | manual-price end date (YYYY-MM-DD); empty = indefinite |
+| `--start-date` | `string` | No | `(empty)` | manual-price start date (YYYY-MM-DD); empty = no lower bound |
+| `--tier` | `string` | Yes | `(empty)` | AppPricePointV3 id |
 
 ## `privacy-labels`
 
 privacy-labels would read Apple's App Privacy Details (nutrition labels) for an app. Apple's App Store Connect API v4.5 does not expose this surface: labels are authored exclusively in App Store Connect's web UI. This command returns a typed diagnostic so callers can detect the unsupported state programmatically. When Apple ships an API endpoint, the command can be wired without changing the JSON contract.
 
-Flags, arguments, and defaults: `flightline privacy-labels --help`.
+**Usage**
+
+```text
+flightline privacy-labels [flags]
+```
+
+### `privacy-labels get`
+
+Get privacy nutrition labels for an app (currently unsupported by ASC API)
+
+**Usage**
+
+```text
+flightline privacy-labels get <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline privacy-labels get com.example.myapp
+  flightline privacy-labels get com.example.myapp --output json | jq .supported
+```
+
+### `privacy-labels set`
+
+set would PATCH an app's privacy nutrition labels. Apple's App Store Connect API v4.5 does not expose this surface: labels are authored exclusively in App Store Connect's web UI. This command returns a typed diagnostic so callers can detect the unsupported state programmatically (`.supported == false`). When Apple ships an API endpoint, set can be wired without changing the JSON contract.
+
+**Usage**
+
+```text
+flightline privacy-labels set <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline privacy-labels set com.example.myapp --from labels.yaml
+  flightline privacy-labels set com.example.myapp --output json | jq .supported
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--from` | `string` | No | `(empty)` | (reserved) path to YAML/JSON describing the labels |
 
 ## `rejection`
 
 rejection composes the API-visible signals around an App Store rejection into one report: the version's state, the build attached to it (if any), the matching review submission's state, and each review submission item's state. Apple's resolution-center reviewer text is NOT in the public API. Flightline shows the API-visible state. To read the actual reviewer message, log into App Store Connect. Examples: flightline rejection com.example.myapp --version 1.0.1 flightline rejection com.example.myapp --version 1.0.1 --output json | jq .submission.state
 
-Flags, arguments, and defaults: `flightline rejection --help`.
+**Usage**
+
+```text
+flightline rejection <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline rejection com.example.myapp --version 1.0.1
+  flightline rejection com.example.myapp --version 1.0.1 --output json
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--platform` | `string` | No | `IOS` | platform (IOS&#124;MAC_OS&#124;TV_OS&#124;VISION_OS) |
+| `--version` | `string` | Yes | `(empty)` | version string (e.g. 1.0.1) |
 
 ## `review-attachments`
 
 Manage App Store Review attachments
 
-Flags, arguments, and defaults: `flightline review-attachments --help`.
+**Usage**
+
+```text
+flightline review-attachments [flags]
+```
+
+### `review-attachments delete`
+
+Delete one verified review attachment
+
+**Usage**
+
+```text
+flightline review-attachments delete <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--attachment` | `string` | No | `(empty)` | review attachment ID |
+| `--confirm` | `bool` | No | `false` | confirm attachment deletion |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--version` | `string` | No | `(empty)` | App Store version string |
+
+### `review-attachments list`
+
+List attachments for a version's review detail
+
+**Usage**
+
+```text
+flightline review-attachments list <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--version` | `string` | No | `(empty)` | App Store version string |
+
+### `review-attachments upload`
+
+Upload one review attachment and wait for processing
+
+**Usage**
+
+```text
+flightline review-attachments upload <bundleId> <file> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm attachment upload |
+| `--max-polls` | `int` | No | `20` | maximum processing status reads |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--poll-interval` | `duration` | No | `3s` | time between processing status reads |
+| `--resume` | `bool` | No | `false` | resume a matching upload checkpoint |
+| `--version` | `string` | No | `(empty)` | App Store version string |
+
+### `review-attachments wait`
+
+Wait for an existing review attachment without uploading again
+
+**Usage**
+
+```text
+flightline review-attachments wait <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--attachment` | `string` | No | `(empty)` | review attachment ID |
+| `--max-polls` | `int` | No | `20` | maximum processing status reads |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--poll-interval` | `duration` | No | `3s` | time between processing status reads |
+| `--version` | `string` | No | `(empty)` | App Store version string |
 
 ## `review-submissions`
 
 review-submissions reads from /v1/reviewSubmissions, the modern flow. Apple's /v1/appStoreVersionSubmissions is deprecated; Flightline uses the modern endpoint exclusively.
 
-Flags, arguments, and defaults: `flightline review-submissions --help`.
+**Usage**
+
+```text
+flightline review-submissions [flags]
+```
+
+### `review-submissions items`
+
+List items in a review submission
+
+**Usage**
+
+```text
+flightline review-submissions items <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline review-submissions items com.example.myapp --submission abc123
+  flightline review-submissions items com.example.myapp --submission abc123 --output json
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--submission` | `string` | Yes | `(empty)` | review submission ID (from `review-submissions list`) |
+
+### `review-submissions list`
+
+List review submissions for an app
+
+**Usage**
+
+```text
+flightline review-submissions list <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline review-submissions list com.example.myapp
+  flightline review-submissions list com.example.myapp --output json | jq -r '.submissions[].attributes.state'
+```
 
 ## `reviewer-demo`
 
 reviewer-demo configures the per-version appStoreReviewDetail Apple shows reviewers during App Store Review. Security: --password is never written to logs, never echoed in --verbose output, and never appears in error messages. Prefer --password-file <path> to keep the secret out of shell history.
 
-Flags, arguments, and defaults: `flightline reviewer-demo --help`.
+**Usage**
+
+```text
+flightline reviewer-demo [flags]
+```
+
+### `reviewer-demo set`
+
+set creates or PATCHes the appStoreReviewDetail for a version. Diffs against current state: only fields that differ go in the body. When all supplied flags already match current state, returns noop=true. The --password flag is treated specially: never logged, never echoed, never included in any error output. Use --password-file <path> to read the secret from a file rather than the shell command line.
+
+**Usage**
+
+```text
+flightline reviewer-demo set <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline reviewer-demo set com.example.myapp --version 1.0.1 --contact-name "Jane Doe" --contact-email reviewer@example.com
+  flightline reviewer-demo set com.example.myapp --version 1.0.1 --username demo@example.com --password-file ./.password
+  flightline reviewer-demo set com.example.myapp --version 1.0.1 --notes "Tap the gear icon to access the demo flow"
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--contact-email` | `string` | No | `(empty)` | reviewer contact email |
+| `--contact-name` | `string` | No | `(empty)` | reviewer contact full name; split on first space into first/last |
+| `--contact-phone` | `string` | No | `(empty)` | reviewer contact phone |
+| `--notes` | `string` | No | `(empty)` | freeform reviewer notes |
+| `--password` | `string` | No | `(empty)` | demo account password (NEVER logged or echoed; prefer --password-file) |
+| `--password-file` | `string` | No | `(empty)` | path to a file containing the demo account password (preferred over --password) |
+| `--platform` | `string` | No | `IOS` | platform (IOS&#124;MAC_OS&#124;TV_OS&#124;VISION_OS) |
+| `--username` | `string` | No | `(empty)` | demo account username |
+| `--version` | `string` | Yes | `(empty)` | version string to look up (e.g. 1.0.1) |
 
 ## `reviews`
 
 reviews groups read commands over Apple's customer-review surface: - list <bundleId> : list reviews with optional territory/rating/since filters - get <reviewId> : fetch a single review with the developer response (if any) - summary <bundleId> : read Apple's AI summarization of recent reviews
 
-Flags, arguments, and defaults: `flightline reviews --help`.
+**Usage**
+
+```text
+flightline reviews [flags]
+```
+
+### `reviews get`
+
+Get a single customer review with the developer response (if any)
+
+**Usage**
+
+```text
+flightline reviews get <reviewId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline reviews get 6e2b9b14-1234-4567-8910-abcdef012345
+  flightline reviews get 6e2b9b14-1234-4567-8910-abcdef012345 --output json
+```
+
+### `reviews list`
+
+List customer reviews for an app
+
+**Usage**
+
+```text
+flightline reviews list <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline reviews list com.example.myapp
+  flightline reviews list com.example.myapp --territory USA --rating 1..3
+  flightline reviews list com.example.myapp --since 30d --output json | jq '.reviews[].attributes.body'
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--limit` | `int` | No | `0` | max reviews to emit (0 = no cap) |
+| `--rating` | `string` | No | `(empty)` | filter by rating: single (e.g. 1) or range (e.g. 1..3); empty = all |
+| `--since` | `string` | No | `(empty)` | only reviews newer than this duration (e.g. 30d, 7d) or ISO date (2026-04-01) |
+| `--territory` | `string` | No | `(empty)` | filter by ISO 3166-1 alpha-3 territory (e.g. USA, GBR); empty = all |
+
+### `reviews responses`
+
+Read, create, and delete customer review responses
+
+**Usage**
+
+```text
+flightline reviews responses [flags]
+```
+
+### `reviews responses create`
+
+Submit one confirmed customer review response
+
+**Usage**
+
+```text
+flightline reviews responses create <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--body` | `string` | No | `(empty)` | exact response text |
+| `--body-file` | `string` | No | `(empty)` | file containing exact response text |
+| `--confirm` | `bool` | No | `false` | confirm response submission |
+| `--review` | `string` | No | `(empty)` | customer review ID |
+
+### `reviews responses delete`
+
+Delete one confirmed response by review and response ID
+
+**Usage**
+
+```text
+flightline reviews responses delete <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm response deletion |
+| `--response` | `string` | No | `(empty)` | expected response resource ID |
+| `--review` | `string` | No | `(empty)` | customer review ID |
+
+### `reviews responses get`
+
+Get the response to one app customer review
+
+**Usage**
+
+```text
+flightline reviews responses get <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--review` | `string` | No | `(empty)` | customer review ID |
+
+### `reviews summary`
+
+Read Apple's per-locale AI summary of recent reviews
+
+**Usage**
+
+```text
+flightline reviews summary <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline reviews summary com.example.myapp
+  flightline reviews summary com.example.myapp --output json | jq '.summarizations[].attributes.text'
+```
 
 ## `sales`
 
 sales pulls Sales and Trends reports from /v1/salesReports. Reports are vendor-wide: Apple does not filter by app on the wire. The bundleId argument resolves the app and scopes typed output by bundle ID, configured SKU, and Apple ID. Use --output tsv to stream Apple's raw (gunzipped) wire format unfiltered for downstream tools. Frequency is inferred from the date flag (--days → DAILY, --week → WEEKLY, --month → MONTHLY, --year → YEARLY). --frequency may be supplied as an explicit assertion but must match the selected date shape. Reports are fetched per-day for daily windows so a 30-day pull = 30 API calls; budget against Apple's 500 req/hr cap accordingly. Vendor number is read from APP_STORE_CONNECT_VENDOR_NUMBER. Refuses to run without one rather than erroring on the wire.
 
-Flags, arguments, and defaults: `flightline sales --help`.
+**Usage**
+
+```text
+flightline sales <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline sales com.example.myapp --days 7
+  flightline sales com.example.myapp --month 2026-04
+  flightline sales com.example.myapp --week 2026-04-29
+  flightline sales com.example.myapp --year 2026
+  flightline sales com.example.myapp --report-type SUBSCRIPTION --month 2026-04
+  flightline sales com.example.myapp --days 30 --output json | jq '.summary'
+  flightline sales com.example.myapp --days 1 --output tsv > today.tsv
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--days` | `int` | No | `0` | fetch the last N days of DAILY reports (mutually exclusive with --month/--week/--year) |
+| `--frequency` | `string` | No | `(empty)` | override the inferred frequency (DAILY/WEEKLY/MONTHLY/YEARLY) |
+| `--month` | `string` | No | `(empty)` | MONTHLY report for YYYY-MM |
+| `--report-sub-type` | `string` | No | `SUMMARY` | reportSubType filter (SUMMARY, DETAILED, SUMMARY_INSTALL_TYPE, SUMMARY_TERRITORY, SUMMARY_CHANNEL) |
+| `--report-type` | `string` | No | `SALES` | reportType filter (SALES, SUBSCRIPTION, SUBSCRIPTION_EVENT, SUBSCRIBER, INSTALLS, ...) |
+| `--week` | `string` | No | `(empty)` | WEEKLY report for the week containing YYYY-MM-DD (Apple aligns to Sunday) |
+| `--year` | `string` | No | `(empty)` | YEARLY report for YYYY |
 
 ## `screenshots`
 
 screenshots wraps Apple's appScreenshotSets / appScreenshots resources. Uploads use the 3-step reserve -> PUT chunks -> commit dance. All operations are idempotent: a file whose MD5 already matches a slot in the set is skipped.
 
-Flags, arguments, and defaults: `flightline screenshots --help`.
+**Usage**
+
+```text
+flightline screenshots [flags]
+```
+
+### `screenshots list`
+
+List live screenshot sets and files per locale
+
+**Usage**
+
+```text
+flightline screenshots list <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline screenshots list com.example.myapp --version 1.0.1
+  flightline screenshots list com.example.myapp --version 1.0.1 --locale en-US
+  flightline screenshots list com.example.myapp --version 1.0.1 --output json | jq '.locales'
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--locale` | `string` | No | `(empty)` | restrict to one BCP-47 locale (e.g. en-US) |
+| `--platform` | `string` | No | `IOS` | platform (IOS&#124;MAC_OS&#124;TV_OS&#124;VISION_OS) |
+| `--version` | `string` | Yes | `(empty)` | App Store version string (e.g. 1.0.1) |
+
+### `screenshots reorder`
+
+Replace the complete ordered screenshot membership for one existing set. The command re-reads the selected set immediately before PATCHing and rejects missing, duplicate, or foreign screenshot IDs. It only changes relationship order; it never uploads or re-encodes image bytes. Select either a normal App Store version or an exact Custom Product Page version.
+
+**Usage**
+
+```text
+flightline screenshots reorder <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--custom-product-page` | `string` | No | `(empty)` | App Custom Product Page ID |
+| `--custom-product-page-version` | `string` | No | `(empty)` | exact App Custom Product Page version ID |
+| `--device-set` | `string` | No | `(empty)` | ScreenshotDisplayType |
+| `--locale` | `string` | No | `(empty)` | BCP-47 locale code |
+| `--platform` | `string` | No | `IOS` | platform for --version (IOS&#124;MAC_OS&#124;TV_OS&#124;VISION_OS) |
+| `--screenshot` | `stringArray` | No | `[]` | appScreenshot ID in final order (repeatable; complete set required) |
+| `--version` | `string` | No | `(empty)` | App Store version string for a normal version target |
+
+### `screenshots upload`
+
+Upload screenshots to a version localization (idempotent: skips files already at target by MD5)
+
+**Usage**
+
+```text
+flightline screenshots upload <bundleId> [files...] [flags]
+```
+
+**Examples**
+
+```bash
+flightline screenshots upload com.example.myapp --version 1.0.1 --locale en-US --device-set APP_IPHONE_67 ./shots/iphone-67/*.png
+  flightline screenshots upload com.example.myapp --version 1.0.1 --locale en-US --device-set APP_IPAD_PRO_3GEN_129 ./shots/ipad/01.png ./shots/ipad/02.png
+  flightline screenshots upload com.example.myapp --version 1.0.1 --locale en-US --device-set APP_IPHONE_67 --resume ./shots/01.png
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--device-set` | `string` | Yes | `(empty)` | ScreenshotDisplayType (e.g. APP_IPHONE_67) |
+| `--locale` | `string` | Yes | `(empty)` | BCP-47 locale code (e.g. en-US) |
+| `--platform` | `string` | No | `IOS` | platform (IOS&#124;MAC_OS&#124;TV_OS&#124;VISION_OS) |
+| `--resume` | `bool` | No | `false` | resume from on-disk upload checkpoint if present |
+| `--version` | `string` | Yes | `(empty)` | App Store version string (e.g. 1.0.1) |
 
 ## `submission-assembly`
 
 Plan, assemble, and explicitly submit an App Store review submission
 
-Flags, arguments, and defaults: `flightline submission-assembly --help`.
+**Usage**
+
+```text
+flightline submission-assembly [flags]
+```
+
+### `submission-assembly assemble`
+
+Create or resume a review submission and attach exact membership
+
+**Usage**
+
+```text
+flightline submission-assembly assemble <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm creation and membership attachment; this does not submit to App Review |
+| `--event` | `stringSlice` | No | `[]` | app event ID to attach (repeatable) |
+| `--experiment` | `stringSlice` | No | `[]` | product page experiment ID to attach (repeatable) |
+| `--iap-version` | `stringSlice` | No | `[]` | IAP version ID to attach (repeatable) |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--version` | `string` | Yes | `(empty)` | App Store version string |
+
+### `submission-assembly plan`
+
+Show the ordered review-submission membership plan
+
+**Usage**
+
+```text
+flightline submission-assembly plan <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--event` | `stringSlice` | No | `[]` | app event ID to attach (repeatable) |
+| `--experiment` | `stringSlice` | No | `[]` | product page experiment ID to attach (repeatable) |
+| `--iap-version` | `stringSlice` | No | `[]` | IAP version ID to attach (repeatable) |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--version` | `string` | Yes | `(empty)` | App Store version string |
+
+### `submission-assembly submit`
+
+Rechecks every proposed item, exact membership, and fresh preflight before PATCHing submitted: true. An interrupted submit is unconfirmed and must be inspected before retrying.
+
+**Usage**
+
+```text
+flightline submission-assembly submit <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm final submission to App Review |
+| `--event` | `stringSlice` | No | `[]` | app event ID to attach (repeatable) |
+| `--experiment` | `stringSlice` | No | `[]` | product page experiment ID to attach (repeatable) |
+| `--iap-version` | `stringSlice` | No | `[]` | IAP version ID to attach (repeatable) |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--submission` | `string` | Yes | `(empty)` | existing review submission ID |
+| `--version` | `string` | Yes | `(empty)` | App Store version string |
 
 ## `subscriptions`
 
 subscriptions groups read commands over Apple's auto-renewable subscription resources. Apple structures subscriptions as a tree: - SubscriptionGroup : competing-tier group └── Subscription : one product within the group ├── Localizations : per-locale name/description ├── IntroductoryOffers : onboarding discount tiers └── Prices : price ladder - list <bundleId> : list groups + member count - get <bundleId> --product <productId> : full detail for one product This command group is read-only.
 
-Flags, arguments, and defaults: `flightline subscriptions --help`.
+**Usage**
+
+```text
+flightline subscriptions [flags]
+```
+
+### `subscriptions get`
+
+Get a single subscription product by productId
+
+**Usage**
+
+```text
+flightline subscriptions get <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline subscriptions get com.example.myapp --product com.example.pro.monthly
+  flightline subscriptions get com.example.myapp --product com.example.pro.monthly --output json
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--product` | `string` | Yes | `(empty)` | subscription productId (e.g. com.example.pro.monthly) |
+
+### `subscriptions list`
+
+List subscription groups for an app with member counts
+
+**Usage**
+
+```text
+flightline subscriptions list <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline subscriptions list com.example.myapp
+  flightline subscriptions list com.example.myapp --output json | jq '.groups[].memberCount'
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--limit` | `int` | No | `0` | max groups to emit (0 = no cap) |
+
+### `subscriptions reports`
+
+subscriptions reports pulls time-series subscription data from /v1/salesReports with reportType set to one of: --type summary → SUBSCRIPTION (active counts, period, proceeds) --type events → SUBSCRIPTION_EVENT (cancel/upgrade/downgrade events) --type retention → SUBSCRIBER (subscriber-level retention rows) Distinct from `subscriptions list` and `subscriptions get`, which read the configuration of subscription products. This command is the analytical view: how many subscribers, when did they churn, where they came from. Frequency is inferred from --range: P1D / P7D / P30D / P1Y → DAILY (one call per day, 1..N calls) P1M → MONTHLY (single call) P1Y → YEARLY (single call when --frequency=YEARLY) Vendor number is read from APP_STORE_CONNECT_VENDOR_NUMBER. The bundleId argument resolves the app and filters typed output by its bundle ID, SKU, and Apple ID (sales reports are vendor-wide on the wire).
+
+**Usage**
+
+```text
+flightline subscriptions reports <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline subscriptions reports com.example.myapp --type summary --range P30D
+  flightline subscriptions reports com.example.myapp --type events --range P7D
+  flightline subscriptions reports com.example.myapp --type retention --month 2026-04
+  flightline subscriptions reports com.example.myapp --type summary --range P30D --output json | jq '.rows | length'
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--frequency` | `string` | No | `(empty)` | override the inferred frequency (DAILY/WEEKLY/MONTHLY/YEARLY) |
+| `--month` | `string` | No | `(empty)` | alternative to --range: pull a single MONTHLY report for YYYY-MM |
+| `--range` | `string` | No | `P7D` | ISO-8601 duration ending yesterday: P1D, P7D, P30D, P1Y. Daily granularity (one call per day). |
+| `--type` | `string` | No | `summary` | report type: summary &#124; events &#124; retention |
 
 ## `territories`
 
 territories groups read commands over the /v1/territories resource. Apple's territory list is reference data: the same set across every ASC account, with currency codes that change at most a few times a year. The list command caches results under $XDG_CACHE_HOME/flightline/territories.json for 24 hours by default; pass --no-cache to force a fresh fetch.
 
-Flags, arguments, and defaults: `flightline territories --help`.
+**Usage**
+
+```text
+flightline territories [flags]
+```
+
+### `territories list`
+
+List App Store territories with their ISO 4217 currency codes
+
+**Usage**
+
+```text
+flightline territories list [flags]
+```
+
+**Examples**
+
+```bash
+flightline territories list
+  flightline territories list --output json | jq -r '.territories[].id'
+  flightline territories list --no-cache
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--no-cache` | `bool` | No | `false` | force a fresh fetch (bypasses the 24h cache) |
 
 ## `testflight`
 
 testflight groups read commands over Apple's TestFlight resources: - groups list <bundleId> : list internal + external beta groups - testers list <bundleId> : list testers in the app or a group - beta-review get <bundleId> --build <n> : show beta-review state for a build
 
-Flags, arguments, and defaults: `flightline testflight --help`.
+**Usage**
+
+```text
+flightline testflight [flags]
+```
+
+### `testflight beta-review`
+
+Inspect TestFlight beta-review submissions
+
+**Usage**
+
+```text
+flightline testflight beta-review [flags]
+```
+
+### `testflight beta-review get`
+
+Show the beta-review submission state for a specific build
+
+**Usage**
+
+```text
+flightline testflight beta-review get <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline testflight beta-review get com.example.myapp --build 42
+	  flightline testflight beta-review get com.example.myapp --build 2 --version 1.1 --platform IOS
+	  flightline testflight beta-review get com.example.myapp --build 42 --output json
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--build` | `string` | Yes | `(empty)` | build number to inspect (CFBundleVersion, e.g. 42) |
+| `--platform` | `string` | No | `IOS` | platform used to disambiguate duplicate build numbers |
+| `--version` | `string` | No | `(empty)` | App Store version/train used to disambiguate duplicate build numbers |
+
+### `testflight beta-review submit`
+
+Creates a betaAppReviewSubmission for the named (bundleId, build) pair. Apple's beta review is one-shot per build: if a submission already exists for the build, the command surfaces the existing submission ID with changed=false rather than erroring.
+
+**Usage**
+
+```text
+flightline testflight beta-review submit <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline testflight beta-review submit com.example.myapp --build 42
+	  flightline testflight beta-review submit com.example.myapp --build 2 --version 1.1 --platform IOS
+	  flightline testflight beta-review submit com.example.myapp --build 42 --output json
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--build` | `string` | Yes | `(empty)` | build number to submit (CFBundleVersion, e.g. 42) |
+| `--platform` | `string` | No | `IOS` | platform used to disambiguate duplicate build numbers |
+| `--version` | `string` | No | `(empty)` | App Store version/train used to disambiguate duplicate build numbers |
+
+### `testflight distribution`
+
+List and assign TestFlight builds to beta groups
+
+**Usage**
+
+```text
+flightline testflight distribution [flags]
+```
+
+### `testflight distribution add`
+
+Assign a build to a beta group
+
+**Usage**
+
+```text
+flightline testflight distribution add <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--allow-notifications` | `bool` | No | `false` | permit assignment when Apple has auto-notify enabled |
+| `--build` | `string` | Yes | `(empty)` | build number (CFBundleVersion) |
+| `--confirm` | `bool` | No | `false` | confirm assignment with auto-notify enabled |
+| `--group` | `string` | Yes | `(empty)` | beta group ID |
+| `--platform` | `string` | No | `IOS` | platform to disambiguate a build number |
+| `--version` | `string` | No | `(empty)` | release version to disambiguate a build number |
+
+### `testflight distribution list`
+
+List a beta group's assigned builds
+
+**Usage**
+
+```text
+flightline testflight distribution list <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--group` | `string` | Yes | `(empty)` | beta group ID |
+
+### `testflight distribution remove`
+
+Remove a build from a beta group
+
+**Usage**
+
+```text
+flightline testflight distribution remove <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--build` | `string` | Yes | `(empty)` | build number (CFBundleVersion) |
+| `--group` | `string` | Yes | `(empty)` | beta group ID |
+| `--platform` | `string` | No | `IOS` | platform to disambiguate a build number |
+| `--version` | `string` | No | `(empty)` | release version to disambiguate a build number |
+
+### `testflight groups`
+
+Manage and inspect TestFlight beta groups
+
+**Usage**
+
+```text
+flightline testflight groups [flags]
+```
+
+### `testflight groups create`
+
+Creates a beta group on the named app. Idempotent: if a group with the same --name already exists for the app, the existing group is returned without a POST and changed=false. Internal vs external is selected via --internal (default false = external). Public-link controls are optional and only meaningful for external groups; Apple silently ignores them on internal groups.
+
+**Usage**
+
+```text
+flightline testflight groups create <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline testflight groups create com.example.myapp --name "Internal" --internal
+  flightline testflight groups create com.example.myapp --name "Public Beta" --public-link --public-link-limit 10000
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--feedback` | `bool` | No | `false` | enable in-app feedback for this group |
+| `--internal` | `bool` | No | `false` | create as an internal group (default external) |
+| `--name` | `string` | Yes | `(empty)` | group name (must be unique per app) |
+| `--public-link` | `bool` | No | `false` | enable the public join link (external groups only) |
+| `--public-link-limit` | `int` | No | `0` | max testers reachable via the public link (0 = unlimited) |
+
+### `testflight groups delete`
+
+DELETEs a beta group. Idempotent: if the group is already absent (404 from Apple) the command exits 0 with changed=false rather than failing: re-running a delete script should not be a hard error.
+
+**Usage**
+
+```text
+flightline testflight groups delete <groupId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline testflight groups delete BG-EXTERNAL-1
+```
+
+### `testflight groups list`
+
+List beta groups for an app (internal and external)
+
+**Usage**
+
+```text
+flightline testflight groups list <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline testflight groups list com.example.myapp
+  flightline testflight groups list com.example.myapp --output json | jq -r '.groups[].attributes.name'
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--limit` | `int` | No | `0` | max groups to emit (0 = no cap) |
+
+### `testflight groups update`
+
+PATCHes a beta group. Only flags explicitly passed are sent; omitted flags leave the corresponding attribute untouched. Idempotent: reads current state first, only PATCHes when at least one attribute differs.
+
+**Usage**
+
+```text
+flightline testflight groups update <groupId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline testflight groups update BG-EXTERNAL-1 --public-link-limit 5000
+  flightline testflight groups update BG-EXTERNAL-1 --feedback
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--feedback` | `bool` | No | `false` | enable in-app feedback |
+| `--name` | `string` | No | `(empty)` | rename the group |
+| `--public-link` | `bool` | No | `false` | enable the public join link |
+| `--public-link-limit` | `int` | No | `0` | set the max testers reachable via the public link |
+
+### `testflight metadata`
+
+Inspect TestFlight app copy, build notes, and beta review details
+
+**Usage**
+
+```text
+flightline testflight metadata [flags]
+```
+
+### `testflight metadata app-localizations`
+
+List TestFlight app localizations
+
+**Usage**
+
+```text
+flightline testflight metadata app-localizations <bundleId> [flags]
+```
+
+### `testflight metadata build-localizations`
+
+List TestFlight build notes
+
+**Usage**
+
+```text
+flightline testflight metadata build-localizations <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--build` | `string` | Yes | `(empty)` | build number (CFBundleVersion) |
+| `--platform` | `string` | No | `IOS` | platform to disambiguate a build number |
+| `--version` | `string` | No | `(empty)` | release version to disambiguate a build number |
+
+### `testflight metadata review-details`
+
+Read TestFlight beta review contact and demo details
+
+**Usage**
+
+```text
+flightline testflight metadata review-details <bundleId> [flags]
+```
+
+### `testflight metadata set-app-localization`
+
+Create or update TestFlight app copy for one locale
+
+**Usage**
+
+```text
+flightline testflight metadata set-app-localization <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--description` | `string` | No | `(empty)` | beta app description |
+| `--feedback-email` | `string` | No | `(empty)` | tester feedback email |
+| `--locale` | `string` | Yes | `(empty)` | locale to create or update |
+| `--marketing-url` | `string` | No | `(empty)` | TestFlight marketing URL |
+| `--privacy-policy-url` | `string` | No | `(empty)` | TestFlight privacy URL |
+| `--tvos-privacy-policy` | `string` | No | `(empty)` | tvOS privacy policy |
+
+### `testflight metadata set-build-localization`
+
+Create or update TestFlight what's-new text
+
+**Usage**
+
+```text
+flightline testflight metadata set-build-localization <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--build` | `string` | Yes | `(empty)` | build number (CFBundleVersion) |
+| `--locale` | `string` | Yes | `(empty)` | locale to create or update |
+| `--platform` | `string` | No | `IOS` | platform to disambiguate a build number |
+| `--version` | `string` | No | `(empty)` | release version to disambiguate a build number |
+| `--whats-new` | `string` | Yes | `(empty)` | what testers should test |
+
+### `testflight metadata set-review-details`
+
+Update TestFlight beta review contact and demo details
+
+**Usage**
+
+```text
+flightline testflight metadata set-review-details <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--contact-email` | `string` | No | `(empty)` | beta reviewer contact email |
+| `--contact-first-name` | `string` | No | `(empty)` | beta reviewer contact first name |
+| `--contact-last-name` | `string` | No | `(empty)` | beta reviewer contact last name |
+| `--contact-phone` | `string` | No | `(empty)` | beta reviewer contact phone |
+| `--demo-account-name` | `string` | No | `(empty)` | TestFlight demo account name |
+| `--demo-account-required` | `bool` | No | `false` | whether beta review requires a demo account |
+| `--notes` | `string` | No | `(empty)` | TestFlight beta review notes |
+| `--password-file` | `string` | No | `(empty)` | file containing beta demo password; never emitted |
+| `--password-ref` | `string` | No | `(empty)` | env:NAME reference for beta demo password; never emitted |
+
+### `testflight recruitment`
+
+Read recruitment criteria and options, set a build's auto-notify policy, or explicitly notify testers. Invitation resend is unavailable because Apple's current request does not establish a supported individual-recipient relationship; recruitment criteria writes are not implemented.
+
+**Usage**
+
+```text
+flightline testflight recruitment [flags]
+```
+
+### `testflight recruitment criteria`
+
+Read a beta group's recruitment criteria
+
+**Usage**
+
+```text
+flightline testflight recruitment criteria <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--group` | `string` | Yes | `(empty)` | beta group ID |
+
+### `testflight recruitment criteria-options`
+
+List available recruitment device and OS options
+
+**Usage**
+
+```text
+flightline testflight recruitment criteria-options [flags]
+```
+
+### `testflight recruitment notify`
+
+Send a TestFlight build notification to testers
+
+**Usage**
+
+```text
+flightline testflight recruitment notify <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--build` | `string` | Yes | `(empty)` | build number (CFBundleVersion) |
+| `--confirm` | `bool` | No | `false` | confirm the one-shot tester notification |
+| `--platform` | `string` | Yes | `(empty)` | platform (IOS, MAC_OS, TV_OS, or VISION_OS) |
+| `--version` | `string` | Yes | `(empty)` | prerelease version |
+
+### `testflight recruitment policy`
+
+Read or set a build's auto-notify policy
+
+**Usage**
+
+```text
+flightline testflight recruitment policy [flags]
+```
+
+### `testflight recruitment policy get`
+
+Read a build's TestFlight auto-notify policy
+
+**Usage**
+
+```text
+flightline testflight recruitment policy get <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--build` | `string` | Yes | `(empty)` | build number (CFBundleVersion) |
+| `--platform` | `string` | Yes | `(empty)` | platform (IOS, MAC_OS, TV_OS, or VISION_OS) |
+| `--version` | `string` | Yes | `(empty)` | prerelease version |
+
+### `testflight recruitment policy set`
+
+Set a build's TestFlight auto-notify policy
+
+**Usage**
+
+```text
+flightline testflight recruitment policy set <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--build` | `string` | Yes | `(empty)` | build number (CFBundleVersion) |
+| `--confirm` | `bool` | No | `false` | confirm enabling future automatic tester notifications |
+| `--enabled` | `bool` | Yes | `false` | explicit desired auto-notify setting |
+| `--platform` | `string` | Yes | `(empty)` | platform (IOS, MAC_OS, TV_OS, or VISION_OS) |
+| `--version` | `string` | Yes | `(empty)` | prerelease version |
+
+### `testflight testers`
+
+Manage and inspect TestFlight beta testers
+
+**Usage**
+
+```text
+flightline testflight testers [flags]
+```
+
+### `testflight testers add`
+
+Adds one or more testers to a beta group via POST /v1/betaGroups/{id}/relationships/betaTesters. Pass tester IDs via --tester (repeatable). Idempotent: testers already in the group are filtered out before the POST so re-running the command is a no-op.
+
+**Usage**
+
+```text
+flightline testflight testers add <groupId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline testflight testers add BG-EXTERNAL-1 --tester T1 --tester T2
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--tester` | `stringSlice` | Yes | `[]` | tester ID to add (repeat for multiple) |
+
+### `testflight testers list`
+
+List beta testers for an app (optionally scoped to a group)
+
+**Usage**
+
+```text
+flightline testflight testers list <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline testflight testers list com.example.myapp
+  flightline testflight testers list com.example.myapp --group 4242424242
+  flightline testflight testers list com.example.myapp --output json | jq -r '.testers[].attributes.email'
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--group` | `string` | No | `(empty)` | scope listing to this beta-group ID; empty = app-wide |
+| `--limit` | `int` | No | `0` | max testers to emit (0 = no cap) |
+
+### `testflight testers remove`
+
+Removes one or more testers from a beta group via DELETE /v1/betaGroups/{id}/relationships/betaTesters. Idempotent: testers already absent are filtered out so re-running is a no-op.
+
+**Usage**
+
+```text
+flightline testflight testers remove <groupId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline testflight testers remove BG-EXTERNAL-1 --tester T1
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--tester` | `stringSlice` | Yes | `[]` | tester ID to remove (repeat for multiple) |
 
 ## `version-release`
 
 Release an approved MANUAL version in Pending Developer Release. This action is never run by state apply and its outcome must be inspected before retrying.
 
-Flags, arguments, and defaults: `flightline version-release --help`.
+**Usage**
+
+```text
+flightline version-release <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm release of the approved version |
+| `--platform` | `string` | No | `IOS` | App Store platform |
+| `--version` | `string` | Yes | `(empty)` | App Store version string |
 
 ## `versions`
 
 versions groups read and write commands over the /v1/appStoreVersions resource.
 
-Flags, arguments, and defaults: `flightline versions --help`.
+**Usage**
+
+```text
+flightline versions [flags]
+```
+
+### `versions create`
+
+Create a new App Store version (idempotent: returns existing version if already present)
+
+**Usage**
+
+```text
+flightline versions create <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline versions create com.example.myapp --version 1.0.1
+  flightline versions create com.example.myapp --version 1.0.1 --platform IOS --release-type MANUAL
+  flightline versions create com.example.myapp --version 1.0.1 --copyright "(c) 2025 Example LLC"
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--copyright` | `string` | No | `(empty)` | copyright line (e.g. '(c) 2025 Example LLC') |
+| `--earliest-release-date` | `string` | No | `(empty)` | earliest release date (RFC3339; only with --release-type SCHEDULED) |
+| `--platform` | `string` | No | `IOS` | platform (IOS&#124;MAC_OS&#124;TV_OS&#124;VISION_OS) |
+| `--release-type` | `string` | No | `(empty)` | release type (MANUAL&#124;AFTER_APPROVAL&#124;SCHEDULED) |
+| `--review-type` | `string` | No | `(empty)` | review type (APP_STORE&#124;NOTARIZATION) |
+| `--version` | `string` | Yes | `(empty)` | version string (e.g. 1.0.1) |
+
+### `versions get`
+
+Get a single App Store version by versionString
+
+**Usage**
+
+```text
+flightline versions get <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline versions get com.example.myapp --version 1.0.1
+  flightline versions get com.example.myapp --version 1.0.1 --platform IOS --output json
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--platform` | `string` | No | `IOS` | platform (IOS&#124;MAC_OS&#124;TV_OS&#124;VISION_OS) |
+| `--version` | `string` | Yes | `(empty)` | version string to fetch (e.g. 1.0.1) |
+
+### `versions list`
+
+List App Store versions for an app
+
+**Usage**
+
+```text
+flightline versions list <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline versions list com.example.myapp
+  flightline versions list com.example.myapp --platform IOS
+  flightline versions list com.example.myapp --output json | jq -r '.versions[].versionString'
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--limit` | `int` | No | `0` | max versions to emit (0 = no cap) |
+| `--platform` | `string` | No | `(empty)` | filter by platform (IOS&#124;MAC_OS&#124;TV_OS&#124;VISION_OS); empty = all |
+
+### `versions update`
+
+Update an existing App Store version (idempotent: PATCH only fields that differ)
+
+**Usage**
+
+```text
+flightline versions update <bundleId> [flags]
+```
+
+**Examples**
+
+```bash
+flightline versions update com.example.myapp --version 1.0.1 --release-type AFTER_APPROVAL
+  flightline versions update com.example.myapp --version 1.0.1 --copyright "(c) 2025 Example LLC"
+  flightline versions update com.example.myapp --version 1.0.1 --earliest-release-date 2025-06-01T08:00:00-07:00
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--copyright` | `string` | No | `(empty)` | new copyright line |
+| `--earliest-release-date` | `string` | No | `(empty)` | new earliest release date (RFC3339; only with --release-type SCHEDULED) |
+| `--platform` | `string` | No | `IOS` | platform (IOS&#124;MAC_OS&#124;TV_OS&#124;VISION_OS) |
+| `--release-type` | `string` | No | `(empty)` | new release type (MANUAL&#124;AFTER_APPROVAL&#124;SCHEDULED) |
+| `--review-type` | `string` | No | `(empty)` | new review type (APP_STORE&#124;NOTARIZATION) |
+| `--version` | `string` | Yes | `(empty)` | version string of the version to update (e.g. 1.0.1) |
 
 ## `webhooks`
 
 Manage app webhook configuration and inspect deliveries
 
-Flags, arguments, and defaults: `flightline webhooks --help`.
+**Usage**
+
+```text
+flightline webhooks [flags]
+```
+
+### `webhooks create`
+
+Create a confirmed webhook configuration
+
+**Usage**
+
+```text
+flightline webhooks create <bundleId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm webhook mutation |
+| `--enabled` | `bool` | No | `false` | enable the webhook |
+| `--event` | `stringArray` | No | `[]` | event type (repeatable) |
+| `--name` | `string` | No | `(empty)` | webhook name |
+| `--secret-file` | `string` | No | `(empty)` | private regular file with signing secret |
+| `--secret-ref` | `string` | No | `(empty)` | env:NAME signing-secret reference |
+| `--url` | `string` | No | `(empty)` | HTTPS webhook endpoint without URL credentials |
+
+### `webhooks delete`
+
+Delete a confirmed app webhook
+
+**Usage**
+
+```text
+flightline webhooks delete <bundleId> <webhookId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm webhook deletion |
+
+### `webhooks deliveries`
+
+Inspect webhook deliveries and request explicit redelivery
+
+**Usage**
+
+```text
+flightline webhooks deliveries [flags]
+```
+
+### `webhooks deliveries list`
+
+List delivery attempts for an app webhook
+
+**Usage**
+
+```text
+flightline webhooks deliveries list <bundleId> <webhookId> [flags]
+```
+
+### `webhooks deliveries redeliver`
+
+Request a confirmed retry of an owned delivery
+
+**Usage**
+
+```text
+flightline webhooks deliveries redeliver <bundleId> <webhookId> <deliveryId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm outbound delivery retry |
+
+### `webhooks get`
+
+Inspect an app-owned webhook
+
+**Usage**
+
+```text
+flightline webhooks get <bundleId> <webhookId> [flags]
+```
+
+### `webhooks list`
+
+List app webhook configurations
+
+**Usage**
+
+```text
+flightline webhooks list <bundleId> [flags]
+```
+
+### `webhooks ping`
+
+Request a webhook ping
+
+**Usage**
+
+```text
+flightline webhooks ping <bundleId> <webhookId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm an outbound webhook ping |
+
+### `webhooks update`
+
+Update or rotate a confirmed webhook configuration
+
+**Usage**
+
+```text
+flightline webhooks update <bundleId> <webhookId> [flags]
+```
+
+| Flag | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `--confirm` | `bool` | No | `false` | confirm webhook mutation |
+| `--enabled` | `bool` | No | `false` | enable the webhook |
+| `--event` | `stringArray` | No | `[]` | event type (repeatable) |
+| `--name` | `string` | No | `(empty)` | webhook name |
+| `--secret-file` | `string` | No | `(empty)` | private regular file with signing secret |
+| `--secret-ref` | `string` | No | `(empty)` | env:NAME signing-secret reference |
+| `--url` | `string` | No | `(empty)` | HTTPS webhook endpoint without URL credentials |
 
 ## `whoami`
 
 whoami exercises the simplest auth-required ASC endpoint to verify the configured key works, then prints the credential metadata Flightline is using. Credentials are resolved via the standard precedence: --key-id flag > APP_STORE_CONNECT_KEY_ID > ~/.config/flightline/config.yaml The .p8 private key is read from $APP_STORE_CONNECT_KEY_PATH if set, otherwise ~/.appstoreconnect/AuthKey_<KEY_ID>.p8 (mode 0600 required). Examples: flightline whoami flightline whoami --output json | jq -r .keyId flightline whoami --output json | jq -e .authorized # exit nonzero on failure
 
-Flags, arguments, and defaults: `flightline whoami --help`.
+**Usage**
+
+```text
+flightline whoami [flags]
+```
 

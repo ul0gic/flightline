@@ -19,7 +19,7 @@ func (reviewDetailsCompletenessRule) Severity() Severity { return SeverityWarnin
 func (reviewDetailsCompletenessRule) Mode() Mode         { return ModeLive }
 func (reviewDetailsCompletenessRule) Doc() string {
 	return "Warns when an app that sells in-app purchases submits a version whose App Review notes are empty, and escalates to an error once an IAP is attached to the review submission. " +
-		"Reviewers who cannot see the purchase flow respond with an Information Needed rejection asking for it — and for demo credentials the app may not even have; trial-gated paywalls are the top reason reviewers cannot find an IAP. " +
+		"Reviewers who cannot see the purchase flow respond with an Information Needed rejection asking for it and for demo credentials the app may not even have; trial-gated paywalls are the top reason reviewers cannot find an IAP. " +
 		"Fix it by writing notes that give the exact steps to reach the purchase, describe any trial mechanics, and state explicitly when the app has no accounts or sign-in."
 }
 

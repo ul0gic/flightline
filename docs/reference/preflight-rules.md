@@ -2,7 +2,7 @@
 
 # Preflight rules
 
-Flightline's L3 layer catches the clerical mistakes that cause Apple to reject a release. Each rule encodes a real rejection pattern. The `ruleId` is a stable JSON contract; renaming one is a breaking change.
+Flightline checks supported schema, consistency and release-readiness requirements. Passing these checks does not guarantee App Review approval. The `ruleId` is a stable JSON contract; renaming one is a breaking change.
 
 Two commands run the rules: `flightline lint <state.yaml>` (offline) and `flightline preflight <bundleId> --version <v>` (live). Both emit a stable JSON contract via `--output json`.
 
@@ -10,9 +10,9 @@ Two commands run the rules: `flightline lint <state.yaml>` (offline) and `flight
 
 | Severity | Meaning | Exit code |
 |----------|---------|-----------|
-| `error` | Known rejection cause or structural problem that blocks `apply`. Preflight exits non-zero. | `1` |
-| `warning` | Worth fixing; Apple is unlikely to hard-reject for it. | `2` (when no errors present) |
-| `info` | A reminder or hint. Never gates submission. | `0` |
+| `error` | A validation or readiness issue. The command exits nonzero. | `1` |
+| `warning` | A finding to review. Warnings produce a nonzero exit when no errors are present. | `2` (when no errors present) |
+| `info` | Additional context. Info-only results exit successfully. | `0` |
 
 When both errors and warnings are present, exit code is `1`.
 
@@ -45,7 +45,7 @@ Rules are sorted alphabetically by ID, the same order the runner executes them i
 - **Mode:** Live
 - **Severity:** Info
 
-Reminds you to confirm the Paid Apps Agreement whenever the app sells in-app purchases. Apple exposes no API for agreement status, and a lapsed or re-issued agreement makes every IAP silently invisible to the reviewer's sandbox — the rejection reads "IAP product not found" with nothing wrong in ASC. Confirm the agreement is Active under Business in App Store Connect before submitting; this diagnostic is informational and never fails preflight.
+Reminds you to confirm the Paid Apps Agreement whenever the app sells in-app purchases. Apple exposes no API for agreement status, and a lapsed or re-issued agreement makes every IAP silently invisible to the reviewer's sandbox; the rejection reads "IAP product not found" with nothing wrong in ASC. Confirm the agreement is Active under Business in App Store Connect before submitting; this diagnostic is informational and never fails preflight.
 
 ### `build.attached-and-valid`
 
@@ -66,7 +66,7 @@ Checks that every in-app purchase marked READY_TO_SUBMIT also appears in the app
 - **Mode:** Offline
 - **Severity:** Warning
 
-Warns when an in-app purchase localization's display name is a language name like "English" or "Español" — the classic paste bug where the locale label lands in the product-name field. Customers see this name on the purchase sheet, and Apple's reviewer will describe the IAP by it, turning the mistake into a confusing rejection. Fix it by naming what the customer buys ("Lifetime Access", "Acceso de por Vida"), never the language it is written in.
+Warns when an in-app purchase localization's display name is a language name like "English" or "Español". This happens when the locale label lands in the product-name field. Customers see this name on the purchase sheet, and Apple's reviewer will describe the IAP by it, turning the mistake into a confusing rejection. Fix it by naming what the customer buys ("Lifetime Access", "Acceso de por Vida"), never the language it is written in.
 
 ### `iap.promotional-image-distinct`
 
@@ -101,14 +101,14 @@ Checks that each managed metadata locale has Flightline's submission baseline fi
 - **Mode:** Live
 - **Severity:** Warning
 
-Warns when an app that sells in-app purchases submits a version whose App Review notes are empty, and escalates to an error once an IAP is attached to the review submission. Reviewers who cannot see the purchase flow respond with an Information Needed rejection asking for it — and for demo credentials the app may not even have; trial-gated paywalls are the top reason reviewers cannot find an IAP. Fix it by writing notes that give the exact steps to reach the purchase, describe any trial mechanics, and state explicitly when the app has no accounts or sign-in.
+Warns when an app that sells in-app purchases submits a version whose App Review notes are empty, and escalates to an error once an IAP is attached to the review submission. Reviewers who cannot see the purchase flow respond with an Information Needed rejection asking for it and for demo credentials the app may not even have; trial-gated paywalls are the top reason reviewers cannot find an IAP. Fix it by writing notes that give the exact steps to reach the purchase, describe any trial mechanics, and state explicitly when the app has no accounts or sign-in.
 
 ### `screenshots.required-devices`
 
 - **Mode:** Both
 - **Severity:** Error
 
-Checks that every locale has at least one screenshot set from the large-iPhone tier Apple accepts for submission: 6.9 inch, 6.7 inch, or 6.5 inch. Apple requires the 6.9-inch size unless a 6.5-inch set is provided, and scales the largest set you supply down to smaller displays — so any one tier member unblocks Submit for Review. Fix it by uploading screenshots for one of the accepted device classes in each affected locale; 6.9 inch gives the best scaled quality.
+Checks that every locale has at least one screenshot set from the large-iPhone tier Apple accepts for submission: 6.9 inch, 6.7 inch, or 6.5 inch. Apple requires the 6.9-inch size unless a 6.5-inch set is provided, and scales the largest set you supply down to smaller displays, so any one tier member unblocks Submit for Review. Fix it by uploading screenshots for one of the accepted device classes in each affected locale; 6.9 inch gives the best scaled quality.
 
 ### `strict.format-email`
 

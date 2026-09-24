@@ -15,7 +15,7 @@ func (iapLocalizationNameLanguageRule) ID() string         { return "iap.localiz
 func (iapLocalizationNameLanguageRule) Severity() Severity { return SeverityWarning }
 func (iapLocalizationNameLanguageRule) Mode() Mode         { return ModeOffline }
 func (iapLocalizationNameLanguageRule) Doc() string {
-	return "Warns when an in-app purchase localization's display name is a language name like \"English\" or \"Español\" — the classic paste bug where the locale label lands in the product-name field. " +
+	return "Warns when an in-app purchase localization's display name is a language name like \"English\" or \"Español\". This happens when the locale label lands in the product-name field. " +
 		"Customers see this name on the purchase sheet, and Apple's reviewer will describe the IAP by it, turning the mistake into a confusing rejection. " +
 		"Fix it by naming what the customer buys (\"Lifetime Access\", \"Acceso de por Vida\"), never the language it is written in."
 }

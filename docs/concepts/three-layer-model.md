@@ -1,11 +1,11 @@
 # The three-layer model
 
-Flightline is built as three layers. Each one is useful on its own, and they stack: L1 is the foundation, L2 builds desired-state management on top of it, and L3 validates that state before it reaches Apple.
+Flightline combines direct API commands, configuration in YAML, and validation rules. You can use each separately.
 
 ```
 L3: preflight rules  (internal/lint/)   catches clerical rejection causes
 L2: state as code    (internal/state/)  declare, diff, apply
-L1: API CLI          (internal/asc/)    every ASC surface as a terminal command
+L1: API CLI          (internal/asc/)    supported ASC operations as terminal commands
 ```
 
 You can use `flightline sales` and `flightline reviews` (L1) without ever touching a `state.yaml`. You can use L2 without running preflight. L3 can catch issues even if you manage writes by hand.
@@ -29,7 +29,7 @@ Observation examples:
 ```bash
 flightline sales app.tideterm.ios --days 30
 flightline finance app.tideterm.ios --month 2026-04
-flightline reviews list app.tideterm.ios --rating 1 --rating 2
+flightline reviews list app.tideterm.ios --rating 1..2
 flightline analytics request app.tideterm.ios --access-type ONE_TIME_SNAPSHOT --wait
 flightline performance app app.tideterm.ios
 ```
@@ -38,7 +38,7 @@ Every command supports `--output table|json`. The JSON shape is a stable contrac
 
 ## L2: state as code
 
-A single declarative YAML file per app describes the desired state across every authoring surface. Three commands drive it:
+A YAML file describes the supported configuration you want to manage for one app. Three commands drive it:
 
 ```bash
 flightline fetch app.tideterm.ios > state.yaml   # snapshot live ASC state into YAML
@@ -48,13 +48,13 @@ flightline apply state.yaml --confirm              # idempotent writes, checkpoi
 
 The YAML is human-edited, a JSON Schema is the contract (the `apiVersion` constant locks it to `flightline.dev/v1alpha1`), and the L3 linter enforces it. L2 covers authoring only; observation surfaces stay in L1 because they are queries against live state, not state to declare.
 
-This is the same shape as Terraform or Pulumi: declarative state, idempotent reconciliation, drift detection, version control as the source of truth. The substrate is Apple's API instead of a cloud, and the failure mode being prevented is App Store rejection rather than a bad cloud rollout, but the discipline is identical.
+Fetch captures the current configuration. Plan compares it with your edited YAML. Apply writes the supported changes, and a fresh plan verifies the result.
 
 See [State as code](../guides/state-as-code.md) for the walkthrough and the [state-yaml reference](../reference/state-yaml.md) for the schema.
 
 ## L3: preflight rules
 
-A growing rule set that captures the clerical reasons Apple rejects releases. Every rejection eaten in the wild becomes a rule. Two commands run them:
+Fifteen rules check supported schema, consistency and release-readiness requirements. Two commands run them:
 
 ```bash
 flightline lint state.yaml                          # offline; YAML correctness plus Apple format rules
@@ -63,13 +63,13 @@ flightline preflight app.tideterm.ios --version 1.1   # live; reads ASC state, r
 
 Sample rules:
 
-- `iap.attachedToReviewSubmission`, an IAP being `READY_TO_SUBMIT` is not enough; it must be in the review submission's items.
-- `iap.reviewScreenshot.exists`, the buried review screenshot that is a common rejection cause.
-- `version.exportCompliance.answered` and `version.ageRating.answered`.
+- `iap.attached-to-review-submission`, an IAP being `READY_TO_SUBMIT` is not enough; it must be in the review submission's items.
+- `iap.review-screenshot-exists`, the buried review screenshot that is a common rejection cause.
+- `version.export-compliance-answered` and `version.age-rating-answered`.
 - `localizations.completeness`, every declared locale has every required field.
-- `screenshots.requiredDevices`, 6.9-inch and 6.7-inch present for new submissions.
+- `screenshots.required-devices`, 6.9-inch and 6.7-inch present for new submissions.
 
-L3 is the highest-value authoring layer; rejection prevention is the actual product on the authoring side. See [Preflight rules](../reference/preflight-rules.md) for the full catalog with modes, severities, and fix hints.
+Passing checks does not guarantee App Review approval. See [Preflight rules](../reference/preflight-rules.md) for the full catalog with modes, severities, and fix hints.
 
 ## The lifecycle
 

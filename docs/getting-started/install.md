@@ -17,7 +17,7 @@ flightline --version
 flightline --help
 ```
 
-`go install` is the supported install method — a single static binary, no package manager needed.
+`go install` is the supported install method. It installs a single static binary with no package manager needed.
 
 ## Build from source
 

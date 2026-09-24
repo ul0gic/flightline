@@ -19,7 +19,7 @@ func (screenshotsRequiredDevicesRule) Severity() Severity { return SeverityError
 func (screenshotsRequiredDevicesRule) Mode() Mode         { return ModeBoth }
 func (screenshotsRequiredDevicesRule) Doc() string {
 	return "Checks that every locale has at least one screenshot set from the large-iPhone tier Apple accepts for submission: 6.9 inch, 6.7 inch, or 6.5 inch. " +
-		"Apple requires the 6.9-inch size unless a 6.5-inch set is provided, and scales the largest set you supply down to smaller displays — so any one tier member unblocks Submit for Review. " +
+		"Apple requires the 6.9-inch size unless a 6.5-inch set is provided, and scales the largest set you supply down to smaller displays, so any one tier member unblocks Submit for Review. " +
 		"Fix it by uploading screenshots for one of the accepted device classes in each affected locale; 6.9 inch gives the best scaled quality."
 }
 
