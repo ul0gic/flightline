@@ -83,7 +83,7 @@ The three layers come together in the authoring loop:
 5. preflight   live rule check (L3)
 6. apply       idempotent writes (L2)
 7a. external TestFlight   flightline testflight beta-review submit
-7b. App Store release    attach build and IAPs, then Submit for Review manually in ASC
+7b. App Store release    submission-assembly plan, assemble --confirm, then submit --confirm
 ```
 
-Steps 1 through 5 are read-only against ASC and reversible. Step 6 patches ASC but does not submit. The terminal paths are different workflows: beta review gates external TestFlight testing, while production App Store Review requires a separate review submission. Flightline checks that submission but does not press its final Submit for Review action today.
+Steps 1 through 5 are read-only against ASC and reversible. Step 6 patches ASC but does not submit. The terminal paths are different workflows: beta review gates external TestFlight testing, while production App Store Review requires a separate review submission. Flightline keeps assembly and final submit in separate confirmed commands. Final submit requires fresh preflight and exact membership checks; generic state apply never invokes it.

@@ -20,6 +20,7 @@ const (
 	MetricCategoryBattery     = "BATTERY"
 	MetricCategoryTermination = "TERMINATION"
 	MetricCategoryAnimation   = "ANIMATION"
+	MetricCategoryStorage     = "STORAGE"
 )
 
 // PerfPowerMetricsResponse is Apple's xcodeMetrics envelope.
@@ -60,7 +61,7 @@ type PerfPowerInsightPopulation struct {
 }
 
 // PerfPowerProductData groups metric categories under one platform (typically
-// IOS). Apple v4.3 only emits IOS for perfPowerMetrics.
+// IOS). Apple API 4.5 documents IOS for perfPowerMetrics.
 type PerfPowerProductData struct {
 	Platform         string                    `json:"platform,omitempty"`
 	MetricCategories []PerfPowerMetricCategory `json:"metricCategories,omitempty"`

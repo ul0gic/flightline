@@ -55,6 +55,7 @@ func (v *AgeRatingView) TableRows() (headers []string, rows [][]string) {
 		{"ageRatingOverride", ageRatingValue(a.AgeRatingOverride)},
 		{"ageRatingOverrideV2", ageRatingValue(a.AgeRatingOverrideV2)},
 		{"koreaAgeRatingOverride", ageRatingValue(a.KoreaAgeRatingOverride)},
+		{"gracRatingClassificationNumber", a.GracRatingClassificationNumber},
 		{"developerAgeRatingInfoUrl", a.DeveloperAgeRatingInfoURL},
 	}
 	return headers, rows

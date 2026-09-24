@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// ASC API v4.3 has no appPrivacyDetails resource (web-UI only). See ISSUE-002.
+// ASC API v4.5 has no appPrivacyDetails resource (web-UI only). See ISSUE-002.
 type PrivacyLabelsView struct {
 	BundleID  string `json:"bundleId"`
 	Supported bool   `json:"supported"`
@@ -29,7 +29,7 @@ var privacyLabelsCmd = &cobra.Command{
 	Use:   "privacy-labels",
 	Short: "Inspect privacy nutrition labels",
 	Long: `privacy-labels would read Apple's App Privacy Details
-(nutrition labels) for an app. Apple's App Store Connect API v4.3 does
+(nutrition labels) for an app. Apple's App Store Connect API v4.5 does
 not expose this surface: labels are authored exclusively in App Store
 Connect's web UI.
 
@@ -48,7 +48,7 @@ var privacyLabelsGetCmd = &cobra.Command{
   flightline privacy-labels get com.example.myapp --output json | jq .supported`,
 }
 
-// No appPrivacyDetails surface in v4.3; set returns the same typed
+// No appPrivacyDetails surface in v4.5; set returns the same typed
 // diagnostic as get rather than fabricating an endpoint. See ISSUE-002.
 var privacyLabelsSetCmd = &cobra.Command{
 	Use:          "set <bundleId>",
@@ -57,7 +57,7 @@ var privacyLabelsSetCmd = &cobra.Command{
 	Args:         cobra.ExactArgs(1),
 	RunE:         runPrivacyLabelsSet,
 	Long: `set would PATCH an app's privacy nutrition labels. Apple's App Store Connect
-API v4.3 does not expose this surface: labels are authored exclusively in
+API v4.5 does not expose this surface: labels are authored exclusively in
 App Store Connect's web UI.
 
 This command returns a typed diagnostic so callers can detect the
@@ -84,7 +84,7 @@ func privacyLabelsDiagnostic(bundleID string) *PrivacyLabelsView {
 	return &PrivacyLabelsView{
 		BundleID:  bundleID,
 		Supported: false,
-		Reason:    "App Store Connect API v4.3 does not expose appPrivacyDetails. Manage privacy nutrition labels via App Store Connect web UI.",
+		Reason:    "App Store Connect API v4.5 does not expose appPrivacyDetails. Manage privacy nutrition labels via App Store Connect web UI.",
 		Reference: "https://developer.apple.com/app-store/app-privacy-details/",
 	}
 }

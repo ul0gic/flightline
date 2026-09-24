@@ -97,7 +97,7 @@ metrics the Xcode Organizer "Metrics" tab shows.
   - build <bundleId> --build <number>: build-specific metrics
 
 Filter by --platform, --category (HANG | LAUNCH | MEMORY | DISK |
-BATTERY | TERMINATION | ANIMATION), and --device.`,
+BATTERY | TERMINATION | ANIMATION | STORAGE), and --device.`,
 }
 
 var performanceAppCmd = &cobra.Command{
@@ -134,13 +134,13 @@ var (
 )
 
 func init() {
-	performanceAppCmd.Flags().StringVar(&performanceAppPlatform, "platform", "IOS", "filter by platform (Apple v4.3 only emits IOS)")
-	performanceAppCmd.Flags().StringVar(&performanceAppCategory, "category", "", "filter by metric category: HANG | LAUNCH | MEMORY | DISK | BATTERY | TERMINATION | ANIMATION")
+	performanceAppCmd.Flags().StringVar(&performanceAppPlatform, "platform", "IOS", "filter by platform (Apple v4.5 only emits IOS)")
+	performanceAppCmd.Flags().StringVar(&performanceAppCategory, "category", "", "filter by metric category: HANG | LAUNCH | MEMORY | DISK | BATTERY | TERMINATION | ANIMATION | STORAGE")
 	performanceAppCmd.Flags().StringVar(&performanceAppDevice, "device", "", "filter by device type (Apple model id, e.g. iPhone15,3)")
 
 	performanceBuildCmd.Flags().StringVar(&performanceBuildBuild, "build", "", "build number to inspect (CFBundleVersion, e.g. 42)")
 	performanceBuildCmd.Flags().StringVar(&performanceBuildVer, "version", "", "App Store version/train used to disambiguate duplicate build numbers")
-	performanceBuildCmd.Flags().StringVar(&performanceBuildPlat, "platform", "IOS", "filter by platform (Apple v4.3 only emits IOS)")
+	performanceBuildCmd.Flags().StringVar(&performanceBuildPlat, "platform", "IOS", "filter by platform (Apple v4.5 only emits IOS)")
 	performanceBuildCmd.Flags().StringVar(&performanceBuildCat, "category", "", "filter by metric category")
 	performanceBuildCmd.Flags().StringVar(&performanceBuildDev, "device", "", "filter by device type")
 	_ = performanceBuildCmd.MarkFlagRequired("build")

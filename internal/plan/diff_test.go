@@ -165,8 +165,8 @@ func TestDiff_NilLive(t *testing.T) {
 		},
 	}
 	got := Diff(desired, nil)
-	if len(got) != 2 {
-		t.Fatalf("got %d, want 2: %+v", len(got), got)
+	if len(got) != 1 {
+		t.Fatalf("got %d, want 1 atomic pricing change: %+v", len(got), got)
 	}
 	for _, c := range got {
 		if c.Op != OpCreate {

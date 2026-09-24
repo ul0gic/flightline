@@ -395,7 +395,7 @@ func TestTableRows_AllRenderables(t *testing.T) {
 		}},
 		{"analytics status", AnalyticsStatusView{
 			BundleID: "com.example.app", StateFile: "/path/file.json", RequestID: "req1",
-			Status: "completed", SubmittedAt: "2026-01-01T00:00:00Z", LastPollAt: "2026-01-01T01:00:00Z",
+			Status: "reports_available", ReportDefinitionsAvailable: true, DataReadiness: "unchecked", SubmittedAt: "2026-01-01T00:00:00Z", LastPollAt: "2026-01-01T01:00:00Z",
 			Reports:    []asc.PersistedAnalyticsReport{{ID: asc.ReportID("rpt1"), Name: "report"}},
 			Downloaded: []string{"seg1"},
 		}},

@@ -188,6 +188,7 @@ func TestPricing_FixtureReplay_ScheduleAndPricePoint(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
 		"GET /v1/apps": {File: "apps_get_byBundleId"},
 		"GET /v1/apps/1234567890/appPriceSchedule":             {File: "pricing_get"},
+		"GET /v1/appPriceSchedules/1234567890/baseTerritory":   {File: "pricing_base_territory"},
 		"GET /v3/appPricePoints/PP-USA-999":                    {File: "pricing_price_point"},
 		"GET /v1/appPriceSchedules/1234567890/manualPrices":    {File: "pricing_manual_prices"},
 		"GET /v1/appPriceSchedules/1234567890/automaticPrices": {File: "pricing_automatic_prices"},
@@ -305,45 +306,6 @@ func TestPricingSet_RegisteredOnGroup(t *testing.T) {
 	}
 }
 
-// TestBuildPricingScheduleCreate_Shape: local id "${TIER}" wires the
-// manualPrices linkage to the inline appPrice that carries the relationships.
-func TestBuildPricingScheduleCreate_Shape(t *testing.T) {
-	body := buildPricingScheduleCreate("APP-1", "USA", "PP-USA-999", "2025-01-01", "")
-	raw, err := json.Marshal(body)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-	out := string(raw)
-	for _, want := range []string{
-		`"type":"appPriceSchedules"`,
-		`"app":{"data":{"id":"APP-1","type":"apps"}}`,
-		`"baseTerritory":{"data":{"id":"USA","type":"territories"}}`,
-		`"manualPrices":{"data":[{"id":"${TIER}","type":"appPrices"}]}`,
-		`"included":[{`,
-		`"id":"${TIER}","relationships":{"appPricePoint":{"data":{"id":"PP-USA-999","type":"appPricePoints"}}`,
-		`"territory":{"data":{"id":"USA","type":"territories"}}`,
-		`"startDate":"2025-01-01"`,
-	} {
-		if !strings.Contains(out, want) {
-			t.Errorf("body missing %q\nfull body: %s", want, out)
-		}
-	}
-	if strings.Contains(out, `"endDate"`) {
-		t.Errorf("body should omit endDate when empty: %s", out)
-	}
-}
-
-func TestBuildPricingScheduleCreate_OmitsEmptyDates(t *testing.T) {
-	body := buildPricingScheduleCreate("APP-1", "USA", "PP-USA-999", "", "")
-	raw, _ := json.Marshal(body)
-	out := string(raw)
-	for _, leak := range []string{`"startDate"`, `"endDate"`} {
-		if strings.Contains(out, leak) {
-			t.Errorf("body should omit %s when not provided: %s", leak, out)
-		}
-	}
-}
-
 func TestPricingSetResult_TableRows_NoChange(t *testing.T) {
 	r := &PricingSetResult{
 		BundleID:      "com.example.alpha",
@@ -391,7 +353,8 @@ func TestPricingSetResult_JSONShape(t *testing.T) {
 // today is MP-USA-1 → PP-USA-999.
 func TestFetchCurrentBaseSchedule_FixtureReplay(t *testing.T) {
 	srv := startFixtureServer(t, map[string]fixtureRoute{
-		"GET /v1/apps/1234567890/appPriceSchedule": {File: "pricing_get"},
+		"GET /v1/apps/1234567890/appPriceSchedule":          {File: "pricing_get"},
+		"GET /v1/appPriceSchedules/1234567890/manualPrices": {File: "pricing_manual_prices"},
 	})
 	c := fixtureASCClient(t, srv)
 	schedID, baseTerr, pricePoint, err := fetchCurrentBaseSchedule(context.Background(), c, "1234567890")

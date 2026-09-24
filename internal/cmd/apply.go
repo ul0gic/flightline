@@ -15,6 +15,7 @@ import (
 
 // ApplyResult is the stable JSON envelope for `apply`; renaming or removing a field breaks consumers.
 type ApplyResult struct {
+	Planned  []plan.Change       `json:"planned,omitempty"`
 	BundleID string              `json:"bundleId"`
 	Version  string              `json:"version,omitempty"`
 	DryRun   bool                `json:"dryRun,omitempty"`
@@ -25,6 +26,7 @@ type ApplyResult struct {
 
 func (r *ApplyResult) TableRows() (headers []string, rows [][]string) {
 	headers = []string{"STATUS", "OP", "PATH", "ERROR"}
+	rows = plannedApplyRows(r.Planned)
 	for _, c := range r.Applied {
 		rows = append(rows, []string{"applied", string(c.Op), c.Path, ""})
 	}
@@ -53,8 +55,9 @@ guardrail as terraform plan. With --confirm, every leaf-level change
 dispatches to its L1 writer, with a checkpoint persisted after every
 success so a Ctrl-C / crash mid-apply resumes cleanly via --resume.
 
---dry-run fetches live state and computes the dispatch path, but sends
-no mutating API requests. It requires credentials and network access.
+--dry-run fetches live state and validates every planned dispatch, but sends
+no mutating API requests. Output lists planned changes, never applied changes.
+It requires credentials and network access.
 
 Examples:
   flightline apply state.yaml                 # plan only, refuses to write
@@ -109,12 +112,15 @@ func runApplyWithClient(cmd *cobra.Command, stateFile string, desired *config.St
 	}
 
 	live, err := state.Fetch(cmd.Context(), c, desired.Metadata.BundleID, state.FetchOpts{
-		Version: version, Platform: platform, RequireEditable: true,
+		Version: version, Platform: platform, RequireEditable: true, AllowPhasedRelease: hasPhasedReleaseIntent(desired), BetaDesired: desired.Spec.TestFlight,
 	})
 	if err != nil {
 		return err
 	}
 
+	if err := validateCommandWriteIntent(stateFile, desired, live); err != nil {
+		return err
+	}
 	changes := plan.Diff(desired, live)
 	confirm, _ := cmd.Flags().GetBool("confirm")
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
@@ -150,6 +156,7 @@ func runApplyWithClient(cmd *cobra.Command, stateFile string, desired *config.St
 		DryRun:   dryRun,
 	}
 	if res != nil {
+		out.Planned = res.Planned
 		out.Applied = res.Applied
 		out.Skipped = res.Skipped
 		out.Errors = res.Errors

@@ -13,15 +13,22 @@ Every command supports `--output table` (default) and `--output json`. JSON is a
 
 | Group | Summary |
 |-------|---------|
+| [`accessibility-declarations`](#accessibility-declarations) | Manage per-device accessibility declarations |
 | [`age-rating`](#age-rating) | Inspect Apple age-rating declarations |
 | [`analytics`](#analytics) | Request, track, and download Apple analytics reports |
+| [`app-availability`](#app-availability) | Inspect app availability by territory |
+| [`app-eula`](#app-eula) | Inspect and manage the custom app EULA |
+| [`app-tags`](#app-tags) | Inspect assigned App Store tags and manage their visibility |
 | [`apply`](#apply) | Reconcile App Store Connect to match a state file |
 | [`apps`](#apps) | Manage and inspect apps in App Store Connect |
 | [`beta-feedback`](#beta-feedback) | Read TestFlight beta feedback (crash submissions, screenshots) |
 | [`builds`](#builds) | Manage and inspect builds |
 | [`categories`](#categories) | Inspect App Store category catalog and per-app assignments |
+| [`content-rights`](#content-rights) | Inspect and set the app content rights declaration |
 | [`custom-product-pages`](#custom-product-pages) | Inspect App Store Custom Product Pages |
 | [`diagnostics`](#diagnostics) | Read crash and hang diagnostic signatures (build-scoped) |
+| [`events`](#events) | Manage In-App Events |
+| [`experiments`](#experiments) | Manage App Store product page experiments |
 | [`export-compliance`](#export-compliance) | Inspect export-compliance / encryption answers |
 | [`fetch`](#fetch) | Fetch live App Store Connect state into a state.yaml |
 | [`finance`](#finance) | Fetch App Store Connect finance (settlement) reports |
@@ -29,21 +36,34 @@ Every command supports `--output table` (default) and `--output json`. JSON is a
 | [`lint`](#lint) | Lint a state.yaml against Flightline's offline preflight rules |
 | [`metadata`](#metadata) | Manage App Store metadata localizations |
 | [`performance`](#performance) | Read Xcode Organizer performance metrics |
+| [`phased-release`](#phased-release) | Inspect and control phased release for an app update |
 | [`plan`](#plan) | Diff a state file against live ASC state |
 | [`preflight`](#preflight) | Run live + offline preflight rules against an App Store version |
+| [`previews`](#previews) | Manage App Store preview videos |
+| [`price-points`](#price-points) | Discover app price points and equalizations |
 | [`pricing`](#pricing) | Inspect App Store pricing and availability |
 | [`privacy-labels`](#privacy-labels) | Inspect privacy nutrition labels |
 | [`rejection`](#rejection) | Compose a rejection report for a version (state + submission + items) |
+| [`review-attachments`](#review-attachments) | Manage App Store Review attachments |
 | [`review-submissions`](#review-submissions) | Inspect App Store review submissions (modern /v1/reviewSubmissions) |
 | [`reviewer-demo`](#reviewer-demo) | Manage the App Store Review demo account + reviewer contact info |
 | [`reviews`](#reviews) | Read App Store customer reviews and Apple's AI summaries |
 | [`sales`](#sales) | Fetch App Store Connect sales reports (TSV-backed, vendor-wide) |
 | [`screenshots`](#screenshots) | Manage App Store screenshots |
+| [`submission-assembly`](#submission-assembly) | Plan, assemble, and explicitly submit an App Store review submission |
 | [`subscriptions`](#subscriptions) | Read auto-renewable subscription configuration (read-only in v1) |
 | [`territories`](#territories) | List App Store territories |
 | [`testflight`](#testflight) | Inspect TestFlight beta groups, testers, and review state |
+| [`version-release`](#version-release) | Release an approved manual version |
 | [`versions`](#versions) | Manage and inspect App Store versions |
+| [`webhooks`](#webhooks) | Manage app webhook configuration and inspect deliveries |
 | [`whoami`](#whoami) | Verify ASC credentials and print the configured identity |
+
+## `accessibility-declarations`
+
+Manage per-device accessibility declarations
+
+Flags, arguments, and defaults: `flightline accessibility-declarations --help`.
 
 ## `age-rating`
 
@@ -57,9 +77,27 @@ analytics drives Apple's asynchronous analytics report lifecycle: 1. request : s
 
 Flags, arguments, and defaults: `flightline analytics --help`.
 
+## `app-availability`
+
+Inspect app availability by territory
+
+Flags, arguments, and defaults: `flightline app-availability --help`.
+
+## `app-eula`
+
+Inspect and manage the custom app EULA
+
+Flags, arguments, and defaults: `flightline app-eula --help`.
+
+## `app-tags`
+
+Inspect assigned App Store tags and manage their visibility
+
+Flags, arguments, and defaults: `flightline app-tags --help`.
+
 ## `apply`
 
-Loads <state.yaml>, validates it against the schema, fetches live state, computes the diff, and writes the changes back to ASC. Without --confirm, apply prints the plan and refuses to write: same guardrail as terraform plan. With --confirm, every leaf-level change dispatches to its L1 writer, with a checkpoint persisted after every success so a Ctrl-C / crash mid-apply resumes cleanly via --resume. --dry-run fetches live state and computes the dispatch path, but sends no mutating API requests. It requires credentials and network access. Examples: flightline apply state.yaml # plan only, refuses to write flightline apply state.yaml --confirm # write changes flightline apply state.yaml --confirm --resume # continue after Ctrl-C flightline apply state.yaml --dry-run --output json
+Loads <state.yaml>, validates it against the schema, fetches live state, computes the diff, and writes the changes back to ASC. Without --confirm, apply prints the plan and refuses to write: same guardrail as terraform plan. With --confirm, every leaf-level change dispatches to its L1 writer, with a checkpoint persisted after every success so a Ctrl-C / crash mid-apply resumes cleanly via --resume. --dry-run fetches live state and validates every planned dispatch, but sends no mutating API requests. Output lists planned changes, never applied changes. It requires credentials and network access. Examples: flightline apply state.yaml # plan only, refuses to write flightline apply state.yaml --confirm # write changes flightline apply state.yaml --confirm --resume # continue after Ctrl-C flightline apply state.yaml --dry-run --output json
 
 Flags, arguments, and defaults: `flightline apply --help`.
 
@@ -87,6 +125,12 @@ categories groups read commands over the /v1/appCategories resource. categories 
 
 Flags, arguments, and defaults: `flightline categories --help`.
 
+## `content-rights`
+
+Inspect and set the app content rights declaration
+
+Flags, arguments, and defaults: `flightline content-rights --help`.
+
 ## `custom-product-pages`
 
 custom-product-pages groups read commands over Apple's AppCustomProductPage resources: alternate App Store listings used to target ad-driven traffic with different screenshots and descriptions. list <bundleId> : list all configured pages with current state get <bundleId> --page <id> : detail for one page (versions + localizations)
@@ -95,9 +139,21 @@ Flags, arguments, and defaults: `flightline custom-product-pages --help`.
 
 ## `diagnostics`
 
-diagnostics groups read commands over Apple's diagnostic signatures resource. Apple deduplicates crash and hang reports into signatures: same call stack, same crash, regardless of how many users hit it. Apple v4.3 only exposes diagnostic signatures scoped to a build: - list <bundleId> --build <number> : list signatures for a build - get <signatureId> : fetch the full log payload There is no app-wide aggregation API in v4.3; --build is required on list.
+diagnostics groups read commands over Apple's diagnostic signatures resource. Apple deduplicates crash and hang reports into signatures: same call stack, same crash, regardless of how many users hit it. Apple v4.5 only exposes diagnostic signatures scoped to a build: - list <bundleId> --build <number> : list signatures for a build - get <signatureId> : fetch the full log payload There is no app-wide aggregation API in v4.5; --build is required on list.
 
 Flags, arguments, and defaults: `flightline diagnostics --help`.
+
+## `events`
+
+Manage In-App Events
+
+Flags, arguments, and defaults: `flightline events --help`.
+
+## `experiments`
+
+Manage App Store product page experiments
+
+Flags, arguments, and defaults: `flightline experiments --help`.
 
 ## `export-compliance`
 
@@ -107,7 +163,7 @@ Flags, arguments, and defaults: `flightline export-compliance --help`.
 
 ## `fetch`
 
-Pulls every L2 surface Flightline supports for the given bundleId and writes the result as a Flightline state file. Default output is YAML with a yaml-language-server schema directive prepended for editor autocomplete. Surfaces absent from the state file are not managed. The diff engine leaves those surfaces untouched on subsequent applies. Examples: flightline fetch app.tideterm.ios > state.yaml flightline fetch app.tideterm.ios -o state.yaml --version 1.0.1 flightline fetch app.tideterm.ios --output json | jq '.spec.version'
+Pulls every L2 surface Flightline supports for the given bundleId and writes the result as a Flightline state file. Beta build metadata is scoped to the attached build; --include-beta-builds adds complete group membership sets. Default output is YAML with a yaml-language-server schema directive prepended for editor autocomplete. Surfaces absent from the state file are not managed. The diff engine leaves those surfaces untouched on subsequent applies. Examples: flightline fetch app.tideterm.ios > state.yaml flightline fetch app.tideterm.ios -o state.yaml --version 1.0.1 flightline fetch app.tideterm.ios --output json | jq '.spec.version'
 
 Flags, arguments, and defaults: `flightline fetch --help`.
 
@@ -137,9 +193,15 @@ Flags, arguments, and defaults: `flightline metadata --help`.
 
 ## `performance`
 
-performance groups read commands over Apple's perfPowerMetrics endpoints: the same battery / memory / hangs / launches / disk-writes metrics the Xcode Organizer "Metrics" tab shows. - app <bundleId> : app-level (cross-build aggregate) - build <bundleId> --build <number>: build-specific metrics Filter by --platform, --category (HANG | LAUNCH | MEMORY | DISK | BATTERY | TERMINATION | ANIMATION), and --device.
+performance groups read commands over Apple's perfPowerMetrics endpoints: the same battery / memory / hangs / launches / disk-writes metrics the Xcode Organizer "Metrics" tab shows. - app <bundleId> : app-level (cross-build aggregate) - build <bundleId> --build <number>: build-specific metrics Filter by --platform, --category (HANG | LAUNCH | MEMORY | DISK | BATTERY | TERMINATION | ANIMATION | STORAGE), and --device.
 
 Flags, arguments, and defaults: `flightline performance --help`.
+
+## `phased-release`
+
+Inspect and control phased release for an app update
+
+Flags, arguments, and defaults: `flightline phased-release --help`.
 
 ## `plan`
 
@@ -153,6 +215,18 @@ preflight runs every Flightline rejection-prevention rule against a live App Sto
 
 Flags, arguments, and defaults: `flightline preflight --help`.
 
+## `previews`
+
+Manage App Store preview videos
+
+Flags, arguments, and defaults: `flightline previews --help`.
+
+## `price-points`
+
+Discover app price points and equalizations
+
+Flags, arguments, and defaults: `flightline price-points --help`.
+
 ## `pricing`
 
 pricing groups read commands over the /v1/appPriceSchedules and /v1/apps/{id}/appAvailabilityV2 resources. Apple's pricing model uses AppPriceSchedule (one per app) carrying manual/automatic price windows that link to AppPricePointV3 entries (customerPrice + proceeds per territory). AppPriceTier is deprecated. Availability lives in a separate resource: a flag for new-territory auto-release plus the per-territory availability set.
@@ -161,7 +235,7 @@ Flags, arguments, and defaults: `flightline pricing --help`.
 
 ## `privacy-labels`
 
-privacy-labels would read Apple's App Privacy Details (nutrition labels) for an app. Apple's App Store Connect API v4.3 does not expose this surface: labels are authored exclusively in App Store Connect's web UI. This command returns a typed diagnostic so callers can detect the unsupported state programmatically. When Apple ships an API endpoint, the command can be wired without changing the JSON contract.
+privacy-labels would read Apple's App Privacy Details (nutrition labels) for an app. Apple's App Store Connect API v4.5 does not expose this surface: labels are authored exclusively in App Store Connect's web UI. This command returns a typed diagnostic so callers can detect the unsupported state programmatically. When Apple ships an API endpoint, the command can be wired without changing the JSON contract.
 
 Flags, arguments, and defaults: `flightline privacy-labels --help`.
 
@@ -170,6 +244,12 @@ Flags, arguments, and defaults: `flightline privacy-labels --help`.
 rejection composes the API-visible signals around an App Store rejection into one report: the version's state, the build attached to it (if any), the matching review submission's state, and each review submission item's state. Apple's resolution-center reviewer text is NOT in the public API. Flightline shows the API-visible state. To read the actual reviewer message, log into App Store Connect. Examples: flightline rejection com.example.myapp --version 1.0.1 flightline rejection com.example.myapp --version 1.0.1 --output json | jq .submission.state
 
 Flags, arguments, and defaults: `flightline rejection --help`.
+
+## `review-attachments`
+
+Manage App Store Review attachments
+
+Flags, arguments, and defaults: `flightline review-attachments --help`.
 
 ## `review-submissions`
 
@@ -201,6 +281,12 @@ screenshots wraps Apple's appScreenshotSets / appScreenshots resources. Uploads 
 
 Flags, arguments, and defaults: `flightline screenshots --help`.
 
+## `submission-assembly`
+
+Plan, assemble, and explicitly submit an App Store review submission
+
+Flags, arguments, and defaults: `flightline submission-assembly --help`.
+
 ## `subscriptions`
 
 subscriptions groups read commands over Apple's auto-renewable subscription resources. Apple structures subscriptions as a tree: - SubscriptionGroup : competing-tier group └── Subscription : one product within the group ├── Localizations : per-locale name/description ├── IntroductoryOffers : onboarding discount tiers └── Prices : price ladder - list <bundleId> : list groups + member count - get <bundleId> --product <productId> : full detail for one product This command group is read-only.
@@ -219,11 +305,23 @@ testflight groups read commands over Apple's TestFlight resources: - groups list
 
 Flags, arguments, and defaults: `flightline testflight --help`.
 
+## `version-release`
+
+Release an approved MANUAL version in Pending Developer Release. This action is never run by state apply and its outcome must be inspected before retrying.
+
+Flags, arguments, and defaults: `flightline version-release --help`.
+
 ## `versions`
 
 versions groups read and write commands over the /v1/appStoreVersions resource.
 
 Flags, arguments, and defaults: `flightline versions --help`.
+
+## `webhooks`
+
+Manage app webhook configuration and inspect deliveries
+
+Flags, arguments, and defaults: `flightline webhooks --help`.
 
 ## `whoami`
 

@@ -1,46 +1,39 @@
 # First run
 
-Once you have [installed Flightline](./install.md) and [set up an API key](./apple-api-key.md), these five commands confirm the install works and cover both pillars (authoring and observation). They are all read-only, so nothing here writes to App Store Connect.
+Start with [installation](./install.md) and an [Apple API key](./apple-api-key.md). These commands read App Store Connect and write one local snapshot; they do not change your app.
+
+The guides describe the current source tree. A published binary may lag it: check `flightline --version` and the relevant command's `--help`, or build the source revision you intend to use.
+
+## Inspect your app
 
 ```bash
-# Verify auth
+flightline --version
 flightline whoami
-
-# List your apps
 flightline apps list
-
-# Inspect a version
-flightline versions get app.tideterm.ios --version 1.0
-
-# Diagnose a rejection (if the version is in REJECTED state)
-flightline rejection app.tideterm.ios --version 1.0
-
-# Run offline preflight against a state file
-flightline lint state.yaml
+flightline versions list com.example.app --platform IOS
+flightline versions get com.example.app --version 1.0 --platform IOS
 ```
 
-Replace `app.tideterm.ios` with your own bundle ID.
+Replace `com.example.app` and `1.0` with a bundle ID and version returned by your account. Select an editable version for the later authoring workflow. Use `--output json` on inspection commands when you need machine-readable results.
 
-## What each command does
-
-| Command | What it does | Writes? |
-|---------|--------------|---------|
-| `flightline whoami` | Prints the configured identity and confirms the key authorizes | No |
-| `flightline apps list` | Lists the apps your key can see | No |
-| `flightline versions get <bundleId> --version <v>` | Shows the state of one App Store version | No |
-| `flightline rejection <bundleId> --version <v>` | Composes a rejection report for a version | No |
-| `flightline lint state.yaml` | Validates a state file offline against the schema and format rules | No |
-
-## Output formats
-
-Every command supports `--output table` (the default) and `--output json`. JSON is a stable contract: pipe it to `jq` or feed it to an LLM prompt.
+## Create a state file before linting it
 
 ```bash
-flightline apps list --output json
+flightline fetch com.example.app --version 1.0 --platform IOS -o state.yaml
+flightline lint state.yaml
+flightline plan state.yaml
 ```
 
-## Next steps
+`fetch` creates the file. `lint` validates it offline. `plan` reads live state and reports the changes needed for the fields you manage. Review fetched metadata before committing it: reviewer contact information and demo credentials can be sensitive.
 
-- [State as code: a 5-minute walkthrough](../guides/state-as-code.md), fetch, edit, plan, apply.
-- [Preflight rules](../reference/preflight-rules.md), every rejection rule Flightline checks.
-- [The three-layer model](../concepts/three-layer-model.md), how L1, L2, and L3 fit together.
+Lint exits `0` for clean or info-only results, `1` for errors, and `2` for warnings only. A diagnostic is a finding to inspect, not evidence that these read-only commands changed anything.
+
+## Choose a workflow
+
+- [State as code](../guides/state-as-code.md): edit, preview, apply, and recover interrupted changes.
+- [Submission and release](../guides/submission-and-release.md): assemble a production submission, submit it, and control release separately.
+- [TestFlight](../guides/testflight.md): beta metadata, groups, builds, and external review.
+- [Capabilities](../reference/capabilities.md): select a workflow and understand its support boundary.
+- [Preflight in CI](../guides/preflight-in-ci.md): handle diagnostics and exit codes correctly.
+
+No write is needed to finish this first run. Continue to a workflow guide when you have reviewed the target app, version, and proposed changes.

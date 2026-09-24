@@ -16,7 +16,7 @@
         {
           "file": "getting-started/first-run.md",
           "label": "First run",
-          "description": "Five read-only commands to prove the setup against your real account."
+          "description": "Inspect an app, fetch a local snapshot, lint it, and preview changes."
         }
       ]
     },
@@ -31,7 +31,7 @@
         {
           "file": "guides/uploading-assets.md",
           "label": "Uploading assets",
-          "description": "Screenshots and IAP review screenshots through the upload verbs."
+          "description": "Screenshots, previews, review attachments, and upload recovery."
         },
         {
           "file": "guides/preflight-in-ci.md",
@@ -42,12 +42,52 @@
           "file": "guides/observability.md",
           "label": "Observability",
           "description": "Sales, finance, reviews, analytics, crashes, and metrics, all pipeable."
+        },
+        {
+          "file": "guides/submission-and-release.md",
+          "label": "Submission and release",
+          "description": "Plan exact membership, assemble a draft, submit explicitly, and control release."
+        },
+        {
+          "file": "guides/iap-commerce.md",
+          "label": "IAP commerce",
+          "description": "Manage products, selected pricing and availability, offers, and purchase actions."
+        },
+        {
+          "file": "guides/testflight.md",
+          "label": "TestFlight",
+          "description": "Manage beta metadata, groups, builds, testers, and external review."
+        },
+        {
+          "file": "guides/events.md",
+          "label": "In-app events",
+          "description": "Author events, localizations and media, then prepare submission proposals."
+        },
+        {
+          "file": "guides/experiments.md",
+          "label": "Product-page experiments",
+          "description": "Manage experiments, treatments and assets with explicit lifecycle boundaries."
+        },
+        {
+          "file": "guides/declarations.md",
+          "label": "Declarations",
+          "description": "Manage rights, EULA, accessibility, tags, and declaration boundaries."
+        },
+        {
+          "file": "guides/review-responses-and-webhooks.md",
+          "label": "Reviews and webhooks",
+          "description": "Manage customer review responses and app-scoped webhook delivery workflows."
         }
       ]
     },
     {
       "label": "Reference",
       "items": [
+        {
+          "file": "reference/capabilities.md",
+          "label": "Capabilities",
+          "description": "Workflow support across commands, desired state, and live qualification boundaries."
+        },
         {
           "file": "reference/state-yaml.md",
           "label": "state.yaml schema",
@@ -61,12 +101,17 @@
         {
           "file": "reference/cli.md",
           "label": "CLI reference",
-          "description": "Every command group and flag, generated from source."
+          "description": "Generated command-group index; use nested CLI help for arguments and flags."
         },
         {
           "file": "reference/json-output.md",
           "label": "JSON output",
           "description": "The stable JSON contract and patterns for jq and LLM consumers."
+        },
+        {
+          "file": "reference/api-compatibility.md",
+          "label": "API compatibility",
+          "description": "Pinned Apple API reference, supported boundaries, and refresh procedure."
         }
       ]
     },

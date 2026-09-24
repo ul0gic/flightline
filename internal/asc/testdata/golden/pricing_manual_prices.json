@@ -1,10 +1,59 @@
 {
   "data": [
-    { "type": "appPrices", "id": "MP-1", "attributes": { "manual": true } },
-    { "type": "appPrices", "id": "MP-2", "attributes": { "manual": true } }
+    {
+      "type": "appPrices",
+      "id": "MP-USA-1",
+      "attributes": {
+        "manual": true,
+        "startDate": "2020-01-01",
+        "endDate": "2099-12-31"
+      },
+      "relationships": {
+        "territory": {
+          "data": {
+            "type": "territories",
+            "id": "USA"
+          }
+        },
+        "appPricePoint": {
+          "data": {
+            "type": "appPricePoints",
+            "id": "PP-USA-999"
+          }
+        }
+      }
+    },
+    {
+      "type": "appPrices",
+      "id": "MP-USA-2",
+      "attributes": {
+        "manual": true,
+        "startDate": "2099-12-31",
+        "endDate": ""
+      },
+      "relationships": {
+        "territory": {
+          "data": {
+            "type": "territories",
+            "id": "USA"
+          }
+        },
+        "appPricePoint": {
+          "data": {
+            "type": "appPricePoints",
+            "id": "PP-USA-1099"
+          }
+        }
+      }
+    }
   ],
   "links": {
     "self": "https://api.appstoreconnect.apple.com/v1/appPriceSchedules/1234567890/manualPrices"
   },
-  "meta": { "paging": { "total": 2, "limit": 200 } }
+  "meta": {
+    "paging": {
+      "total": 2,
+      "limit": 200
+    }
+  }
 }

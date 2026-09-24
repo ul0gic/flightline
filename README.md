@@ -144,7 +144,7 @@ flowchart LR
     D --> E["5. preflight\nlive rule check"]
     E --> F["6. apply --confirm\nidempotent writes"]
     F --> G["7a. external TestFlight\nbeta-review submit"]
-    F --> H["7b. App Store release\nsubmit manually in ASC"]
+    F --> H["7b. App Store release\nassemble, then explicit submit"]
     H --> I["8. rejection\ndiagnose if bounced"]
 
     classDef readonly fill:#e8f5e9,stroke:#388e3c,color:#1b5e20
@@ -156,7 +156,7 @@ flowchart LR
     class F,G,H commit
 ```
 
-Steps 1 to 5 are read-only against ASC and reversible. Step 6 patches ASC but does not submit anything for review. From there the workflows split: `testflight beta-review submit` requests Beta App Review for external TestFlight distribution only; it does not submit an App Store release. For production, attach the build and every intended IAP to the App Store review submission, run preflight, then use Submit for Review in ASC. That final production action remains manual.
+Steps 1 to 5 are read-only against ASC and reversible. Step 6 patches ASC but does not submit anything for review. From there the workflows split: `testflight beta-review submit` requests Beta App Review for external TestFlight distribution only; it does not submit an App Store release. For production, `submission-assembly plan` verifies the selected version and item proposals; `assemble --confirm` creates or resumes a draft with exact membership. The separate `submit --confirm` command reruns preflight and membership checks before requesting App Store Review. Submit for Review in ASC remains an alternative. Generic state apply never performs this final action.
 
 ### Observation (stop opening the web UI)
 
@@ -175,7 +175,7 @@ All observation commands support `--output json` for piping to `jq` or feeding t
 
 ## What it does today
 
-All three layers are complete: L1 (API CLI), L2 (state-as-code), and L3 (preflight rules).
+Implemented coverage spans L1 (API CLI), L2 (state-as-code), and L3 (preflight rules). The table describes selected workflows, not every operation in an API resource family. New corrections are locally verified; live qualification is recorded separately.
 
 | Surface | L1 read | L1 write | L2 state-as-code | L3 preflight rule |
 |---|:---:|:---:|:---:|:---:|
@@ -183,40 +183,59 @@ All three layers are complete: L1 (API CLI), L2 (state-as-code), and L3 (preflig
 | Versions | ✅ | ✅ | ✅ | ✅ |
 | Builds (incl. attach) | ✅ | ✅ | ✅ | ✅ |
 | Metadata + localizations | ✅ | ✅ | ✅ | ✅ |
-| Screenshots | ✅ | ✅ | ✅ | ✅ |
-| IAPs (incl. review screenshot) | ✅ | ✅ | ✅ | ✅ (3 rules) |
+| Screenshots (including explicit ordering) | ✅ | ✅ | ✅ | ✅ |
+| Preview videos (main / CPP) | ✅ | ✅ | ✅ | Intent validation |
+| App Review attachments | ✅ | ✅ | - | - |
+| Content rights / custom EULA | ✅ | ✅ | ✅ | Intent validation |
+| IAPs (metadata, review screenshot) | ✅ | ✅ | ✅ | ✅ (3 rules) |
+| IAP commerce (price, territories) | ✅ | ✅ | ✅ | Intent validation |
+| IAP promotional images / promoted purchases | ✅ | ✅ (explicit actions) | - | - |
+| IAP offer codes | ✅ | ✅ (explicit issuance) | - | - |
+| App availability / preorders | ✅ | Partial (active preorders) | Partial (existing preorder territories) | Intent validation |
 | Age rating | ✅ | ✅ | ✅ | ✅ |
 | Export compliance | ✅ | ✅ | ✅ | ✅ |
 | Reviewer demo info | ✅ | ✅ | ✅ | - |
 | Categories | ✅ | ✅ | ✅ | - |
 | Pricing | ✅ | ✅ | ✅ | - |
 | Custom product pages | ✅ | ✅ | ✅ | - |
-| TestFlight (groups, testers, beta-review submit) | ✅ | ✅ | ✅ (partial) | ✅ |
+| TestFlight groups, testers, beta-review submit | ✅ | ✅ | ✅ (partial) | ✅ |
+| TestFlight metadata and build membership | ✅ | ✅ | ✅ | Intent validation |
+| Beta auto-notify / notifications / recruitment | ✅ | Policy, explicit notification | - | - |
 | Subscription groups | ✅ | - ¹ | - ¹ | - |
-| Review submissions (App Store Review) | ✅ | - ² | - ² | - |
-| Customer reviews | ✅ | - ³ | - | - |
+| Review submissions (App Store Review) | ✅ | ✅ (explicit assembly/submit) ² | - | Fresh preflight |
+| In-app events / product page experiments | ✅ | ✅ (selected workflows, item proposals) | - | - |
+| Phased release | ✅ | ✅ (enable/pause/resume) | ✅ (bounded transitions) | Intent validation |
+| Manual version release | ✅ | ✅ (explicit action) | - | - |
+| Webhooks / deliveries | ✅ | ✅ (confirmed actions) | - | - |
+| Customer reviews / responses | ✅ | ✅ (confirmed responses) | - | - |
 | Beta feedback (crash + screenshot) | ✅ | - | - | - |
 | Diagnostic signatures | ✅ | - | - | - |
-| Performance metrics | ✅ | - | - | - |
+| Performance metrics + overview | ✅ | - | - | - |
+| App tags | ✅ | ✅ (visibility) | - | - |
+| Accessibility declarations | ✅ | ✅ (drafts, explicit publish/delete) | ✅ (draft answers) | Intent validation |
 | Sales reports | ✅ | - | - | - |
 | Finance reports | ✅ | - | - | - |
 | Subscription reports | ✅ | - | - | - |
 | Analytics reports | ✅ | - | - | - |
 | Privacy nutrition labels | portal-only ⁴ | - | - | - |
 
+Commercial/beta limits: ordinary app-availability mutations, preorder creation, invitation resend, and recruitment-criteria writes remain unsupported or unqualified. Offer-code issuance, preorder release, and beta notifications are explicit commands, never automatic reconciliation.
+
+State write limits: IAP type and content hosting are not mutable; export declaration documents and approval steps are unsupported. Pricing changes preserve verified manual windows and require a valid territory/price-point pair. Dry-run reports validated planned changes, not applied changes.
+
 ¹ Subscriptions are read-only for now. Subscription writes are deferred, with no near-term plan.
 
-² App Store Review submission is intentionally manual; see [What it doesn't do](#what-it-doesnt-do).
+² Submission assembly and final submit are separate confirmed commands. The selected workflow requires an app version; subscription, Game Center, CPP and background-asset submission items are excluded. IAP-version attachment and campaign lifecycle operations are locally tested but await controlled live qualification.
 
-³ Replying to reviews is not implemented.
+Review responses are app-scoped explicit actions. Replacing text requires a separate confirmed delete; Flightline never silently deletes and recreates a reply.
 
-⁴ `appPrivacyDetails` is absent from ASC API v4.3. `flightline privacy-labels get` returns a typed `supported: false` diagnostic rather than silently failing.
+⁴ `appPrivacyDetails` is absent from ASC API v4.5. `flightline privacy-labels get` returns a typed `supported: false` diagnostic rather than silently failing.
 
 ---
 
 ## Architecture
 
-Flightline is a cobra subcommand tree backed by a hand-rolled HTTP+JSON client against Apple's API. There is no codegen: Apple's OpenAPI spec triggers cascading type-name collisions in every Go generator evaluated. The spec is committed as authoritative reference and queried via `jq` during development.
+Flightline is a cobra subcommand tree backed by a hand-rolled HTTP+JSON client against Apple's API. There is no codegen: Apple's OpenAPI spec triggers cascading type-name collisions in every Go generator evaluated. The spec is committed as authoritative reference and queried via `jq` during development. The pinned version and refresh procedure are documented in [API compatibility](docs/reference/api-compatibility.md).
 
 ```mermaid
 flowchart TB
@@ -285,7 +304,7 @@ flightline age-rating set app.tideterm.ios --version 1.1 --from-file rating.json
 flightline export-compliance set app.tideterm.ios --version 1.1 \
   --uses-non-exempt-encryption false
 
-# Review submissions (read-only) and rejection diagnosis
+# Review submission inspection and rejection diagnosis
 flightline review-submissions items app.tideterm.ios --submission <id>
 flightline rejection app.tideterm.ios --version 1.1
 ```
@@ -423,12 +442,12 @@ output: table
 
 **Not a SaaS.** No backend, no telemetry, no accounts. The binary talks directly to Apple's API using your credentials.
 
-**Not the App Store Review submit button, by design.** Flightline preps everything that goes into a submission, and `flightline preflight` tells you whether the version is submission-ready, but the final "Submit for Review" click happens in the ASC web portal. Review submission is high-stakes and non-reversible; keeping that one step human-in-the-loop is the safer default while the toolchain accumulates real-world miles. May be wired as `flightline review-submissions submit` later.
+**No implicit submission or release.** State apply does not submit an App Store release. `submission-assembly assemble --confirm` prepares exact draft membership; `submission-assembly submit --confirm` is a separate final action with fresh preflight and membership checks. Manual version release, phased transitions, review replies and webhook actions also have their own explicit command boundaries.
 
 **Two portal-only surfaces.** Apple's public API does not expose these, and Flightline tells you explicitly when you hit them:
 
-- **Resolution-center reviewer messages:** the rejection text written by Apple's reviewers is not in the v4.3 API. `flightline rejection` reports every API-visible state field and tells you to check the portal for the actual message.
-- **Privacy nutrition labels** (`appPrivacyDetails`): entirely absent from ASC API v4.3. `flightline privacy-labels get` returns a typed `supported: false` diagnostic.
+- **Resolution-center reviewer messages:** the rejection text written by Apple's reviewers is not in the v4.5 API. `flightline rejection` reports every API-visible state field and tells you to check the portal for the actual message.
+- **Privacy nutrition labels** (`appPrivacyDetails`): entirely absent from ASC API v4.5. `flightline privacy-labels get` returns a typed `supported: false` diagnostic.
 
 ---
 
@@ -438,9 +457,17 @@ output: table
 |---|---|
 | [docs/getting-started/install.md](docs/getting-started/install.md) | Install via `go install` or from source |
 | [docs/getting-started/apple-api-key.md](docs/getting-started/apple-api-key.md) | Full API key setup: generate, place the `.p8`, export env vars, verify |
-| [docs/getting-started/first-run.md](docs/getting-started/first-run.md) | The first five read-only commands |
+| [docs/getting-started/first-run.md](docs/getting-started/first-run.md) | Inspect an app, fetch a snapshot, lint, and preview changes |
 | [docs/guides/state-as-code.md](docs/guides/state-as-code.md) | Fetch, edit, plan, apply walkthrough |
-| [docs/guides/uploading-assets.md](docs/guides/uploading-assets.md) | Uploading screenshots and IAP review screenshots |
+| [docs/guides/uploading-assets.md](docs/guides/uploading-assets.md) | Screenshots, previews, review attachments, and recovery |
+| [Submission and release](docs/guides/submission-and-release.md) | Plan exact membership, assemble a draft, submit explicitly, and control release. |
+| [IAP commerce](docs/guides/iap-commerce.md) | Manage products, selected pricing and availability, offers, and purchase actions. |
+| [TestFlight](docs/guides/testflight.md) | Manage beta metadata, groups, builds, testers, and external review. |
+| [In-app events](docs/guides/events.md) | Author events, localizations and media, then prepare submission proposals. |
+| [Product-page experiments](docs/guides/experiments.md) | Manage experiments, treatments and assets with explicit lifecycle boundaries. |
+| [Declarations](docs/guides/declarations.md) | Manage rights, EULA, accessibility, tags, and declaration boundaries. |
+| [Reviews and webhooks](docs/guides/review-responses-and-webhooks.md) | Manage customer review responses and app-scoped webhook delivery workflows. |
+| [Capabilities](docs/reference/capabilities.md) | Workflow coverage and qualification boundaries |
 | [docs/reference/state-yaml.md](docs/reference/state-yaml.md) | Full v1alpha1 schema reference |
 | [docs/reference/preflight-rules.md](docs/reference/preflight-rules.md) | All 15 preflight rules + submission-checklist items |
 | [docs/reference/cli.md](docs/reference/cli.md) | Command-group index |
@@ -466,7 +493,7 @@ make fmt      # gofmt -s -w . && goimports -w .
 
 ## Status
 
-All three layers are complete and verified against live App Store Connect: L1 (full API CLI), L2 (state-as-code), and L3 (15 preflight rules). Releases are cut by tagging `v*` on GitHub — the release pipeline builds, signs, and publishes binaries with an SBOM automatically.
+Flightline implements selected ASC commands (L1), desired-state reconciliation (L2), and 15 preflight rules (L3). Coverage and limitations are listed above. The correction workflows are verified locally against fixtures; controlled live qualification remains pending. Releases are cut by tagging `v*` on GitHub — the release pipeline builds, signs, and publishes binaries with an SBOM automatically.
 
 **Versioning policy (pre-1.0):** breaking changes to flags, JSON output, or exit codes can happen between minor versions (0.5 → 0.6), are always flagged in a `### Breaking` section of the release notes, and never happen in patch releases. 1.0 locks the contract.
 

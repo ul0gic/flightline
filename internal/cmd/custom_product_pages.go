@@ -254,8 +254,11 @@ func runCustomProductPagesGet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Resolve the app so a typo in --page surfaces against the right app.
-	if _, err := resolveAppID(cmd.Context(), c, bundleID); err != nil {
+	appID, err := resolveAppID(cmd.Context(), c, bundleID)
+	if err != nil {
+		return err
+	}
+	if err := requireCPPAppMembership(cmd.Context(), c, appID, pageID); err != nil {
 		return err
 	}
 
@@ -266,23 +269,28 @@ func runCustomProductPagesGet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	versions, err := collectCustomProductPageVersions(cmd.Context(), c, pageID, 0)
+	versions, err := collectCustomProductPageVersions(cmd.Context(), c, pageID)
 	if err != nil {
 		return err
 	}
 
-	// Highest version string wins; Apple's are monotonic ints, lex-compare is safe.
 	var current *CustomProductPageVersionView
-	for i := range versions {
-		v := &versions[i]
-		if current == nil || v.Attributes.Version > current.Attributes.Version {
-			current = v
+	if len(versions) != 0 {
+		selected, err := highestCPPVersionID(versions)
+		if err != nil {
+			return err
+		}
+		for i := range versions {
+			if versions[i].ID == selected {
+				current = &versions[i]
+				break
+			}
 		}
 	}
 
 	var locs []CustomProductPageLocalizationView
 	if current != nil {
-		locs, err = collectCustomProductPageLocalizations(cmd.Context(), c, current.ID, 0)
+		locs, err = collectCustomProductPageLocalizations(cmd.Context(), c, current.ID)
 		if err != nil {
 			return err
 		}
@@ -298,23 +306,26 @@ func runCustomProductPagesGet(cmd *cobra.Command, args []string) error {
 	return Render(view, outputMode())
 }
 
-// fetchCurrentCustomProductPageVersion returns the highest-version row's
+// fetchCurrentCustomProductPageVersion returns the selected editable/latest row's
 // (version, state) for the page.
 func fetchCurrentCustomProductPageVersion(ctx context.Context, c *asc.Client, pageID string) (version, state string, err error) {
-	q := url.Values{"limit": {"50"}}
-	page, err := asc.Get[asc.Collection[asc.AppCustomProductPageVersionAttributes]](
-		ctx, c, "/v1/appCustomProductPages/"+pageID+"/appCustomProductPageVersions", q,
-	)
+	versions, err := collectCustomProductPageVersions(ctx, c, pageID)
 	if err != nil {
 		return "", "", err
 	}
-	for _, r := range page.Data {
-		if r.Attributes.Version > version {
-			version = r.Attributes.Version
-			state = r.Attributes.State
+	if len(versions) == 0 {
+		return "", "", nil
+	}
+	selected, err := highestCPPVersionID(versions)
+	if err != nil {
+		return "", "", err
+	}
+	for _, row := range versions {
+		if row.ID == selected {
+			return row.Attributes.Version, row.Attributes.State, nil
 		}
 	}
-	return version, state, nil
+	return "", "", errors.New("selected CPP version missing")
 }
 
 // collectCustomProductPages walks the paging iterator and returns flattened
@@ -336,8 +347,8 @@ func collectCustomProductPages(ctx context.Context, c *asc.Client, path string, 
 }
 
 // collectCustomProductPageVersions walks a page's versions iterator.
-func collectCustomProductPageVersions(ctx context.Context, c *asc.Client, pageID string, limit int) ([]CustomProductPageVersionView, error) {
-	out := make([]CustomProductPageVersionView, 0, defaultListCap(limit))
+func collectCustomProductPageVersions(ctx context.Context, c *asc.Client, pageID string) ([]CustomProductPageVersionView, error) {
+	out := make([]CustomProductPageVersionView, 0, defaultListCap(0))
 	q := url.Values{"limit": {"50"}}
 	path := "/v1/appCustomProductPages/" + pageID + "/appCustomProductPageVersions"
 	for page, err := range asc.Pages[asc.AppCustomProductPageVersionAttributes](ctx, c, path, q) {
@@ -346,9 +357,6 @@ func collectCustomProductPageVersions(ctx context.Context, c *asc.Client, pageID
 		}
 		for _, r := range page.Data {
 			out = append(out, CustomProductPageVersionView{ID: r.ID, Type: r.Type, Attributes: r.Attributes})
-			if limit > 0 && len(out) >= limit {
-				return out, nil
-			}
 		}
 	}
 	return out, nil
@@ -356,8 +364,8 @@ func collectCustomProductPageVersions(ctx context.Context, c *asc.Client, pageID
 
 // collectCustomProductPageLocalizations walks a version's localizations
 // iterator.
-func collectCustomProductPageLocalizations(ctx context.Context, c *asc.Client, versionID string, limit int) ([]CustomProductPageLocalizationView, error) {
-	out := make([]CustomProductPageLocalizationView, 0, defaultListCap(limit))
+func collectCustomProductPageLocalizations(ctx context.Context, c *asc.Client, versionID string) ([]CustomProductPageLocalizationView, error) {
+	out := make([]CustomProductPageLocalizationView, 0, defaultListCap(0))
 	q := url.Values{"limit": {"200"}}
 	path := "/v1/appCustomProductPageVersions/" + versionID + "/appCustomProductPageLocalizations"
 	for page, err := range asc.Pages[asc.AppCustomProductPageLocalizationAttributes](ctx, c, path, q) {
@@ -366,9 +374,6 @@ func collectCustomProductPageLocalizations(ctx context.Context, c *asc.Client, v
 		}
 		for _, r := range page.Data {
 			out = append(out, CustomProductPageLocalizationView{ID: r.ID, Type: r.Type, Attributes: r.Attributes})
-			if limit > 0 && len(out) >= limit {
-				return out, nil
-			}
 		}
 	}
 	return out, nil
@@ -566,26 +571,42 @@ func runCustomProductPagesDelete(cmd *cobra.Command, args []string) error {
 	}, outputMode())
 }
 
-// findCustomProductPageByName returns the first page whose name matches
-// (case-sensitive), or (nil, nil) when none match.
+// findCustomProductPageByName reads every page before authorizing reuse or creation.
 func findCustomProductPageByName(ctx context.Context, c *asc.Client, appID, name string) (*asc.Resource[asc.AppCustomProductPageAttributes], error) {
-	q := url.Values{"limit": {"200"}}
-	page, err := asc.Get[asc.Collection[asc.AppCustomProductPageAttributes]](
-		ctx, c, "/v1/apps/"+appID+"/appCustomProductPages", q,
-	)
+	rows, err := collectCustomProductPages(ctx, c, "/v1/apps/"+url.PathEscape(appID)+"/appCustomProductPages", url.Values{"limit": {"200"}}, 0)
 	if err != nil {
 		return nil, err
 	}
-	for i := range page.Data {
-		if page.Data[i].Attributes.Name == name {
-			return &page.Data[i], nil
+	var found *asc.Resource[asc.AppCustomProductPageAttributes]
+	for _, row := range rows {
+		if row.Attributes.Name != name {
+			continue
 		}
+		if row.ID == "" || row.Type != "appCustomProductPages" || found != nil {
+			return nil, errors.New("CPP name has ambiguous or incomplete identity")
+		}
+		found = &asc.Resource[asc.AppCustomProductPageAttributes]{ID: row.ID, Type: row.Type, Attributes: row.Attributes}
 	}
-	return nil, nil
+	return found, nil
 }
 
-// buildCustomProductPageCreate crafts the POST body with only the required
-// (name, app) fields; versions/localizations are created via subresources later.
+func requireCPPAppMembership(ctx context.Context, c *asc.Client, appID, pageID string) error {
+	rows, err := collectCustomProductPages(ctx, c, "/v1/apps/"+url.PathEscape(appID)+"/appCustomProductPages", url.Values{"limit": {"200"}}, 0)
+	if err != nil {
+		return err
+	}
+	matches := 0
+	for _, row := range rows {
+		if row.ID == pageID && row.Type == "appCustomProductPages" {
+			matches++
+		}
+	}
+	if matches != 1 {
+		return fmt.Errorf("CPP %s is not uniquely owned by app %s", pageID, appID)
+	}
+	return nil
+}
+
 func buildCustomProductPageCreate(appID, name string) map[string]any {
 	return map[string]any{
 		"data": map[string]any{

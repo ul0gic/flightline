@@ -37,7 +37,7 @@ type IAPAttributes struct {
 	ContentHosting    *bool  `json:"contentHosting,omitempty"`
 }
 
-// IAPVersionAttributes is returned by the undocumented public IAP versions relationship.
+// IAPVersionAttributes is returned by the public IAP versions relationship documented in API 4.5.
 type IAPVersionAttributes struct {
 	State   string `json:"state,omitempty"`
 	Version int    `json:"version,omitempty"`

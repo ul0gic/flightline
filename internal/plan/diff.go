@@ -42,16 +42,27 @@ func Diff(desired, live *config.State) []Change {
 		live = &config.State{}
 	}
 
+	diffAccessibilityDeclarations(desired, live, &out)
+	diffAppAvailability(desired.Spec.AppAvailability, live.Spec.AppAvailability, &out)
 	diffVersion(desired.Spec.Version, live.Spec.Version, &out)
+	diffPhasedRelease(desired, live, &out)
 	diffBuild(desired.Spec.Build, live.Spec.Build, &out)
 	diffMetadata(desired.Spec.Metadata, live.Spec.Metadata, &out)
+	diffPreviews(desired, live, &out)
 	diffScreenshots(desired.Spec.Screenshots, live.Spec.Screenshots, &out)
+	diffScreenshotOrder(desired, live, &out)
 	diffIAP(desired.Spec.IAP, live.Spec.IAP, &out)
 	diffAgeRating(desired.Spec.AgeRating, live.Spec.AgeRating, &out)
-	diffExportCompliance(desired.Spec.ExportCompliance, live.Spec.ExportCompliance, &out)
+	liveExport := live.Spec.ExportCompliance
+	if desired.Spec.Build != nil && (live.Spec.Build == nil || desired.Spec.Build.Number != live.Spec.Build.Number) {
+		// Export state belongs to the newly selected build, not the old one.
+		liveExport = nil
+	}
+	diffExportCompliance(desired.Spec.ExportCompliance, liveExport, &out)
 	diffReviewerDemo(desired.Spec.ReviewerDemo, live.Spec.ReviewerDemo, &out)
 	diffCategories(desired.Spec.Categories, live.Spec.Categories, &out)
 	diffPricing(desired.Spec.Pricing, live.Spec.Pricing, &out)
+	diffRights(desired, live, &out)
 	diffTestFlight(desired.Spec.TestFlight, live.Spec.TestFlight, &out)
 	diffCustomProductPages(derefCPP(desired.Spec.CustomProductPages), derefCPP(live.Spec.CustomProductPages), &out)
 
@@ -214,55 +225,6 @@ func diffScreenshots(d, l *config.ScreenshotsSpec, out *[]Change) {
 	}
 }
 
-func diffIAP(d, l *config.IAPSpec, out *[]Change) {
-	if d == nil {
-		return
-	}
-	live := map[string]config.IAPProduct{}
-	if l != nil && l.Products != nil {
-		live = l.Products
-	}
-	for _, pid := range sortedKeys(d.Products) {
-		dp := d.Products[pid]
-		lp, exists := live[pid]
-		base := "/spec/iap/products/" + pid
-		if !exists {
-			*out = append(*out, Change{
-				Op: OpCreate, Resource: "iap." + pid,
-				Path: base, From: nil, To: dp,
-				Hint: fmt.Sprintf("create IAP %s (%s)", pid, dp.Type),
-			})
-			continue
-		}
-		if dp.Type != lp.Type {
-			emitIfDiff(out, "iap."+pid, base+"/type", &dp.Type, &lp.Type)
-		}
-		emitIfDiff(out, "iap."+pid, base+"/name", dp.Name, lp.Name)
-		emitIfDiff(out, "iap."+pid, base+"/familySharable", dp.FamilySharable, lp.FamilySharable)
-		emitIfDiff(out, "iap."+pid, base+"/contentHosting", dp.ContentHosting, lp.ContentHosting)
-		emitIfDiff(out, "iap."+pid, base+"/reviewNote", dp.ReviewNote, lp.ReviewNote)
-		if !equalIAPReviewScreenshot(dp.ReviewScreenshot, lp.ReviewScreenshot) && dp.ReviewScreenshot != nil {
-			op := OpUpdate
-			if lp.ReviewScreenshot == nil {
-				op = OpCreate
-			}
-			*out = append(*out, Change{
-				Op: op, Resource: "iap." + pid + ".reviewScreenshot",
-				Path: base + "/reviewScreenshot", From: lp.ReviewScreenshot, To: dp.ReviewScreenshot,
-				Hint: "upload IAP review screenshot for " + pid,
-			})
-		}
-		// localizations
-		for _, loc := range sortedKeys(dp.Localizations) {
-			dloc := dp.Localizations[loc]
-			lloc := lp.Localizations[loc]
-			lpath := base + "/localizations/" + loc
-			emitIfDiff(out, "iap."+pid+".loc."+loc, lpath+"/name", dloc.Name, lloc.Name)
-			emitIfDiff(out, "iap."+pid+".loc."+loc, lpath+"/description", dloc.Description, lloc.Description)
-		}
-	}
-}
-
 func diffAgeRating(d, l *config.AgeRatingSpec, out *[]Change) {
 	if d == nil {
 		return
@@ -295,33 +257,11 @@ func diffAgeRating(d, l *config.AgeRatingSpec, out *[]Change) {
 	emitIfDiff(out, "ageRating", "/spec/ageRating/socialMedia", d.SocialMedia, live.SocialMedia)
 	emitIfDiff(out, "ageRating", "/spec/ageRating/socialMediaAgeRestricted", d.SocialMediaAgeRestricted, live.SocialMediaAgeRestricted)
 	emitIfDiff(out, "ageRating", "/spec/ageRating/unrestrictedWebAccess", d.UnrestrictedWebAccess, live.UnrestrictedWebAccess)
+	emitIfDiff(out, "ageRating", "/spec/ageRating/ageRatingOverrideV2", d.AgeRatingOverrideV2, live.AgeRatingOverrideV2)
+	emitIfDiff(out, "ageRating", "/spec/ageRating/koreaAgeRatingOverride", d.KoreaAgeRatingOverride, live.KoreaAgeRatingOverride)
+	emitIfDiff(out, "ageRating", "/spec/ageRating/gracRatingClassificationNumber", d.GracRatingClassificationNumber, live.GracRatingClassificationNumber)
 	emitIfDiff(out, "ageRating", "/spec/ageRating/kidsAgeBand", d.KidsAgeBand, live.KidsAgeBand)
 	emitIfDiff(out, "ageRating", "/spec/ageRating/seventeenPlus", d.SeventeenPlus, live.SeventeenPlus)
-}
-
-func diffExportCompliance(d, l *config.ExportComplianceSpec, out *[]Change) {
-	if d == nil {
-		return
-	}
-	live := config.ExportComplianceSpec{}
-	if l != nil {
-		live = *l
-	}
-	emitIfDiff(out, "exportCompliance", "/spec/exportCompliance/usesNonExemptEncryption", d.UsesNonExemptEncryption, live.UsesNonExemptEncryption)
-	if d.Declaration != nil {
-		liveDecl := config.ExportComplianceDeclaration{}
-		if live.Declaration != nil {
-			liveDecl = *live.Declaration
-		}
-		emitIfDiff(out, "exportCompliance", "/spec/exportCompliance/declaration/containsProprietaryCryptography", d.Declaration.ContainsProprietaryCryptography, liveDecl.ContainsProprietaryCryptography)
-		emitIfDiff(out, "exportCompliance", "/spec/exportCompliance/declaration/containsThirdPartyCryptography", d.Declaration.ContainsThirdPartyCryptography, liveDecl.ContainsThirdPartyCryptography)
-		emitIfDiff(out, "exportCompliance", "/spec/exportCompliance/declaration/availableOnFrenchStore", d.Declaration.AvailableOnFrenchStore, liveDecl.AvailableOnFrenchStore)
-		emitIfDiff(out, "exportCompliance", "/spec/exportCompliance/declaration/usesEncryption", d.Declaration.UsesEncryption, liveDecl.UsesEncryption)
-		emitIfDiff(out, "exportCompliance", "/spec/exportCompliance/declaration/exempt", d.Declaration.Exempt, liveDecl.Exempt)
-		emitIfDiff(out, "exportCompliance", "/spec/exportCompliance/declaration/eccn", d.Declaration.ECCN, liveDecl.ECCN)
-		emitIfDiff(out, "exportCompliance", "/spec/exportCompliance/declaration/documentName", d.Declaration.DocumentName, liveDecl.DocumentName)
-		emitIfDiff(out, "exportCompliance", "/spec/exportCompliance/declaration/documentUrl", d.Declaration.DocumentURL, liveDecl.DocumentURL)
-	}
 }
 
 func diffReviewerDemo(d, l *config.ReviewerDemoSpec, out *[]Change) {
@@ -342,98 +282,6 @@ func diffReviewerDemo(d, l *config.ReviewerDemoSpec, out *[]Change) {
 	emitIfDiff(out, "reviewerDemo", "/spec/reviewerDemo/contactPhone", d.ContactPhone, live.ContactPhone)
 }
 
-func diffCategories(d, l *config.CategoriesSpec, out *[]Change) {
-	if d == nil {
-		return
-	}
-	live := config.CategoriesSpec{}
-	if l != nil {
-		live = *l
-	}
-	emitIfDiff(out, "categories", "/spec/categories/primary", d.Primary, live.Primary)
-	emitIfDiff(out, "categories", "/spec/categories/secondary", d.Secondary, live.Secondary)
-	if !equalStringSlices(d.PrimarySubcategories, live.PrimarySubcategories) {
-		op := OpUpdate
-		if len(live.PrimarySubcategories) == 0 {
-			op = OpCreate
-		}
-		*out = append(*out, Change{
-			Op: op, Resource: "categories", Path: "/spec/categories/primarySubcategories",
-			From: live.PrimarySubcategories, To: d.PrimarySubcategories,
-			Hint: fmt.Sprintf("primarySubcategories: %v -> %v", live.PrimarySubcategories, d.PrimarySubcategories),
-		})
-	}
-	if !equalStringSlices(d.SecondarySubcategories, live.SecondarySubcategories) {
-		op := OpUpdate
-		if len(live.SecondarySubcategories) == 0 {
-			op = OpCreate
-		}
-		*out = append(*out, Change{
-			Op: op, Resource: "categories", Path: "/spec/categories/secondarySubcategories",
-			From: live.SecondarySubcategories, To: d.SecondarySubcategories,
-			Hint: fmt.Sprintf("secondarySubcategories: %v -> %v", live.SecondarySubcategories, d.SecondarySubcategories),
-		})
-	}
-}
-
-func diffPricing(d, l *config.PricingSpec, out *[]Change) {
-	if d == nil {
-		return
-	}
-	live := config.PricingSpec{}
-	if l != nil {
-		live = *l
-	}
-	emitIfDiff(out, "pricing", "/spec/pricing/baseTerritory", d.BaseTerritory, live.BaseTerritory)
-	emitIfDiff(out, "pricing", "/spec/pricing/appPricePointId", d.AppPricePointID, live.AppPricePointID)
-}
-
-func diffTestFlight(d, l *config.TestFlightSpec, out *[]Change) {
-	if d == nil {
-		return
-	}
-	live := map[string]config.TestFlightGroup{}
-	if l != nil && l.Groups != nil {
-		live = l.Groups
-	}
-	for _, g := range sortedKeys(d.Groups) {
-		dg := d.Groups[g]
-		lg, exists := live[g]
-		base := "/spec/testflight/groups/" + g
-		if !exists {
-			*out = append(*out, Change{
-				Op: OpCreate, Resource: "testflight." + g,
-				Path: base, To: dg,
-				Hint: "create TestFlight group " + g,
-			})
-			continue
-		}
-		emitIfDiff(out, "testflight."+g, base+"/isInternal", dg.IsInternal, lg.IsInternal)
-		emitIfDiff(out, "testflight."+g, base+"/publicLink", dg.PublicLink, lg.PublicLink)
-		emitIfDiff(out, "testflight."+g, base+"/publicLinkLimit", dg.PublicLinkLimit, lg.PublicLinkLimit)
-		dEmails := testerEmails(dg.Testers)
-		lEmails := testerEmails(lg.Testers)
-		for _, e := range dEmails {
-			if !contains(lEmails, e) {
-				*out = append(*out, Change{
-					Op: OpCreate, Resource: "testflight." + g + ".testers",
-					Path: base + "/testers/" + e, To: e,
-					Hint: fmt.Sprintf("add tester %s to %s", e, g),
-				})
-			}
-		}
-		for _, e := range lEmails {
-			if !contains(dEmails, e) {
-				*out = append(*out, Change{
-					Op: OpDelete, Resource: "testflight." + g + ".testers",
-					Path: base + "/testers/" + e, From: e,
-					Hint: fmt.Sprintf("remove tester %s from %s", e, g),
-				})
-			}
-		}
-	}
-}
-
 func diffCustomProductPages(d, l config.CustomProductPagesSpec, out *[]Change) {
 	if d == nil {
 		return
@@ -445,7 +293,7 @@ func diffCustomProductPages(d, l config.CustomProductPagesSpec, out *[]Change) {
 	for _, name := range sortedKeys(d) {
 		dp := d[name]
 		lp, exists := live[name]
-		base := "/spec/customProductPages/" + name
+		base := "/spec/customProductPages/" + escapeJSONPointerToken(name)
 		if !exists {
 			*out = append(*out, Change{
 				Op: OpCreate, Resource: "customProductPages." + name,
@@ -531,6 +379,11 @@ func derefCPP(p *config.CustomProductPagesSpec) config.CustomProductPagesSpec {
 		return nil
 	}
 	return *p
+}
+
+func escapeJSONPointerToken(token string) string {
+	token = strings.ReplaceAll(token, "~", "~0")
+	return strings.ReplaceAll(token, "/", "~1")
 }
 
 func sortedKeys[V any](m map[string]V) []string {

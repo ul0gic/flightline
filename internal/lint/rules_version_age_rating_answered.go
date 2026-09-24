@@ -21,7 +21,7 @@ func (versionAgeRatingAnsweredRule) Doc() string {
 	return "Checks that every prompt in the age-rating questionnaire has a value, across both the frequency-enum fields (violence, sexual content, profanity, and so on) and the boolean prompts (gambling, unrestricted web access). " +
 		"A partially answered questionnaire shows up only as a soft block on the Submit for Review button, and Apple will not tell you which field is missing until you open the specific panel. " +
 		"Fix it by giving every prompt a value; NONE for frequency fields and false for boolean prompts are valid answers meaning the content is absent. " +
-		"Derived and optional fields (seventeenPlus, kidsAgeBand) are exempt: Apple computes seventeenPlus itself and kidsAgeBand only applies to Kids-category apps."
+		"Derived and optional fields (seventeenPlus, kidsAgeBand, rating overrides, GRAC number) are exempt: Apple computes seventeenPlus itself and kidsAgeBand only applies to Kids-category apps."
 }
 
 func (r versionAgeRatingAnsweredRule) Check(ctx CheckContext) []Diagnostic {
@@ -113,18 +113,21 @@ func (r versionAgeRatingAnsweredRule) fetchErr(what string, err error) Diagnosti
 // notAnswerable: nil is a valid answer here — Apple derives, defaults, or conditionally scopes these,
 // and demanding them recreates the lint/apply catch-22 (apply rejects seventeenPlus as read-only).
 var notAnswerable = map[string]struct{}{
-	"seventeenPlus":            {},
-	"kidsAgeBand":              {},
-	"socialMediaAgeRestricted": {},
-	"gamblingSimulated":        {},
-	"gunsOrOtherWeapons":       {},
-	"advertising":              {},
-	"ageAssurance":             {},
-	"healthOrWellnessTopics":   {},
-	"lootBox":                  {},
-	"messagingAndChat":         {},
-	"parentalControls":         {},
-	"userGeneratedContent":     {},
+	"ageRatingOverrideV2":            {},
+	"koreaAgeRatingOverride":         {},
+	"gracRatingClassificationNumber": {},
+	"seventeenPlus":                  {},
+	"kidsAgeBand":                    {},
+	"socialMediaAgeRestricted":       {},
+	"gamblingSimulated":              {},
+	"gunsOrOtherWeapons":             {},
+	"advertising":                    {},
+	"ageAssurance":                   {},
+	"healthOrWellnessTopics":         {},
+	"lootBox":                        {},
+	"messagingAndChat":               {},
+	"parentalControls":               {},
+	"userGeneratedContent":           {},
 }
 
 // unansweredAgeRatingFields returns names of nil pointer fields; uses reflection so new schema fields are automatic.

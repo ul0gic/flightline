@@ -63,7 +63,7 @@ func TestFetch_VersionAndAgeRating(t *testing.T) {
 		case r.URL.Path == "/v1/appStoreVersions/VER1/build":
 			_, _ = w.Write([]byte(`{"data":{"type":"builds","id":"BUILD1","attributes":{"version":"42","usesNonExemptEncryption":false}}}`))
 		default:
-			http.Error(w, "unhandled "+r.URL.Path, http.StatusNotFound)
+			fullCoverageHandler(t).ServeHTTP(w, r)
 		}
 	}))
 	defer srv.Close()
@@ -96,7 +96,7 @@ func TestFetch_AppNotFound(t *testing.T) {
 			_, _ = w.Write([]byte(`{"data":[],"links":{}}`))
 			return
 		}
-		http.Error(w, "not found", http.StatusNotFound)
+		fullCoverageHandler(t).ServeHTTP(w, r)
 	}))
 	defer srv.Close()
 
@@ -119,7 +119,7 @@ func TestFetch_RequireEditable_RejectsReleasedVersion(t *testing.T) {
 		case "/v1/apps/APP1/appStoreVersions":
 			_, _ = w.Write([]byte(`{"data":[{"type":"appStoreVersions","id":"VER1","attributes":{"versionString":"1.0","appVersionState":"READY_FOR_DISTRIBUTION"}}],"links":{}}`))
 		default:
-			http.Error(w, "not found", http.StatusNotFound)
+			fullCoverageHandler(t).ServeHTTP(w, r)
 		}
 	}))
 	defer srv.Close()

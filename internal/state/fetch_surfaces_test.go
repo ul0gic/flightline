@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/ul0gic/flightline/internal/config"
 )
 
 // fullCoverageHandler returns an httptest handler with one row per surface, matching the
@@ -14,15 +16,25 @@ func fullCoverageHandler(t *testing.T) http.Handler {
 	t.Helper()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if response, ok := commerceBetaSnapshotResponse(r.URL.Path); ok {
+			_, _ = w.Write([]byte(response))
+			return
+		}
+		if response, ok := assetsRightsSnapshotResponse(r.URL.Path); ok {
+			_, _ = w.Write([]byte(response))
+			return
+		}
 		switch {
 		case r.URL.Path == "/v1/apps":
 			_, _ = w.Write([]byte(`{"data":[{"type":"apps","id":"APP1","attributes":{"bundleId":"com.example.app"}}],"links":{}}`))
+		case r.URL.Path == "/v1/apps/APP1/accessibilityDeclarations":
+			_, _ = w.Write([]byte(`{"data":[{"type":"accessibilityDeclarations","id":"ACCESS1","attributes":{"deviceFamily":"IPHONE","state":"DRAFT","supportsVoiceover":false}}],"links":{}}`))
 		case r.URL.Path == "/v1/apps/APP1/appStoreVersions":
 			_, _ = w.Write([]byte(`{"data":[{"type":"appStoreVersions","id":"VER1","attributes":{"versionString":"1.0","platform":"IOS","copyright":"© 2026","releaseType":"MANUAL"}}],"links":{}}`))
 		case r.URL.Path == "/v1/apps/APP1/appInfos":
 			_, _ = w.Write([]byte(`{"data":[{"type":"appInfos","id":"AINFO1","attributes":{"state":"PREPARE_FOR_SUBMISSION"}}],"links":{}}`))
 		case r.URL.Path == "/v1/appInfos/AINFO1/ageRatingDeclaration":
-			_, _ = w.Write([]byte(`{"data":{"type":"ageRatingDeclarations","id":"AR1","attributes":{"violenceCartoonOrFantasy":"NONE","gambling":false}}}`))
+			_, _ = w.Write([]byte(`{"data":{"type":"ageRatingDeclarations","id":"AR1","attributes":{"violenceCartoonOrFantasy":"NONE","violenceRealisticProlongedGraphicOrSadistic":"INFREQUENT","gambling":false,"ageRatingOverrideV2":"EIGHTEEN_PLUS","koreaAgeRatingOverride":"NINETEEN_PLUS","gracRatingClassificationNumber":"SYNTHETIC-GRAC-1"}}}`))
 		case strings.HasPrefix(r.URL.Path, "/v1/appInfos/AINFO1/relationships/"):
 			rel := strings.TrimPrefix(r.URL.Path, "/v1/appInfos/AINFO1/relationships/")
 			switch rel {
@@ -35,6 +47,8 @@ func fullCoverageHandler(t *testing.T) http.Handler {
 			}
 		case r.URL.Path == "/v1/appStoreVersions/VER1/build":
 			_, _ = w.Write([]byte(`{"data":{"type":"builds","id":"BUILD1","attributes":{"version":"42","usesNonExemptEncryption":false}}}`))
+		case r.URL.Path == "/v1/builds/BUILD1/appEncryptionDeclaration":
+			_, _ = w.Write([]byte(`{"data":{"type":"appEncryptionDeclarations","id":"DECL1","attributes":{"appDescription":"Fixture app","containsProprietaryCryptography":false,"containsThirdPartyCryptography":false,"availableOnFrenchStore":false}}}`))
 		case r.URL.Path == "/v1/builds/BUILD1":
 			_, _ = w.Write([]byte(`{"data":{"type":"builds","id":"BUILD1","attributes":{"version":"42"}}}`))
 		case r.URL.Path == "/v1/appStoreVersions/VER1/appStoreReviewDetail":
@@ -44,7 +58,9 @@ func fullCoverageHandler(t *testing.T) http.Handler {
 		case r.URL.Path == "/v1/appInfos/AINFO1/appInfoLocalizations":
 			_, _ = w.Write([]byte(`{"data":[{"type":"appInfoLocalizations","id":"AL1","attributes":{"locale":"en-US","name":"App","subtitle":"sub","privacyPolicyUrl":"https://x.com/p"}}],"links":{}}`))
 		case r.URL.Path == "/v1/apps/APP1/appPriceSchedule":
-			_, _ = w.Write([]byte(`{"data":{"type":"appPriceSchedules","id":"PS1"},"included":[{"type":"territories","id":"USA"},{"type":"appPricePoints","id":"FREE"}]}`))
+			_, _ = w.Write([]byte(`{"data":{"type":"appPriceSchedules","id":"PS1","relationships":{"baseTerritory":{"data":{"type":"territories","id":"USA"}}}}}`))
+		case r.URL.Path == "/v1/appPriceSchedules/PS1/manualPrices":
+			_, _ = w.Write([]byte(`{"data":[{"type":"appPrices","id":"P1","attributes":{"manual":true},"relationships":{"territory":{"data":{"type":"territories","id":"USA"}},"appPricePoint":{"data":{"type":"appPricePoints","id":"FREE"}}}}],"links":{}}`))
 		case r.URL.Path == "/v1/apps/APP1/inAppPurchasesV2":
 			_, _ = w.Write([]byte(`{"data":[{"type":"inAppPurchases","id":"IAP1","attributes":{"productId":"com.x.lifetime","name":"Lifetime","inAppPurchaseType":"NON_CONSUMABLE","reviewNote":"unlock"}}],"links":{}}`))
 		case r.URL.Path == "/v2/inAppPurchases/IAP1/inAppPurchaseLocalizations":
@@ -60,7 +76,7 @@ func fullCoverageHandler(t *testing.T) http.Handler {
 		case r.URL.Path == "/v1/apps/APP1/appCustomProductPages":
 			_, _ = w.Write([]byte(`{"data":[{"type":"appCustomProductPages","id":"CPP1","attributes":{"name":"summer-2026","visible":true}}],"links":{}}`))
 		case r.URL.Path == "/v1/appCustomProductPages/CPP1/appCustomProductPageVersions":
-			_, _ = w.Write([]byte(`{"data":[{"type":"appCustomProductPageVersions","id":"CPPV1","attributes":{"state":"APPROVED","version":1}}],"links":{}}`))
+			_, _ = w.Write([]byte(`{"data":[{"type":"appCustomProductPageVersions","id":"CPPV1","attributes":{"state":"APPROVED","version":"1"}}],"links":{}}`))
 		case r.URL.Path == "/v1/appCustomProductPageVersions/CPPV1/appCustomProductPageLocalizations":
 			_, _ = w.Write([]byte(`{"data":[{"type":"appCustomProductPageLocalizations","id":"CPPL1","attributes":{"locale":"en-US","promotionalText":"promo"}}],"links":{}}`))
 		case r.URL.Path == "/v1/appCustomProductPageLocalizations/CPPL1/appScreenshotSets":
@@ -85,6 +101,7 @@ func TestFetch_FullSurfaceCoverage(t *testing.T) {
 		t.Fatalf("Fetch: %v", err)
 	}
 
+	assertG3AgeFrequency(t, got.Spec.AgeRating)
 	checks := []struct {
 		name string
 		ok   bool
@@ -98,6 +115,7 @@ func TestFetch_FullSurfaceCoverage(t *testing.T) {
 		{"iap.localizations", got.Spec.IAP != nil && len(got.Spec.IAP.Products["com.x.lifetime"].Localizations) == 1},
 		{"ageRating", got.Spec.AgeRating != nil && got.Spec.AgeRating.CartoonOrFantasyViolence != nil},
 		{"exportCompliance", got.Spec.ExportCompliance != nil && got.Spec.ExportCompliance.UsesNonExemptEncryption != nil},
+		{"exportCompliance.declaration", got.Spec.ExportCompliance != nil && got.Spec.ExportCompliance.Declaration != nil && got.Spec.ExportCompliance.Declaration.AppDescription != nil},
 		{"reviewerDemo", got.Spec.ReviewerDemo != nil && got.Spec.ReviewerDemo.ContactEmail != nil},
 		{"categories", got.Spec.Categories != nil && got.Spec.Categories.Primary != nil},
 		{"pricing", got.Spec.Pricing != nil && got.Spec.Pricing.BaseTerritory != nil},
@@ -109,5 +127,12 @@ func TestFetch_FullSurfaceCoverage(t *testing.T) {
 		if !ck.ok {
 			t.Errorf("surface %s: not populated", ck.name)
 		}
+	}
+}
+
+func assertG3AgeFrequency(t *testing.T, age *config.AgeRatingSpec) {
+	t.Helper()
+	if age == nil || age.ProlongedGraphicSadisticRealisticViolence == nil || *age.ProlongedGraphicSadisticRealisticViolence != "INFREQUENT" {
+		t.Fatal("age rating frequency was not preserved")
 	}
 }

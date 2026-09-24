@@ -49,6 +49,9 @@ func happyPathServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
+		if g5PreflightObservation(w, r) {
+			return
+		}
 		switch {
 		case r.URL.Path == "/v1/apps":
 			_, _ = w.Write([]byte(`{"data":[{"id":"app-1","type":"apps","attributes":{"bundleId":"com.example.x"}}]}`))
@@ -76,8 +79,12 @@ func happyPathServer(t *testing.T) *httptest.Server {
 			_, _ = w.Write([]byte(`{"data":[]}`))
 		case strings.HasSuffix(r.URL.Path, "/betaGroups"):
 			_, _ = w.Write([]byte(`{"data":[]}`))
+		case strings.Contains(r.URL.Path, "/relationships/"), strings.HasSuffix(r.URL.Path, "/appStoreReviewDetail"), strings.HasSuffix(r.URL.Path, "/appPriceSchedule"), strings.HasSuffix(r.URL.Path, "/appEncryptionDeclaration"), strings.HasSuffix(r.URL.Path, "/appStoreReviewScreenshot"):
+			_, _ = w.Write([]byte(`{"data":null}`))
+		case strings.HasPrefix(r.URL.Path, "/v1/builds/"):
+			_, _ = w.Write([]byte(`{"data":{"id":"b-1","type":"builds","attributes":{"version":"42"}}}`))
 		default:
-			// Default to empty data: most fetch helpers swallow benign errors.
+			// Remaining collection endpoints are empty.
 			_, _ = w.Write([]byte(`{"data":[]}`))
 		}
 	}))
@@ -104,13 +111,16 @@ func TestRunPreflight_LiveOnlyHappyPathHasNoErrors(t *testing.T) {
 func TestRunPreflight_NoBuildSurfacesError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
+		if g5PreflightObservation(w, r) {
+			return
+		}
 		switch {
 		case r.URL.Path == "/v1/apps":
 			_, _ = w.Write([]byte(`{"data":[{"id":"app-1","type":"apps","attributes":{"bundleId":"com.example.x"}}]}`))
 		case strings.HasSuffix(r.URL.Path, "/appStoreVersions"):
 			_, _ = w.Write([]byte(`{"data":[{"id":"v-1","type":"appStoreVersions","attributes":{"versionString":"1.0.1","platform":"IOS"}}]}`))
 		case strings.HasSuffix(r.URL.Path, "/build"):
-			_, _ = w.Write([]byte(`{"data":{"id":"","type":"builds","attributes":{}}}`))
+			_, _ = w.Write([]byte(`{"data":null}`))
 		case strings.HasSuffix(r.URL.Path, "/inAppPurchasesV2"):
 			_, _ = w.Write([]byte(`{"data":[]}`))
 		case strings.HasSuffix(r.URL.Path, "/reviewSubmissions"):
@@ -121,6 +131,10 @@ func TestRunPreflight_NoBuildSurfacesError(t *testing.T) {
 			_, _ = w.Write([]byte(`{"data":{"id":"ar-1","type":"ageRatingDeclarations","attributes":{"violenceCartoonOrFantasy":"NONE","violenceRealistic":"NONE","profanityOrCrudeHumor":"NONE","matureOrSuggestiveThemes":"NONE","horrorOrFearThemes":"NONE","medicalOrTreatmentInformation":"NONE","alcoholTobaccoOrDrugUseOrReferences":"NONE","contests":"NONE","sexualContentOrNudity":"NONE","sexualContentGraphicAndNudity":"NONE","gambling":false,"socialMedia":false,"unrestrictedWebAccess":false}}}`))
 		case strings.HasSuffix(r.URL.Path, "/appStoreVersionLocalizations"):
 			_, _ = w.Write([]byte(`{"data":[]}`))
+		case strings.Contains(r.URL.Path, "/relationships/"), strings.HasSuffix(r.URL.Path, "/appStoreReviewDetail"), strings.HasSuffix(r.URL.Path, "/appPriceSchedule"), strings.HasSuffix(r.URL.Path, "/appEncryptionDeclaration"), strings.HasSuffix(r.URL.Path, "/appStoreReviewScreenshot"):
+			_, _ = w.Write([]byte(`{"data":null}`))
+		case strings.HasPrefix(r.URL.Path, "/v1/builds/"):
+			_, _ = w.Write([]byte(`{"data":{"id":"b-1","type":"builds","attributes":{"version":"42"}}}`))
 		default:
 			_, _ = w.Write([]byte(`{"data":[]}`))
 		}

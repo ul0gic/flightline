@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
 	"strings"
 
@@ -126,8 +127,11 @@ func runReviewSubmissionsItems(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	// Surface an unknown-bundle error before hitting the items endpoint.
-	if _, err := resolveAppID(cmd.Context(), c, bundleID); err != nil {
+	appID, err := resolveAppID(cmd.Context(), c, bundleID)
+	if err != nil {
+		return err
+	}
+	if err := requireReviewSubmissionMembership(cmd.Context(), c, appID, submissionID); err != nil {
 		return err
 	}
 
@@ -136,6 +140,23 @@ func runReviewSubmissionsItems(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	return Render(ReviewSubmissionItemList{Items: views}, outputMode())
+}
+
+func requireReviewSubmissionMembership(ctx context.Context, c *asc.Client, appID, submissionID string) error {
+	submissions, err := asc.ListSubmissionAssemblies(ctx, c, appID)
+	if err != nil {
+		return err
+	}
+	found := 0
+	for _, submission := range submissions {
+		if submission.ID == submissionID {
+			found++
+		}
+	}
+	if found != 1 {
+		return fmt.Errorf("review-submissions: submission %s has %d matches under selected app", submissionID, found)
+	}
+	return nil
 }
 
 // listReviewSubmissions fetches every review submission for the app.
@@ -169,7 +190,7 @@ func listReviewSubmissionItems(ctx context.Context, c *asc.Client, submissionID 
 	q := url.Values{
 		"limit": {"200"},
 		// appStoreVersionExperiment (v1) is omitted: Apple 400s when both experiment generations are included together.
-		"include": {"appStoreVersion,appCustomProductPageVersion,appStoreVersionExperimentV2,appEvent,backgroundAssetVersion"},
+		"include": {"appStoreVersion,appCustomProductPageVersion,appStoreVersionExperimentV2,appEvent,backgroundAssetVersion,inAppPurchaseVersion"},
 	}
 	path := "/v1/reviewSubmissions/" + submissionID + "/items"
 

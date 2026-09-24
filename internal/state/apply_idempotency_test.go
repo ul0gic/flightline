@@ -119,6 +119,14 @@ func (f *statefulApplyFixture) handle(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
+	if response, ok := commerceBetaSnapshotResponse(r.URL.Path); ok && r.Method == http.MethodGet {
+		_, _ = w.Write([]byte(response))
+		return
+	}
+	if response, ok := assetsRightsSnapshotResponse(r.URL.Path); ok && r.Method == http.MethodGet {
+		_, _ = w.Write([]byte(response))
+		return
+	}
 	if f.serveLookup(w, r) || f.serveMutation(w, r) {
 		return
 	}
@@ -134,6 +142,8 @@ func (f *statefulApplyFixture) serveLookup(w http.ResponseWriter, r *http.Reques
 			"data":  []any{map[string]any{"type": "appStoreVersions", "id": "VER1", "attributes": f.versionAttrs}},
 			"links": map[string]any{},
 		})
+	case "/v1/apps/APP1/accessibilityDeclarations":
+		_, _ = w.Write([]byte(`{"data":[],"links":{}}`))
 	case "/v1/apps/APP1/appInfos":
 		_, _ = io.WriteString(w, `{"data":[{"type":"appInfos","id":"AINFO1","attributes":{"state":"PREPARE_FOR_SUBMISSION"}}],"links":{}}`)
 	case "/v1/appInfos/AINFO1/ageRatingDeclaration":
@@ -317,6 +327,7 @@ func extractRelationshipID(t *testing.T, r *http.Request) string {
 // makeDesired builds a desired State with attrs that differ from the fixture's initial state,
 // so round 1 has work to do.
 func makeDesired() *config.State {
+	iapName := "Lifetime"
 	releaseType := "MANUAL"
 	copyright := "© NEW COPYRIGHT"
 	gambling := true
@@ -352,6 +363,7 @@ func makeDesired() *config.State {
 				Products: map[string]config.IAPProduct{
 					"com.example.iap.lifetime": {
 						Type: "NON_CONSUMABLE",
+						Name: &iapName,
 					},
 				},
 			},

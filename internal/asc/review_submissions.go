@@ -51,17 +51,8 @@ type ReviewSubmissionItemReference struct {
 // ResolveReviewSubmissionItemReference prefers JSON:API relationship data and
 // falls back to Apple's encoded review-item ID when the relationship is absent.
 func ResolveReviewSubmissionItemReference(itemID, submissionID string, rels map[string]Relationship) ReviewSubmissionItemReference {
-	for _, rel := range rels {
-		if len(rel.Data) == 0 || string(rel.Data) == "null" {
-			continue
-		}
-		var ref struct {
-			Type string `json:"type"`
-			ID   string `json:"id"`
-		}
-		if err := json.Unmarshal(rel.Data, &ref); err == nil && ref.Type != "" && ref.ID != "" {
-			return ReviewSubmissionItemReference{Type: ref.Type, ID: ref.ID, Canonical: true}
-		}
+	if ref, found := reviewSubmissionRelationshipReference(rels); found {
+		return ref
 	}
 
 	parts, ok := decodeReviewSubmissionItemID(itemID)
@@ -107,4 +98,31 @@ func decodeReviewSubmissionItemID(itemID string) ([3]string, bool) {
 		return [3]string{parts[0], parts[1], parts[2]}, true
 	}
 	return empty, false
+}
+
+func reviewSubmissionRelationshipReference(rels map[string]Relationship) (ReviewSubmissionItemReference, bool) {
+	var observed ReviewSubmissionItemReference
+	count := 0
+	for _, rel := range rels {
+		if len(rel.Data) == 0 || string(rel.Data) == "null" {
+			continue
+		}
+		var ref struct {
+			Type string `json:"type"`
+			ID   string `json:"id"`
+		}
+		if err := json.Unmarshal(rel.Data, &ref); err != nil || ref.Type == "" || ref.ID == "" {
+			return ReviewSubmissionItemReference{Type: "UNKNOWN(MALFORMED)", Opaque: true}, true
+		}
+		observed = ReviewSubmissionItemReference{Type: ref.Type, ID: ref.ID, Canonical: true}
+		count++
+	}
+	if count > 1 {
+		return ReviewSubmissionItemReference{Type: "UNKNOWN(AMBIGUOUS)", Opaque: true}, true
+	}
+	if count == 1 {
+		return observed, true
+	}
+
+	return ReviewSubmissionItemReference{}, false
 }

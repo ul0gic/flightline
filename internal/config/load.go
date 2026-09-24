@@ -18,10 +18,12 @@ import (
 // State mirrors the top-level shape of schemas/flightline.schema.json.
 // Loaded from YAML and validated against the schema before use.
 type State struct {
-	APIVersion string        `yaml:"apiVersion" json:"apiVersion"`
-	Kind       string        `yaml:"kind"       json:"kind"`
-	Metadata   StateMetadata `yaml:"metadata"   json:"metadata"`
-	Spec       StateSpec     `yaml:"spec"       json:"spec"`
+	// ObservedVersionState is runtime-only snapshot context; it cannot be authored in YAML.
+	ObservedVersionState string        `yaml:"-" json:"-"`
+	APIVersion           string        `yaml:"apiVersion" json:"apiVersion"`
+	Kind                 string        `yaml:"kind"       json:"kind"`
+	Metadata             StateMetadata `yaml:"metadata"   json:"metadata"`
+	Spec                 StateSpec     `yaml:"spec"       json:"spec"`
 }
 
 // StateMetadata is metadata.{bundleId,version,platform}.
@@ -34,26 +36,32 @@ type StateMetadata struct {
 // StateSpec mirrors schemas/flightline.schema.json's spec section.
 // A nil sub-spec means "not managed": apply leaves that surface alone.
 type StateSpec struct {
-	Version            *VersionSpec            `yaml:"version,omitempty"            json:"version,omitempty"`
-	Build              *BuildSpec              `yaml:"build,omitempty"              json:"build,omitempty"`
-	Metadata           *MetadataSpec           `yaml:"metadata,omitempty"           json:"metadata,omitempty"`
-	Screenshots        *ScreenshotsSpec        `yaml:"screenshots,omitempty"        json:"screenshots,omitempty"`
-	IAP                *IAPSpec                `yaml:"iap,omitempty"                json:"iap,omitempty"`
-	AgeRating          *AgeRatingSpec          `yaml:"ageRating,omitempty"          json:"ageRating,omitempty"`
-	ExportCompliance   *ExportComplianceSpec   `yaml:"exportCompliance,omitempty"   json:"exportCompliance,omitempty"`
-	ReviewerDemo       *ReviewerDemoSpec       `yaml:"reviewerDemo,omitempty"       json:"reviewerDemo,omitempty"`
-	Categories         *CategoriesSpec         `yaml:"categories,omitempty"         json:"categories,omitempty"`
-	Pricing            *PricingSpec            `yaml:"pricing,omitempty"            json:"pricing,omitempty"`
-	TestFlight         *TestFlightSpec         `yaml:"testflight,omitempty"         json:"testflight,omitempty"`
-	CustomProductPages *CustomProductPagesSpec `yaml:"customProductPages,omitempty" json:"customProductPages,omitempty"`
+	Previews                  *PreviewsSpec                  `yaml:"previews,omitempty" json:"previews,omitempty"`
+	ContentRights             *string                        `yaml:"contentRights,omitempty" json:"contentRights,omitempty"`
+	AppEULA                   *AppEULASpec                   `yaml:"appEula,omitempty" json:"appEula,omitempty"`
+	AppAvailability           *AppAvailabilitySpec           `yaml:"appAvailability,omitempty" json:"appAvailability,omitempty"`
+	AccessibilityDeclarations *AccessibilityDeclarationsSpec `yaml:"accessibilityDeclarations,omitempty" json:"accessibilityDeclarations,omitempty"`
+	Version                   *VersionSpec                   `yaml:"version,omitempty"            json:"version,omitempty"`
+	Build                     *BuildSpec                     `yaml:"build,omitempty"              json:"build,omitempty"`
+	Metadata                  *MetadataSpec                  `yaml:"metadata,omitempty"           json:"metadata,omitempty"`
+	Screenshots               *ScreenshotsSpec               `yaml:"screenshots,omitempty"        json:"screenshots,omitempty"`
+	IAP                       *IAPSpec                       `yaml:"iap,omitempty"                json:"iap,omitempty"`
+	AgeRating                 *AgeRatingSpec                 `yaml:"ageRating,omitempty"          json:"ageRating,omitempty"`
+	ExportCompliance          *ExportComplianceSpec          `yaml:"exportCompliance,omitempty"   json:"exportCompliance,omitempty"`
+	ReviewerDemo              *ReviewerDemoSpec              `yaml:"reviewerDemo,omitempty"       json:"reviewerDemo,omitempty"`
+	Categories                *CategoriesSpec                `yaml:"categories,omitempty"         json:"categories,omitempty"`
+	Pricing                   *PricingSpec                   `yaml:"pricing,omitempty"            json:"pricing,omitempty"`
+	TestFlight                *TestFlightSpec                `yaml:"testflight,omitempty"         json:"testflight,omitempty"`
+	CustomProductPages        *CustomProductPagesSpec        `yaml:"customProductPages,omitempty" json:"customProductPages,omitempty"`
 }
 
 // VersionSpec: see #/$defs/versionSpec.
 type VersionSpec struct {
-	ReleaseType         *string `yaml:"releaseType,omitempty"         json:"releaseType,omitempty"`
-	EarliestReleaseDate *string `yaml:"earliestReleaseDate,omitempty" json:"earliestReleaseDate,omitempty"`
-	Copyright           *string `yaml:"copyright,omitempty"           json:"copyright,omitempty"`
-	Downloadable        *bool   `yaml:"downloadable,omitempty"        json:"downloadable,omitempty"`
+	PhasedRelease       *PhasedReleaseSpec `yaml:"phasedRelease,omitempty" json:"phasedRelease,omitempty"`
+	ReleaseType         *string            `yaml:"releaseType,omitempty"         json:"releaseType,omitempty"`
+	EarliestReleaseDate *string            `yaml:"earliestReleaseDate,omitempty" json:"earliestReleaseDate,omitempty"`
+	Copyright           *string            `yaml:"copyright,omitempty"           json:"copyright,omitempty"`
+	Downloadable        *bool              `yaml:"downloadable,omitempty"        json:"downloadable,omitempty"`
 }
 
 // BuildSpec: see #/$defs/buildSpec.
@@ -81,6 +89,7 @@ type MetadataLocale struct {
 
 // ScreenshotsSpec: see #/$defs/screenshotsSpec.
 type ScreenshotsSpec struct {
+	Order   *bool                                  `yaml:"order,omitempty" json:"order,omitempty"`
 	Locales map[string]map[string][]ScreenshotFile `yaml:"locales,omitempty" json:"locales,omitempty"`
 }
 
@@ -98,6 +107,7 @@ type IAPSpec struct {
 
 // IAPProduct: see #/$defs/iapProduct.
 type IAPProduct struct {
+	Commerce         *IAPCommerceSpec           `yaml:"commerce,omitempty" json:"commerce,omitempty"`
 	Type             string                     `yaml:"type"                       json:"type"`
 	Name             *string                    `yaml:"name,omitempty"             json:"name,omitempty"`
 	FamilySharable   *bool                      `yaml:"familySharable,omitempty"   json:"familySharable,omitempty"`
@@ -122,9 +132,13 @@ type IAPLocalization struct {
 // AgeRatingSpec: see #/$defs/ageRatingSpec. Pointer-typed enums and
 // booleans so Flightline can distinguish "answered NONE" from "not managed".
 type AgeRatingSpec struct {
+	AgeRatingOverrideV2            *string `yaml:"ageRatingOverrideV2,omitempty" json:"ageRatingOverrideV2,omitempty"`
+	KoreaAgeRatingOverride         *string `yaml:"koreaAgeRatingOverride,omitempty" json:"koreaAgeRatingOverride,omitempty"`
+	GracRatingClassificationNumber *string `yaml:"gracRatingClassificationNumber,omitempty" json:"gracRatingClassificationNumber,omitempty"`
+
 	CartoonOrFantasyViolence                  *string `yaml:"cartoonOrFantasyViolence,omitempty"                    json:"cartoonOrFantasyViolence,omitempty"`
 	RealisticViolence                         *string `yaml:"realisticViolence,omitempty"                           json:"realisticViolence,omitempty"`
-	ProlongedGraphicSadisticRealisticViolence *bool   `yaml:"prolongedGraphicSadisticRealisticViolence,omitempty"   json:"prolongedGraphicSadisticRealisticViolence,omitempty"`
+	ProlongedGraphicSadisticRealisticViolence *string `yaml:"prolongedGraphicSadisticRealisticViolence,omitempty"   json:"prolongedGraphicSadisticRealisticViolence,omitempty"`
 	ProfanityOrCrudeHumor                     *string `yaml:"profanityOrCrudeHumor,omitempty"                       json:"profanityOrCrudeHumor,omitempty"`
 	MatureSuggestiveThemes                    *string `yaml:"matureSuggestiveThemes,omitempty"                      json:"matureSuggestiveThemes,omitempty"`
 	HorrorOrFearThemes                        *string `yaml:"horrorOrFearThemes,omitempty"                          json:"horrorOrFearThemes,omitempty"`
@@ -158,6 +172,7 @@ type ExportComplianceSpec struct {
 
 // ExportComplianceDeclaration is the optional ECCN classification block.
 type ExportComplianceDeclaration struct {
+	AppDescription                  *string `yaml:"appDescription,omitempty" json:"appDescription,omitempty"`
 	ContainsProprietaryCryptography *bool   `yaml:"containsProprietaryCryptography,omitempty" json:"containsProprietaryCryptography,omitempty"`
 	ContainsThirdPartyCryptography  *bool   `yaml:"containsThirdPartyCryptography,omitempty"  json:"containsThirdPartyCryptography,omitempty"`
 	AvailableOnFrenchStore          *bool   `yaml:"availableOnFrenchStore,omitempty"          json:"availableOnFrenchStore,omitempty"`
@@ -195,15 +210,17 @@ type PricingSpec struct {
 
 // TestFlightSpec: see #/$defs/testflightSpec.
 type TestFlightSpec struct {
-	Groups map[string]TestFlightGroup `yaml:"groups,omitempty" json:"groups,omitempty"`
+	Metadata *BetaMetadataSpec          `yaml:"metadata,omitempty" json:"metadata,omitempty"`
+	Groups   map[string]TestFlightGroup `yaml:"groups,omitempty" json:"groups,omitempty"`
 }
 
 // TestFlightGroup: see #/$defs/testflightGroup.
 type TestFlightGroup struct {
-	IsInternal      *bool              `yaml:"isInternal,omitempty"      json:"isInternal,omitempty"`
-	PublicLink      *bool              `yaml:"publicLink,omitempty"      json:"publicLink,omitempty"`
-	PublicLinkLimit *int               `yaml:"publicLinkLimit,omitempty" json:"publicLinkLimit,omitempty"`
-	Testers         []TestFlightTester `yaml:"testers,omitempty"         json:"testers,omitempty"`
+	Builds          *[]BetaBuildSelector `yaml:"builds,omitempty" json:"builds,omitempty"`
+	IsInternal      *bool                `yaml:"isInternal,omitempty"      json:"isInternal,omitempty"`
+	PublicLink      *bool                `yaml:"publicLink,omitempty"      json:"publicLink,omitempty"`
+	PublicLinkLimit *int                 `yaml:"publicLinkLimit,omitempty" json:"publicLinkLimit,omitempty"`
+	Testers         []TestFlightTester   `yaml:"testers,omitempty"         json:"testers,omitempty"`
 }
 
 // TestFlightTester: see #/$defs/testflightTester.
@@ -225,6 +242,8 @@ type CustomProductPage struct {
 
 // CustomProductPageLocale: one locale's content on a custom product page.
 type CustomProductPageLocale struct {
+	ScreenshotOrder *bool                       `yaml:"screenshotOrder,omitempty" json:"screenshotOrder,omitempty"`
+	Previews        map[string][]PreviewFile    `yaml:"previews,omitempty" json:"previews,omitempty"`
 	PromotionalText *string                     `yaml:"promotionalText,omitempty" json:"promotionalText,omitempty"`
 	Screenshots     map[string][]ScreenshotFile `yaml:"screenshots,omitempty"     json:"screenshots,omitempty"`
 }
@@ -314,6 +333,7 @@ func hydrateAssetChecksums(state *State, stateDir string) {
 		return
 	}
 	hydrateScreenshotChecksums(state.Spec.Screenshots, stateDir)
+	hydratePreviewChecksums(state.Spec.Previews, stateDir)
 	hydrateIAPAssetChecksums(state.Spec.IAP, stateDir)
 	hydrateCPPAssetChecksums(state.Spec.CustomProductPages, stateDir)
 }
@@ -348,6 +368,7 @@ func hydrateCPPAssetChecksums(spec *CustomProductPagesSpec, stateDir string) {
 		pages := *spec
 		for name, page := range pages {
 			for locale, localization := range page.Localizations {
+				hydratePreviewTypeChecksums(localization.Previews, stateDir)
 				for device, files := range localization.Screenshots {
 					for i := range files {
 						files[i].SourceFileChecksum = assetChecksum(stateDir, files[i].Path)
@@ -410,4 +431,23 @@ func yamlErrorToDiagnostic(file string, err error) Diagnostic {
 		d.Message = "yaml: " + te.Error()
 	}
 	return d
+}
+
+// AccessibilityDeclarationsSpec manages explicit answers for each device family.
+type AccessibilityDeclarationsSpec struct {
+	Families map[string]AccessibilityDeclarationSpec `yaml:"families,omitempty" json:"families,omitempty"`
+}
+
+// AccessibilityDeclarationSpec preserves omitted answers. State is observed, read-only.
+type AccessibilityDeclarationSpec struct {
+	State                                  *string `yaml:"state,omitempty" json:"state,omitempty"`
+	SupportsAudioDescriptions              *bool   `yaml:"supportsAudioDescriptions,omitempty" json:"supportsAudioDescriptions,omitempty"`
+	SupportsCaptions                       *bool   `yaml:"supportsCaptions,omitempty" json:"supportsCaptions,omitempty"`
+	SupportsDarkInterface                  *bool   `yaml:"supportsDarkInterface,omitempty" json:"supportsDarkInterface,omitempty"`
+	SupportsDifferentiateWithoutColorAlone *bool   `yaml:"supportsDifferentiateWithoutColorAlone,omitempty" json:"supportsDifferentiateWithoutColorAlone,omitempty"`
+	SupportsLargerText                     *bool   `yaml:"supportsLargerText,omitempty" json:"supportsLargerText,omitempty"`
+	SupportsReducedMotion                  *bool   `yaml:"supportsReducedMotion,omitempty" json:"supportsReducedMotion,omitempty"`
+	SupportsSufficientContrast             *bool   `yaml:"supportsSufficientContrast,omitempty" json:"supportsSufficientContrast,omitempty"`
+	SupportsVoiceControl                   *bool   `yaml:"supportsVoiceControl,omitempty" json:"supportsVoiceControl,omitempty"`
+	SupportsVoiceover                      *bool   `yaml:"supportsVoiceover,omitempty" json:"supportsVoiceover,omitempty"`
 }

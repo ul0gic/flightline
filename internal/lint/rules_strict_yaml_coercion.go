@@ -42,22 +42,21 @@ func (r strictYAMLCoercionRule) Check(ctx CheckContext) []Diagnostic {
 
 // boolKeys is the set of state.yaml keys whose values must be true/false; yes/no/on/off are coercion footguns here.
 var boolKeys = map[string]struct{}{
-	"usesNonExemptEncryption":                   {},
-	"availableOnFrenchStore":                    {},
-	"containsProprietaryCryptography":           {},
-	"containsThirdPartyCryptography":            {},
-	"usesEncryption":                            {},
-	"exempt":                                    {},
-	"prolongedGraphicSadisticRealisticViolence": {},
-	"gambling":                                  {},
-	"unrestrictedWebAccess":                     {},
-	"seventeenPlus":                             {},
-	"familySharable":                            {},
-	"contentHosting":                            {},
-	"downloadable":                              {},
-	"isInternal":                                {},
-	"publicLink":                                {},
-	"visible":                                   {},
+	"usesNonExemptEncryption":         {},
+	"availableOnFrenchStore":          {},
+	"containsProprietaryCryptography": {},
+	"containsThirdPartyCryptography":  {},
+	"usesEncryption":                  {},
+	"exempt":                          {},
+	"gambling":                        {},
+	"unrestrictedWebAccess":           {},
+	"seventeenPlus":                   {},
+	"familySharable":                  {},
+	"contentHosting":                  {},
+	"downloadable":                    {},
+	"isInternal":                      {},
+	"publicLink":                      {},
+	"visible":                         {},
 }
 
 // walkYAMLForCoercion descends the yaml.Node tree carrying parentKey so values correlate to known bool fields.

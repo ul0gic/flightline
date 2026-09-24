@@ -81,13 +81,14 @@ const (
 
 // CheckContext is the input every Rule receives. Client is nil during offline runs.
 type CheckContext struct {
-	State      *config.State // parsed YAML or projected live state
-	Client     *asc.Client   // nil during offline runs
-	BundleID   string
-	Version    string
-	Live       bool
-	Ctx        context.Context
-	SourcePath string // empty when no backing file (live-only preflight)
+	State              *config.State // parsed YAML or projected live state
+	Client             *asc.Client   // nil during offline runs
+	BundleID           string
+	Version            string
+	Live               bool
+	Ctx                context.Context
+	SourcePath         string // empty when no backing file (live-only preflight)
+	ReviewSubmissionID string // optional exact draft for submission preflight
 }
 
 // Diagnostic is one finding produced by a rule. FixHint explains the remedy; Reference cites the guideline.

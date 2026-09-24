@@ -47,8 +47,9 @@ type AnalyticsInstancesView struct {
 }
 
 type AnalyticsReportInstancesEntry struct {
-	Report    asc.PersistedAnalyticsReport  `json:"report"`
-	Instances []asc.AnalyticsReportInstance `json:"instances"`
+	Report        asc.PersistedAnalyticsReport  `json:"report"`
+	Instances     []asc.AnalyticsReportInstance `json:"instances"`
+	DataReadiness string                        `json:"dataReadiness"`
 }
 
 func (v AnalyticsInstancesView) TableRows() (headers []string, rows [][]string) {
@@ -101,14 +102,16 @@ func (v AnalyticsDownloadView) TableRows() (headers []string, rows [][]string) {
 }
 
 type AnalyticsStatusView struct {
-	BundleID    string                         `json:"bundleId"`
-	StateFile   string                         `json:"stateFile"`
-	RequestID   string                         `json:"requestId"`
-	Status      string                         `json:"status"`
-	SubmittedAt string                         `json:"submittedAt,omitempty"`
-	LastPollAt  string                         `json:"lastPollAt,omitempty"`
-	Reports     []asc.PersistedAnalyticsReport `json:"reports"`
-	Downloaded  []string                       `json:"downloadedSegments"`
+	BundleID                   string                         `json:"bundleId"`
+	StateFile                  string                         `json:"stateFile"`
+	RequestID                  string                         `json:"requestId"`
+	Status                     string                         `json:"status"`
+	ReportDefinitionsAvailable bool                           `json:"reportDefinitionsAvailable"`
+	DataReadiness              string                         `json:"dataReadiness"`
+	SubmittedAt                string                         `json:"submittedAt,omitempty"`
+	LastPollAt                 string                         `json:"lastPollAt,omitempty"`
+	Reports                    []asc.PersistedAnalyticsReport `json:"reports"`
+	Downloaded                 []string                       `json:"downloadedSegments"`
 }
 
 func (v AnalyticsStatusView) TableRows() (headers []string, rows [][]string) {
@@ -118,9 +121,11 @@ func (v AnalyticsStatusView) TableRows() (headers []string, rows [][]string) {
 		{"STATE_FILE", v.StateFile},
 		{"REQUEST_ID", v.RequestID},
 		{"STATUS", v.Status},
+		{"REPORT_DEFINITIONS_AVAILABLE", strconv.FormatBool(v.ReportDefinitionsAvailable)},
+		{"DATA_READINESS", v.DataReadiness},
 		{"SUBMITTED_AT", v.SubmittedAt},
 		{"LAST_POLL_AT", v.LastPollAt},
-		{"REPORTS", strconv.Itoa(len(v.Reports))},
+		{"REPORT_DEFINITIONS", strconv.Itoa(len(v.Reports))},
 		{"DOWNLOADED_SEGMENTS", strconv.Itoa(len(v.Downloaded))},
 	}
 	return headers, rows
@@ -388,8 +393,9 @@ func runAnalyticsListInstances(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("list instances for %q: %w", r.ID, err)
 		}
 		view.Reports = append(view.Reports, AnalyticsReportInstancesEntry{
-			Report:    r,
-			Instances: instances,
+			Report:        r,
+			Instances:     instances,
+			DataReadiness: analyticsReportDataReadiness(len(instances)),
 		})
 	}
 	return Render(view, outputMode())
@@ -512,12 +518,14 @@ func runAnalyticsStatus(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	view := AnalyticsStatusView{
-		BundleID:   bundleID,
-		StateFile:  path,
-		RequestID:  string(state.RequestID),
-		Status:     state.Status,
-		Reports:    state.Reports,
-		Downloaded: state.DownloadedSegments,
+		BundleID:                   bundleID,
+		StateFile:                  path,
+		RequestID:                  string(state.RequestID),
+		Status:                     state.Status,
+		ReportDefinitionsAvailable: len(state.Reports) > 0,
+		DataReadiness:              "unchecked",
+		Reports:                    state.Reports,
+		Downloaded:                 state.DownloadedSegments,
 	}
 	if !state.SubmittedAt.IsZero() {
 		view.SubmittedAt = state.SubmittedAt.UTC().Format(time.RFC3339)
@@ -532,6 +540,13 @@ func runAnalyticsStatus(cmd *cobra.Command, args []string) error {
 		view.Downloaded = []string{}
 	}
 	return Render(view, outputMode())
+}
+
+func analyticsReportDataReadiness(instanceCount int) string {
+	if instanceCount > 0 {
+		return "available"
+	}
+	return "none_available"
 }
 
 func refreshAnalyticsState(ctx context.Context, c *asc.Client, state asc.AsyncState) (asc.AsyncState, error) {
