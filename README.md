@@ -58,7 +58,7 @@ See the [state-as-code walkthrough](https://flightline.dev/docs/guides/state-as-
 - **Prepare and submit.** Run preflight checks, assemble a review draft, and submit it with a separate confirmed action.
 - **Read your reports.** Query sales, finance, analytics, customer reviews, beta feedback and performance metrics. Use JSON output in scripts and CI.
 
-The [features page](https://flightline.dev/features) explains the workflows. The [capabilities reference](https://flightline.dev/docs/reference/capabilities) lists supported operations and their limits.
+The [features page](https://flightline.dev/features) explains the workflows. The [capabilities reference](https://github.com/ul0gic/flightline/blob/main/docs/reference/capabilities.md) lists supported operations and their limits.
 
 ## Submission stays explicit
 
@@ -66,7 +66,7 @@ Applying YAML never submits an App Store release. Draft assembly and final submi
 
 Keep using Xcode, Xcode Cloud or Fastlane for building, signing and uploading binaries. Fastlane Deliver also supports metadata-file workflows; Flightline adds live-state comparison and reviewed changes across its supported surfaces. Privacy nutrition labels and Resolution Center messages stay in the portal. Subscription writes and Game Center authoring are not supported.
 
-See [submission and release](https://flightline.dev/docs/guides/submission-and-release) for the full sequence.
+See [submission and release](https://github.com/ul0gic/flightline/blob/main/docs/guides/submission-and-release.md) for the full sequence.
 
 ## Documentation
 
