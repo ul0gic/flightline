@@ -1,0 +1,9 @@
+{
+  "data": {
+    "type": "territories",
+    "id": "USA",
+    "attributes": {
+      "currency": "USD"
+    }
+  }
+}

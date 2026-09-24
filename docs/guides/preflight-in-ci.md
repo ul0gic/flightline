@@ -13,7 +13,7 @@ Two commands run the rules, at different points in the pipeline:
 
 `lint` validates the state file against the embedded JSON Schema plus every offline rule (YAML coercion traps, required-but-empty fields, email format, localization completeness, screenshot device coverage). It makes no network calls, so it belongs in the fast path of every PR: no secrets, no rate-limit budget, sub-second.
 
-`preflight` fetches the live App Store version and runs the live rules on top: build attached and valid, IAPs attached to the review submission, review screenshots present, age rating and export compliance answered. It answers "is this version actually submittable right now?" and belongs where release decisions happen.
+`preflight` fetches the live App Store version and runs the live rules on top: build attached and valid, IAPs attached to the review submission, review screenshots present, age rating and export compliance answered. It checks the supported readiness rules against current observations. Passing does not guarantee submission acceptance or Apple approval.
 
 ## Exit codes
 
@@ -30,7 +30,7 @@ A bare invocation is already a strict CI gate: any nonzero exit fails the step, 
 To fail on errors but let warnings through, accept exit `2` explicitly:
 
 ```bash
-flightline preflight app.tideterm.ios --version 2.1.0 || [ $? -eq 2 ]
+flightline preflight com.example.app --version 2.1.0 || [ $? -eq 2 ]
 ```
 
 The `|| [ $? -eq 2 ]` converts a warnings-only result back into step success; exit `1` still fails.
@@ -38,19 +38,25 @@ The `|| [ $? -eq 2 ]` converts a warnings-only result back into step success; ex
 For finer-grained gates, the JSON summary carries exact counts. `jq -e` exits nonzero when the expression is false, which fails the step:
 
 ```bash
-# Allow up to 5 warnings, fail beyond that
-flightline lint state.yaml --output json | jq -e '.summary.warning <= 5' > /dev/null
+# Preserve command failures, then allow at most 5 warnings and no errors.
+status=0
+flightline lint state.yaml --output json > lint-result.json || status=$?
+case "$status" in
+  0|2) ;;
+  *) exit "$status" ;;
+esac
+jq -e '.summary.error == 0 and .summary.warning <= 5' lint-result.json > /dev/null
 ```
 
 Related gate: `flightline plan state.yaml --exit-on-changes` exits `2` when the file has drifted from live ASC state, `0` when in sync. Useful as a drift detector on a schedule.
 
 ## JSON output for machines
 
-`--output json` emits a stable envelope (see the [JSON output reference](../reference/json-output.md#preflight-and-lint-diagnostics)):
+`--output json` emits a stable envelope (see the [JSON output reference](../reference/json-output.md#example-preflight-and-lint-diagnostics)):
 
 ```json
 {
-  "bundleId": "app.tideterm.ios",
+  "bundleId": "com.example.app",
   "version": "2.1.0",
   "mode": "preflight",
   "diagnostics": [
@@ -74,7 +80,7 @@ flightline lint state.yaml --output json \
   | jq -r '.diagnostics[] | select(.severity == "error") | "\(.ruleId): \(.message)"'
 
 # Machine-readable pass/fail counts
-flightline preflight app.tideterm.ios --version 2.1.0 --output json | jq '.summary'
+flightline preflight com.example.app --version 2.1.0 --output json | jq '.summary'
 ```
 
 ## GitHub Actions example
@@ -119,7 +125,7 @@ jobs:
           chmod 600 ~/.appstoreconnect/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8
         env:
           ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
-      - run: flightline preflight app.tideterm.ios --version 2.1.0 --state-file state.yaml
+      - run: flightline preflight com.example.app --version 2.1.0 --state-file state.yaml
 ```
 
 Notes:
@@ -128,17 +134,17 @@ Notes:
 - The `chmod 600` is not optional: Flightline refuses a key file with wider permissions.
 - Flightline never logs the key, the JWT, or credential IDs; error output is redacted. Still, scope the key to the least role that works (App Manager).
 - `preflight` defaults `--platform` to `IOS`; pass `--platform MAC_OS` (or `TV_OS`, `VISION_OS`) for other platforms.
-- Once tagged releases exist, pin one (`go install github.com/ul0gic/flightline@<tag>`) instead of tracking `@latest` in a gate you depend on.
+- Pin a verified release tag or source revision instead of tracking `@latest` in a production gate. These guides describe current source; check command availability in the binary you install.
 
 ## Cross-checking with --state-file
 
 Without `--state-file`, preflight fetches live state and checks it: pure "is ASC submittable?". With `--state-file`, the offline rules run against your authored YAML while the live rules consult ASC, so one command catches authoring mistakes and live gaps together:
 
 ```bash
-flightline preflight app.tideterm.ios --version 2.1.0 --state-file state.yaml
+flightline preflight com.example.app --version 2.1.0 --state-file state.yaml
 ```
 
-This is the right form for a release pipeline that manages state as code: it verifies both that the file you are about to `apply` is well-formed and that the live version has everything Apple's submission flow will demand. For the full authoring loop around it, see [State as Code](./state-as-code.md).
+This is the right form for a release pipeline that manages state as code: it verifies both that the file you are about to `apply` is well-formed and that the live version passes the supported readiness checks. It does not prove the desired changes have already been applied; inspect the plan separately. For the full authoring loop around it, see [State as Code](./state-as-code.md).
 
 Flightline refuses to combine unrelated coordinates. The file's `metadata.bundleId` and `metadata.version` must exactly match the command, and an explicit `metadata.platform` must match `--platform`. If the file omits `metadata.platform`, it inherits the command platform (`IOS` by default). JSON output includes the resolved `platform` alongside `bundleId` and `version`.
 

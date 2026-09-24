@@ -3,9 +3,11 @@ package state
 import (
 	"bytes"
 	"context"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	yaml "go.yaml.in/yaml/v3"
@@ -17,13 +19,14 @@ import (
 // TestRoundTrip_FetchMarshalLoadRefetchDiffEmpty is the keystone L2 contract:
 // fetch → YAML → reload → re-fetch → diff must be empty.
 func TestRoundTrip_FetchMarshalLoadRefetchDiffEmpty(t *testing.T) {
-	srv := httptest.NewServer(fullCoverageHandler(t))
+	observedDescription := strings.Repeat("x", 54)
+	srv := httptest.NewServer(g1RoundTripHandler(t, observedDescription))
 	defer srv.Close()
 	c := fixtureClient(t, srv)
 
 	ctx := context.Background()
 	bundleID := "com.example.app"
-	opts := FetchOpts{Version: "1.0", Platform: "IOS"}
+	opts := FetchOpts{Version: "1.0", Platform: "IOS", IncludeBetaBuilds: true}
 
 	first, err := Fetch(ctx, c, bundleID, opts)
 	if err != nil {
@@ -46,6 +49,15 @@ func TestRoundTrip_FetchMarshalLoadRefetchDiffEmpty(t *testing.T) {
 	reloaded, err := config.LoadState(path)
 	if err != nil {
 		t.Fatalf("LoadState: %v", err)
+	}
+	if got := len(reloaded.Spec.TestFlight.Groups["family"].Testers); got != 2 {
+		t.Fatalf("paginated roster lost members: %d", got)
+	}
+	if got := reloaded.Spec.IAP.Products["com.x.lifetime"].Localizations["en-US"].Description; got == nil || *got != observedDescription {
+		t.Fatalf("observed description was lost or truncated: %v", got)
+	}
+	if builds := reloaded.Spec.TestFlight.Groups["family"].Builds; builds == nil || len(*builds) != 1 || (*builds)[0].Number != "42" {
+		t.Fatal("managed beta membership lost during round trip")
 	}
 	if diags := config.Validate(path, reloaded); len(diags) > 0 {
 		for _, d := range diags {
@@ -74,6 +86,28 @@ func TestRoundTrip_FetchMarshalLoadRefetchDiffEmpty(t *testing.T) {
 	}
 }
 
+func g1RoundTripHandler(t *testing.T, observedDescription string) http.Handler {
+	t.Helper()
+	base := fullCoverageHandler(t)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/betaGroups/BG1/betaTesters" {
+			w.Header().Set("Content-Type", "application/json")
+			if r.URL.Query().Get("page") == "2" {
+				_, _ = w.Write([]byte(`{"data":[{"type":"betaTesters","id":"BT2","attributes":{"email":"second@example.com"}}]}`))
+			} else {
+				_, _ = w.Write([]byte(`{"data":[{"type":"betaTesters","id":"BT1","attributes":{"email":"first@example.com"}}],"links":{"next":"http://` + r.Host + `/v1/betaGroups/BG1/betaTesters?page=2"}}`))
+			}
+			return
+		}
+		if r.URL.Path == "/v2/inAppPurchases/IAP1/inAppPurchaseLocalizations" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":[{"type":"inAppPurchaseLocalizations","id":"IAPL1","attributes":{"locale":"en-US","name":"Lifetime","description":"` + observedDescription + `"}}]}`))
+			return
+		}
+		base.ServeHTTP(w, r)
+	})
+}
+
 // TestRoundTrip_AllSurfacesPopulated pins surface-level coverage; a silent regression that drops
 // a whole surface would fool the zero-diff invariant above (both paths would skip the surface).
 func TestRoundTrip_AllSurfacesPopulated(t *testing.T) {
@@ -97,7 +131,9 @@ func surfaceChecks(s *config.State) []surfaceCheck {
 	meta := s.Spec.Metadata
 	iap := s.Spec.IAP
 	tf := s.Spec.TestFlight
-	return []surfaceCheck{
+	checks := append(commerceBetaSurfaceChecks(s), assetsRightsSurfaceChecks(s)...)
+	return append(checks, []surfaceCheck{
+		{"spec.version.phasedRelease", v != nil && v.PhasedRelease != nil && derefEq(v.PhasedRelease.State, "INACTIVE")},
 		{"spec.version", v != nil && derefEq(v.Copyright, "© 2026")},
 		{"spec.version.releaseType", v != nil && derefEq(v.ReleaseType, "MANUAL")},
 		{"spec.build.number", s.Spec.Build != nil && s.Spec.Build.Number == "42"},
@@ -113,10 +149,11 @@ func surfaceChecks(s *config.State) []surfaceCheck {
 		{"spec.categories.primary", cat != nil && derefEq(cat.Primary, "EDUCATION")},
 		{"spec.categories.secondary", cat != nil && derefEq(cat.Secondary, "REFERENCE")},
 		{"spec.pricing.baseTerritory", s.Spec.Pricing != nil && s.Spec.Pricing.BaseTerritory != nil},
+
 		{"spec.testflight.groups[family]", tf != nil && len(tf.Groups) > 0},
 		{"spec.testflight.groups[family].testers", tf != nil && len(tf.Groups["family"].Testers) > 0},
 		{"spec.customProductPages[summer-2026]", s.Spec.CustomProductPages != nil && (*s.Spec.CustomProductPages)["summer-2026"].Visible != nil},
-	}
+	}...)
 }
 
 func derefEq[T comparable](p *T, want T) bool {
@@ -164,4 +201,13 @@ func fetchEncodeReload(t *testing.T) *config.State {
 		t.FailNow()
 	}
 	return reloaded
+}
+
+func commerceBetaSurfaceChecks(s *config.State) []surfaceCheck {
+	iap, tf := s.Spec.IAP, s.Spec.TestFlight
+	return []surfaceCheck{
+		{"spec.appAvailability", s.Spec.AppAvailability != nil && len(s.Spec.AppAvailability.Territories) == 1},
+		{"spec.iap.commerce", iap != nil && iap.Products["com.x.lifetime"].Commerce != nil && iap.Products["com.x.lifetime"].Commerce.Pricing != nil},
+		{"spec.testflight.metadata", tf != nil && tf.Metadata != nil && len(tf.Metadata.AppLocalizations) == 1 && len(tf.Metadata.Builds) == 1},
+	}
 }

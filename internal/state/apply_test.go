@@ -310,15 +310,15 @@ func TestApply_DryRunIssuesNoCalls(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
-	if len(res.Applied) != 1 {
-		t.Errorf("expected 1 applied (dry-run); got %+v", res)
+	if len(res.Planned) != 1 || len(res.Applied) != 0 {
+		t.Errorf("expected 1 planned and 0 applied (dry-run); got %+v", res)
 	}
 	if atomic.LoadInt32(&calls) != 0 {
 		t.Errorf("expected 0 calls in dry-run; got %d", calls)
 	}
 }
 
-func TestApply_ContinuesPastFailedChange(t *testing.T) {
+func TestApply_InvalidPlanRejectsAllChanges(t *testing.T) {
 	withTempCacheDir(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -349,8 +349,8 @@ func TestApply_ContinuesPastFailedChange(t *testing.T) {
 	if len(res.Errors) != 1 {
 		t.Errorf("errors = %d, want 1: %+v", len(res.Errors), res.Errors)
 	}
-	if len(res.Applied) != 1 {
-		t.Errorf("applied = %d, want 1 (later change must still run): %+v", len(res.Applied), res.Applied)
+	if len(res.Applied) != 0 {
+		t.Errorf("applied = %d, want 0 for invalid plan: %+v", len(res.Applied), res.Applied)
 	}
 }
 

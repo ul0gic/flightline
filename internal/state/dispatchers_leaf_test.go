@@ -128,33 +128,13 @@ func TestDispatch_EncryptionFlag(t *testing.T) {
 // --- applyEncryptionDeclaration ---------------------------------------------
 
 func TestDispatch_EncryptionDeclaration(t *testing.T) {
-	var posts int32
-	var body string
-	err := applyOneChange(t, func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		switch {
-		case r.URL.Path == "/v1/apps":
-			_, _ = io.WriteString(w, `{"data":[{"type":"apps","id":"APP1"}],"links":{}}`)
-		case r.URL.Path == "/v1/appEncryptionDeclarations" && r.Method == http.MethodPost:
-			atomic.AddInt32(&posts, 1)
-			body = readBody(t, r)
-			w.WriteHeader(http.StatusCreated)
-			_, _ = io.WriteString(w, `{"data":{"type":"appEncryptionDeclarations","id":"ED1"}}`)
-		default:
-			http.Error(w, "unhandled "+r.Method+" "+r.URL.Path, http.StatusNotFound)
-		}
-	}, plan.Change{
-		Op: plan.OpUpdate, Resource: "exportCompliance",
-		Path: "/spec/exportCompliance/declaration/usesEncryption", To: true,
-	})
-	if err != nil {
-		t.Fatalf("Apply: %v", err)
+	var calls atomic.Int32
+	err := applyOneChange(t, func(w http.ResponseWriter, r *http.Request) { calls.Add(1) }, plan.Change{Op: plan.OpUpdate, Path: "/spec/exportCompliance/declaration/usesEncryption", To: true})
+	if err == nil || !strings.Contains(err.Error(), "not mapped") {
+		t.Fatalf("expected unsupported legacy leaf, got %v", err)
 	}
-	if posts != 1 {
-		t.Errorf("declaration POSTs = %d, want 1", posts)
-	}
-	if !strings.Contains(body, "usesEncryption") || !strings.Contains(body, `"apps"`) {
-		t.Errorf("POST body should carry attr + app relationship: %s", body)
+	if calls.Load() != 0 {
+		t.Fatal("legacy leaf issued API requests")
 	}
 }
 
@@ -166,8 +146,8 @@ func TestDispatch_EncryptionDeclaration_NestedPathErrors(t *testing.T) {
 		Op: plan.OpUpdate, Resource: "exportCompliance",
 		Path: "/spec/exportCompliance/declaration/a/b", To: true,
 	})
-	if err == nil || !strings.Contains(err.Error(), "unexpected path") {
-		t.Fatalf("expected unexpected-path error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "not mapped") {
+		t.Fatalf("expected unmapped-path error, got %v", err)
 	}
 }
 
@@ -238,36 +218,13 @@ func TestDispatch_Subcategories_ClearsSecondSlot(t *testing.T) {
 // --- applyPricingField ------------------------------------------------------
 
 func TestDispatch_Pricing_CoalescesMissingField(t *testing.T) {
-	var posts int32
-	var body string
-	err := applyOneChange(t, func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		switch {
-		case r.URL.Path == "/v1/apps":
-			_, _ = io.WriteString(w, `{"data":[{"type":"apps","id":"APP1"}],"links":{}}`)
-		case r.URL.Path == "/v1/apps/APP1/appPriceSchedule":
-			// Live schedule already has a price point; only territory changes.
-			_, _ = io.WriteString(w, `{"data":{"type":"appPriceSchedules","id":"PS1"},"included":[{"type":"appPricePoints","id":"PP_LIVE"}]}`)
-		case r.URL.Path == "/v1/appPriceSchedules" && r.Method == http.MethodPost:
-			atomic.AddInt32(&posts, 1)
-			body = readBody(t, r)
-			w.WriteHeader(http.StatusCreated)
-			_, _ = io.WriteString(w, `{"data":{"type":"appPriceSchedules","id":"PS2"}}`)
-		default:
-			http.Error(w, "unhandled "+r.Method+" "+r.URL.Path, http.StatusNotFound)
-		}
-	}, plan.Change{
-		Op: plan.OpUpdate, Resource: "pricing",
-		Path: "/spec/pricing/baseTerritory", To: "USA",
-	})
-	if err != nil {
-		t.Fatalf("Apply: %v", err)
+	var calls atomic.Int32
+	err := applyOneChange(t, func(w http.ResponseWriter, r *http.Request) { calls.Add(1) }, plan.Change{Op: plan.OpUpdate, Path: "/spec/pricing/baseTerritory", To: true})
+	if err == nil || !strings.Contains(err.Error(), "not mapped") {
+		t.Fatalf("expected unsupported legacy leaf, got %v", err)
 	}
-	if posts != 1 {
-		t.Errorf("schedule POSTs = %d, want 1", posts)
-	}
-	if !strings.Contains(body, "USA") || !strings.Contains(body, "PP_LIVE") {
-		t.Errorf("POST body should coalesce new territory + live price point: %s", body)
+	if calls.Load() != 0 {
+		t.Fatal("legacy leaf issued API requests")
 	}
 }
 
@@ -284,9 +241,9 @@ func TestDispatch_Pricing_MissingBothErrors(t *testing.T) {
 		}
 	}, plan.Change{
 		Op: plan.OpUpdate, Resource: "pricing",
-		Path: "/spec/pricing/baseTerritory", To: "USA",
+		Path: "/spec/pricing", To: map[string]any{"baseTerritory": "USA"},
 	})
-	if err == nil || !strings.Contains(err.Error(), "both baseTerritory") {
+	if err == nil || !strings.Contains(err.Error(), "complete baseTerritory") {
 		t.Fatalf("expected both-required error, got %v", err)
 	}
 }
@@ -399,8 +356,8 @@ func TestDispatch_IAPLocalization_CreatesWhenMissing(t *testing.T) {
 			http.Error(w, "unhandled "+r.Method+" "+r.URL.Path, http.StatusNotFound)
 		}
 	}, plan.Change{
-		Op: plan.OpUpdate, Resource: "iap.com.x.lifetime",
-		Path: "/spec/iap/products/com.x.lifetime/localizations/en-US/name", To: "Lifetime",
+		Op: plan.OpCreate, Resource: "iap.com.x.lifetime",
+		Path: "/spec/iap/products/com.x.lifetime/localizations/en-US", To: config.IAPLocalization{Name: new("Lifetime")},
 	})
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
@@ -775,7 +732,7 @@ func TestDispatch_CustomProductPage_Create(t *testing.T) {
 		}
 	}, plan.Change{
 		Op: plan.OpCreate, Resource: "customProductPages.summer-2026",
-		Path: "/spec/customProductPages/summer-2026", To: map[string]any{"visible": true},
+		Path: "/spec/customProductPages/summer-2026", To: config.CustomProductPage{Visible: new(true)},
 	})
 	if err != nil {
 		t.Fatalf("Apply: %v", err)

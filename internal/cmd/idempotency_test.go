@@ -550,7 +550,8 @@ func TestIdempotency_CategoriesSet_SecondPassNoPATCH(t *testing.T) {
 
 func TestIdempotency_PricingSet_SecondPassNoPOST_MatchingSchedule(t *testing.T) {
 	srv := startCountingFixtureServer(t, map[string]fixtureRoute{
-		"GET /v1/apps/1234567890/appPriceSchedule": {File: "pricing_get"},
+		"GET /v1/apps/1234567890/appPriceSchedule":          {File: "pricing_get"},
+		"GET /v1/appPriceSchedules/1234567890/manualPrices": {File: "pricing_manual_prices"},
 	})
 	c := fixtureASCClientFor(t, srv)
 	ctx := context.Background()

@@ -79,6 +79,14 @@ func runPreflight(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if preflightStateFile != "" && len(schemaDiags) == 0 {
+		live, fetchErr := state.Fetch(cmd.Context(), c, bundleID, state.FetchOpts{Version: versionStr, Platform: platform, BetaDesired: stateInput.Spec.TestFlight})
+		if fetchErr != nil {
+			return fmt.Errorf("preflight write intent: %w", fetchErr)
+		}
+		schemaDiags = append(schemaDiags, writeIntentDiagnostics(sourcePath, stateInput, live)...)
+	}
+
 	rules := lint.All()
 	runner := lint.NewRunner(rules)
 	checkCtx := lint.CheckContext{

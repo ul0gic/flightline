@@ -1,0 +1,16 @@
+{
+  "data": [
+    {
+      "type": "appEncryptionDeclarations",
+      "id": "DECL2",
+      "attributes": {
+        "appDescription": "Uses TLS",
+        "containsProprietaryCryptography": true,
+        "containsThirdPartyCryptography": false,
+        "availableOnFrenchStore": true,
+        "appEncryptionDeclarationState": "CREATED"
+      }
+    }
+  ],
+  "links": {}
+}

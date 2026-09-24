@@ -20,7 +20,8 @@ func init() {
 		Use:   "fetch <bundleId>",
 		Short: "Fetch live App Store Connect state into a state.yaml",
 		Long: `Pulls every L2 surface Flightline supports for the given bundleId and writes
-the result as a Flightline state file. Default output is YAML with a
+the result as a Flightline state file. Beta build metadata is scoped to the attached
+build; --include-beta-builds adds complete group membership sets. Default output is YAML with a
 yaml-language-server schema directive prepended for editor autocomplete.
 
 Surfaces absent from the state file are not managed. The diff engine leaves
@@ -35,6 +36,7 @@ Examples:
 	}
 	cmd.Flags().StringP("output-file", "o", "", "write to file instead of stdout (YAML only)")
 	cmd.Flags().String("version", "", "App Store version string (default: latest editable)")
+	cmd.Flags().Bool("include-beta-builds", false, "include complete beta group build memberships as managed state")
 	cmd.Flags().String("platform", "IOS", "Apple platform: IOS | MAC_OS | TV_OS | VISION_OS")
 	rootCmd.AddCommand(cmd)
 }
@@ -47,9 +49,10 @@ func runFetch(cmd *cobra.Command, args []string) error {
 	}
 	version, _ := cmd.Flags().GetString("version")
 	platform, _ := cmd.Flags().GetString("platform")
+	includeBetaBuilds, _ := cmd.Flags().GetBool("include-beta-builds")
 
 	st, err := state.Fetch(cmd.Context(), c, bundleID, state.FetchOpts{
-		Version: version, Platform: platform,
+		Version: version, Platform: platform, IncludeBetaBuilds: includeBetaBuilds,
 	})
 	if err != nil {
 		return err

@@ -263,6 +263,7 @@ var knownAgeRatingKeys = map[string]struct{}{
 	"developerAgeRatingInfoUrl":                   {},
 	"gambling":                                    {},
 	"gamblingSimulated":                           {},
+	"gracRatingClassificationNumber":              {},
 	"gunsOrOtherWeapons":                          {},
 	"healthOrWellnessTopics":                      {},
 	"horrorOrFearThemes":                          {},
@@ -327,6 +328,24 @@ var frequencyKeys = []string{
 	"violenceRealisticProlongedGraphicOrSadistic",
 }
 
+var ageRatingOverrideEnums = map[string]map[string]struct{}{
+	"ageRatingOverride": {
+		"NONE": {}, "NINE_PLUS": {}, "THIRTEEN_PLUS": {}, "SIXTEEN_PLUS": {}, "SEVENTEEN_PLUS": {}, "UNRATED": {},
+	},
+	"ageRatingOverrideV2": {
+		"NONE": {}, "NINE_PLUS": {}, "THIRTEEN_PLUS": {}, "SIXTEEN_PLUS": {}, "EIGHTEEN_PLUS": {}, "UNRATED": {},
+	},
+	"koreaAgeRatingOverride": {
+		"NONE": {}, "ALL": {}, "TWELVE_PLUS": {}, "FIFTEEN_PLUS": {}, "NINETEEN_PLUS": {},
+	},
+}
+
+var ageRatingOverrideKeys = []string{
+	"ageRatingOverride",
+	"ageRatingOverrideV2",
+	"koreaAgeRatingOverride",
+}
+
 // validateAgeRatingAttributes runs server-side gates locally to avoid a wasted API hit.
 func validateAgeRatingAttributes(a asc.AgeRatingDeclarationAttributes) error {
 	v := reflect.ValueOf(a)
@@ -342,6 +361,19 @@ func validateAgeRatingAttributes(a asc.AgeRatingDeclarationAttributes) error {
 		}
 		if _, ok := validFrequencyEnum[raw]; !ok {
 			return fmt.Errorf("%s: %q is not a valid frequency enum (use NONE | INFREQUENT_OR_MILD | FREQUENT_OR_INTENSE | INFREQUENT | FREQUENT)", key, raw)
+		}
+	}
+	for _, key := range ageRatingOverrideKeys {
+		field, ok := fieldByJSONTag(t, key)
+		if !ok {
+			continue
+		}
+		raw := v.FieldByIndex(field.Index).String()
+		if raw == "" {
+			continue
+		}
+		if _, ok := ageRatingOverrideEnums[key][raw]; !ok {
+			return fmt.Errorf("%s: %q is not a valid age-rating override enum", key, raw)
 		}
 	}
 	return nil

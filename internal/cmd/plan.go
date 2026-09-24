@@ -98,12 +98,15 @@ func runPlan(cmd *cobra.Command, args []string) error {
 	}
 
 	live, err := state.Fetch(cmd.Context(), c, desired.Metadata.BundleID, state.FetchOpts{
-		Version: version, Platform: platform, RequireEditable: true,
+		Version: version, Platform: platform, RequireEditable: true, AllowPhasedRelease: hasPhasedReleaseIntent(desired), BetaDesired: desired.Spec.TestFlight,
 	})
 	if err != nil {
 		return err
 	}
 
+	if err := validateCommandWriteIntent(stateFile, desired, live); err != nil {
+		return err
+	}
 	changes := plan.Diff(desired, live)
 	result := &PlanResult{
 		BundleID: desired.Metadata.BundleID,

@@ -136,7 +136,7 @@ Checks that boolean fields use true or false rather than the YAML 1.1 tokens yes
 - **Mode:** Both
 - **Severity:** Error
 
-Checks that every prompt in the age-rating questionnaire has a value, across both the frequency-enum fields (violence, sexual content, profanity, and so on) and the boolean prompts (gambling, unrestricted web access). A partially answered questionnaire shows up only as a soft block on the Submit for Review button, and Apple will not tell you which field is missing until you open the specific panel. Fix it by giving every prompt a value; NONE for frequency fields and false for boolean prompts are valid answers meaning the content is absent. Derived and optional fields (seventeenPlus, kidsAgeBand) are exempt: Apple computes seventeenPlus itself and kidsAgeBand only applies to Kids-category apps.
+Checks that every prompt in the age-rating questionnaire has a value, across both the frequency-enum fields (violence, sexual content, profanity, and so on) and the boolean prompts (gambling, unrestricted web access). A partially answered questionnaire shows up only as a soft block on the Submit for Review button, and Apple will not tell you which field is missing until you open the specific panel. Fix it by giving every prompt a value; NONE for frequency fields and false for boolean prompts are valid answers meaning the content is absent. Derived and optional fields (seventeenPlus, kidsAgeBand, rating overrides, GRAC number) are exempt: Apple computes seventeenPlus itself and kidsAgeBand only applies to Kids-category apps.
 
 ### `version.export-compliance-answered`
 

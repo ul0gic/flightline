@@ -227,6 +227,9 @@ func iapVersionsForIAP(ctx CheckContext, iapID string) ([]asc.Resource[asc.IAPVe
 // iapLatestSubmissionID picks the highest-priority in-flight submission (prefers WAITING/IN_REVIEW over completed).
 // Returns "" when there are no submissions.
 func iapLatestSubmissionID(ctx CheckContext, appID string) (string, error) {
+	if ctx.ReviewSubmissionID != "" {
+		return iapExactSubmissionID(ctx, appID)
+	}
 	q := url.Values{
 		"filter[app]": {appID},
 		"limit":       {"50"},
@@ -255,6 +258,31 @@ func iapLatestSubmissionID(ctx CheckContext, appID string) (string, error) {
 		}
 	}
 	return bestID, nil
+}
+
+// iapExactSubmissionID proves app membership across every page before inspecting
+// the selected draft. A different in-flight submission cannot satisfy its checks.
+func iapExactSubmissionID(ctx CheckContext, appID string) (string, error) {
+	q := url.Values{"filter[app]": {appID}, "limit": {"200"}}
+	found := 0
+	for page, err := range asc.Pages[asc.ReviewSubmissionAttributes](ctx.Ctx, ctx.Client, "/v1/reviewSubmissions", q) {
+		if err != nil {
+			return "", err
+		}
+		for _, item := range page.Data {
+			if item.ID != ctx.ReviewSubmissionID {
+				continue
+			}
+			if item.Type != "reviewSubmissions" || item.Attributes.State != asc.ReviewSubmissionStateReadyForReview {
+				return "", errors.New("selected review submission is not a READY_FOR_REVIEW draft")
+			}
+			found++
+		}
+	}
+	if found != 1 {
+		return "", fmt.Errorf("selected review submission %s has %d matches under app %s", ctx.ReviewSubmissionID, found, appID)
+	}
+	return ctx.ReviewSubmissionID, nil
 }
 
 // iapSubmissionItemReferences resolves relationships and encoded item IDs.

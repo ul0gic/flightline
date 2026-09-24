@@ -160,6 +160,9 @@ func multiRuleFireServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
+		if g5PreflightObservation(w, r) {
+			return
+		}
 		path := r.URL.Path
 		switch {
 		case path == "/v1/apps":
@@ -190,6 +193,10 @@ func multiRuleFireServer(t *testing.T) *httptest.Server {
 			_, _ = w.Write([]byte(`{"data":[{"id":"set-ipad","type":"appScreenshotSets","attributes":{"screenshotDisplayType":"APP_IPAD_PRO_3GEN_129"}}]}`))
 		case strings.HasSuffix(path, "/appScreenshots"):
 			_, _ = w.Write([]byte(`{"data":[]}`))
+		case strings.Contains(r.URL.Path, "/relationships/"), strings.HasSuffix(r.URL.Path, "/appStoreReviewDetail"), strings.HasSuffix(r.URL.Path, "/appPriceSchedule"), strings.HasSuffix(r.URL.Path, "/appEncryptionDeclaration"), strings.HasSuffix(r.URL.Path, "/appStoreReviewScreenshot"):
+			_, _ = w.Write([]byte(`{"data":null}`))
+		case strings.HasPrefix(r.URL.Path, "/v1/builds/"):
+			_, _ = w.Write([]byte(`{"data":{"id":"b-1","type":"builds","attributes":{"version":"42"}}}`))
 		default:
 			_, _ = w.Write([]byte(`{"data":[]}`))
 		}

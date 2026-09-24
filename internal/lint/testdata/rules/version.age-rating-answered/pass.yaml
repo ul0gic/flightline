@@ -7,7 +7,7 @@ spec:
   ageRating:
     cartoonOrFantasyViolence: NONE
     realisticViolence: NONE
-    prolongedGraphicSadisticRealisticViolence: false
+    prolongedGraphicSadisticRealisticViolence: NONE
     profanityOrCrudeHumor: NONE
     matureSuggestiveThemes: NONE
     horrorOrFearThemes: NONE

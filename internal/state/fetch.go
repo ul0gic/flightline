@@ -15,11 +15,17 @@ import (
 // FetchOpts narrows what Fetch pulls; an empty value resolves to the latest
 // non-archived state on the app.
 type FetchOpts struct {
-	Version  string // e.g. "1.0.1"; empty = latest editable
-	Platform string // e.g. "IOS"; empty = IOS
+	// BetaDesired selects beta build-localization and group-membership observations needed by a plan.
+	BetaDesired *config.TestFlightSpec
+	// IncludeBetaBuilds includes all current group memberships in a fetched state file.
+	IncludeBetaBuilds bool
+	Version           string // e.g. "1.0.1"; empty = latest editable
+	Platform          string // e.g. "IOS"; empty = IOS
 	// RequireEditable fails Fetch on non-writable versions, so a stale
 	// metadata.version errors loudly instead of diffing against a released one.
 	RequireEditable bool
+	// AllowPhasedRelease permits observation only; callers must validate all resulting changes with ValidateVersionChanges.
+	AllowPhasedRelease bool
 }
 
 // editableVersionStates are the appStoreVersion states Apple accepts writes in.
@@ -62,7 +68,7 @@ func Fetch(ctx context.Context, c *asc.Client, bundleID string, opts FetchOpts) 
 	}
 	if opts.RequireEditable {
 		if st := versionState(versionAttrs); st != "" {
-			if _, ok := editableVersionStates[st]; !ok {
+			if _, ok := editableVersionStates[st]; !ok && !opts.AllowPhasedRelease {
 				return nil, fmt.Errorf(
 					"state: version %s is %s and cannot be edited; update metadata.version to an editable version or run `flightline versions create`",
 					versionAttrs.VersionString, st,
@@ -72,8 +78,9 @@ func Fetch(ctx context.Context, c *asc.Client, bundleID string, opts FetchOpts) 
 	}
 
 	out := &config.State{
-		APIVersion: "flightline.dev/v1alpha1",
-		Kind:       "AppState",
+		ObservedVersionState: versionState(versionAttrs),
+		APIVersion:           "flightline.dev/v1alpha1",
+		Kind:                 "AppState",
 		Metadata: config.StateMetadata{
 			BundleID: bundleID,
 			Version:  versionAttrs.VersionString,
@@ -81,56 +88,20 @@ func Fetch(ctx context.Context, c *asc.Client, bundleID string, opts FetchOpts) 
 		},
 		Spec: config.StateSpec{Version: projectVersion(versionAttrs)},
 	}
-	fetchAppInfoSurfaces(ctx, c, appID, versionID, out)
-	fetchVersionScopedSurfaces(ctx, c, versionID, out)
-	fetchAppScopedSurfaces(ctx, c, appID, out)
+	if err := fetchAppInfoSurfaces(ctx, c, appID, versionID, out); err != nil {
+		return nil, err
+	}
+	buildID, err := fetchVersionScopedSurfaces(ctx, c, versionID, out)
+	if err != nil {
+		return nil, err
+	}
+	if err := fetchAppScopedSurfaces(ctx, c, appID, out, opts); err != nil {
+		return nil, err
+	}
+	if err := fetchBetaSurfaces(ctx, c, appID, buildID, opts, out); err != nil {
+		return nil, err
+	}
 	return out, nil
-}
-
-func fetchAppInfoSurfaces(ctx context.Context, c *asc.Client, appID, versionID string, out *State) {
-	appInfoID, err := fetchEditableAppInfo(ctx, c, appID)
-	if err != nil || appInfoID == "" {
-		return
-	}
-	if ar, ferr := fetchAgeRating(ctx, c, appInfoID); ferr == nil {
-		out.Spec.AgeRating = projectAgeRating(ar)
-	}
-	if cats := fetchCategories(ctx, c, appInfoID); cats != nil {
-		out.Spec.Categories = cats
-	}
-	if md, ferr := fetchMetadataLocales(ctx, c, versionID, appInfoID); ferr == nil {
-		out.Spec.Metadata = md
-	}
-}
-
-func fetchVersionScopedSurfaces(ctx context.Context, c *asc.Client, versionID string, out *State) {
-	if buildID, encryption, ferr := fetchVersionBuildEncryption(ctx, c, versionID); ferr == nil && buildID != "" {
-		out.Spec.ExportCompliance = &config.ExportComplianceSpec{UsesNonExemptEncryption: encryption}
-		if num, nerr := fetchBuildNumber(ctx, c, buildID); nerr == nil {
-			out.Spec.Build = &config.BuildSpec{Number: num}
-		}
-	}
-	if rd := fetchReviewerDemo(ctx, c, versionID); rd != nil {
-		out.Spec.ReviewerDemo = rd
-	}
-	if ss, ferr := fetchScreenshots(ctx, c, versionID); ferr == nil && ss != nil {
-		out.Spec.Screenshots = ss
-	}
-}
-
-func fetchAppScopedSurfaces(ctx context.Context, c *asc.Client, appID string, out *State) {
-	if pr := fetchPricing(ctx, c, appID); pr != nil {
-		out.Spec.Pricing = pr
-	}
-	if iaps, ferr := fetchIAPs(ctx, c, appID); ferr == nil && iaps != nil && len(iaps.Products) > 0 {
-		out.Spec.IAP = iaps
-	}
-	if tf, ferr := fetchTestFlightGroups(ctx, c, appID); ferr == nil && tf != nil && len(tf.Groups) > 0 {
-		out.Spec.TestFlight = tf
-	}
-	if cpp, ferr := fetchCustomProductPages(ctx, c, appID); ferr == nil && len(cpp) > 0 {
-		out.Spec.CustomProductPages = &cpp
-	}
 }
 
 // State is re-exported so callers need only one import alongside Fetch.
@@ -161,6 +132,10 @@ func projectVersion(a asc.VersionAttributes) *config.VersionSpec {
 // back via ageRatingSchemaToWire.
 func projectAgeRating(a asc.AgeRatingDeclarationAttributes) *config.AgeRatingSpec {
 	out := &config.AgeRatingSpec{
+		AgeRatingOverrideV2:            optStr(a.AgeRatingOverrideV2),
+		KoreaAgeRatingOverride:         optStr(a.KoreaAgeRatingOverride),
+		GracRatingClassificationNumber: optStr(a.GracRatingClassificationNumber),
+
 		CartoonOrFantasyViolence:            optStr(a.ViolenceCartoonOrFantasy),
 		RealisticViolence:                   optStr(a.ViolenceRealistic),
 		ProfanityOrCrudeHumor:               optStr(a.ProfanityOrCrudeHumor),
@@ -186,11 +161,8 @@ func projectAgeRating(a asc.AgeRatingDeclarationAttributes) *config.AgeRatingSpe
 		UnrestrictedWebAccess:               copyBool(a.UnrestrictedWebAccess),
 		KidsAgeBand:                         optStr(a.KidsAgeBand),
 	}
-	if a.ViolenceRealisticProlongedGraphicOrSadistic != "" {
-		// schema is *bool, Apple is enum string. Treat any non-NONE as true.
-		v := a.ViolenceRealisticProlongedGraphicOrSadistic != "NONE"
-		out.ProlongedGraphicSadisticRealisticViolence = &v
-	}
+	out.ProlongedGraphicSadisticRealisticViolence = optStr(a.ViolenceRealisticProlongedGraphicOrSadistic)
+
 	return out
 }
 
@@ -256,56 +228,78 @@ func fetchVersion(ctx context.Context, c *asc.Client, appID, versionStr, platfor
 	if versionStr != "" {
 		q.Set("filter[versionString]", versionStr)
 	}
-	page, err := asc.Get[asc.Collection[asc.VersionAttributes]](
-		ctx, c, "/v1/apps/"+appID+"/appStoreVersions", q,
-	)
-	if err != nil {
-		return asc.VersionAttributes{}, "", fmt.Errorf("state: list versions: %w", err)
+	var selected *asc.Resource[asc.VersionAttributes]
+	for page, err := range asc.Pages[asc.VersionAttributes](ctx, c, "/v1/apps/"+appID+"/appStoreVersions", q) {
+		if err != nil {
+			return asc.VersionAttributes{}, "", fmt.Errorf("state: list versions: %w", err)
+		}
+		for i := range page.Data {
+			if selected == nil {
+				row := page.Data[i]
+				selected = &row
+			}
+		}
 	}
-	if len(page.Data) == 0 {
+	if selected == nil {
 		return asc.VersionAttributes{}, "", fmt.Errorf("state: no version %q on platform %s", versionStr, platform)
 	}
-	return page.Data[0].Attributes, page.Data[0].ID, nil
+	return selected.Attributes, selected.ID, nil
 }
 
 // fetchEditableAppInfo returns the appInfo ID in an editable state, falling back to the first.
 func fetchEditableAppInfo(ctx context.Context, c *asc.Client, appID string) (string, error) {
 	q := url.Values{"limit": {"50"}}
-	page, err := asc.Get[asc.Collection[asc.AppInfoAttributes]](
-		ctx, c, "/v1/apps/"+appID+"/appInfos", q,
-	)
-	if err != nil {
-		return "", fmt.Errorf("state: list appInfos: %w", err)
-	}
-	for _, r := range page.Data {
-		switch r.Attributes.State {
-		case "PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED",
-			"METADATA_REJECTED", "WAITING_FOR_REVIEW", "IN_REVIEW":
-			return r.ID, nil
+	var firstID string
+	for page, err := range asc.Pages[asc.AppInfoAttributes](ctx, c, "/v1/apps/"+appID+"/appInfos", q) {
+		if err != nil {
+			return "", fmt.Errorf("state: list appInfos: %w", err)
+		}
+		for _, r := range page.Data {
+			if firstID == "" {
+				firstID = r.ID
+			}
+			switch r.Attributes.State {
+			case "PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED",
+				"METADATA_REJECTED", "WAITING_FOR_REVIEW", "IN_REVIEW":
+				return r.ID, nil
+			}
 		}
 	}
-	if len(page.Data) > 0 {
-		return page.Data[0].ID, nil
-	}
-	return "", nil
+	return firstID, nil
 }
 
-func fetchAgeRating(ctx context.Context, c *asc.Client, appInfoID string) (asc.AgeRatingDeclarationAttributes, error) {
-	resp, err := asc.Get[asc.Single[asc.AgeRatingDeclarationAttributes]](
+func fetchAgeRating(ctx context.Context, c *asc.Client, appInfoID string) (*asc.AgeRatingDeclarationAttributes, error) {
+	resp, err := asc.Get[struct {
+		Data *asc.Resource[asc.AgeRatingDeclarationAttributes] `json:"data"`
+	}](
 		ctx, c, "/v1/appInfos/"+appInfoID+"/ageRatingDeclaration", nil,
 	)
 	if err != nil {
-		return asc.AgeRatingDeclarationAttributes{}, err
+		return nil, err
 	}
-	return resp.Data.Attributes, nil
+	if resp.Data == nil {
+		return nil, nil
+	}
+	if resp.Data.ID == "" {
+		return nil, errors.New("age rating response missing resource id")
+	}
+	return &resp.Data.Attributes, nil
 }
 
 func fetchVersionBuildEncryption(ctx context.Context, c *asc.Client, versionID string) (buildID string, usesNonExempt *bool, err error) {
-	resp, err := asc.Get[asc.Single[asc.BuildAttributes]](
+	resp, err := asc.Get[struct {
+		Data *asc.Resource[asc.BuildAttributes] `json:"data"`
+	}](
 		ctx, c, "/v1/appStoreVersions/"+versionID+"/build", nil,
 	)
 	if err != nil {
 		return "", nil, err
+	}
+	if resp.Data == nil {
+		return "", nil, nil
+	}
+	if resp.Data.ID == "" {
+		return "", nil, errors.New("version build response missing resource id")
 	}
 	return resp.Data.ID, resp.Data.Attributes.UsesNonExemptEncryption, nil
 }

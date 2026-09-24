@@ -288,14 +288,14 @@ func TestCustomProductPages_FixtureReplay_GetDetail(t *testing.T) {
 	if pageResp.Data.Attributes.Name != "Holiday Promo" {
 		t.Errorf("page name = %q, want Holiday Promo", pageResp.Data.Attributes.Name)
 	}
-	versions, err := collectCustomProductPageVersions(ctx, c, "CPP-1", 0)
+	versions, err := collectCustomProductPageVersions(ctx, c, "CPP-1")
 	if err != nil {
 		t.Fatalf("collectCustomProductPageVersions: %v", err)
 	}
 	if len(versions) != 2 {
 		t.Fatalf("versions len = %d, want 2", len(versions))
 	}
-	locs, err := collectCustomProductPageLocalizations(ctx, c, "CPPV-2", 0)
+	locs, err := collectCustomProductPageLocalizations(ctx, c, "CPPV-2")
 	if err != nil {
 		t.Fatalf("collectCustomProductPageLocalizations: %v", err)
 	}

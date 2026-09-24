@@ -155,17 +155,17 @@ func TestPrivacyLabels_StubViewSemantics(t *testing.T) {
 	view := &PrivacyLabelsView{
 		BundleID:  "com.example.testapp",
 		Supported: false,
-		Reason:    "App Store Connect API v4.3 does not expose appPrivacyDetails. Manage privacy nutrition labels via App Store Connect web UI.",
+		Reason:    "App Store Connect API v4.5 does not expose appPrivacyDetails. Manage privacy nutrition labels via App Store Connect web UI.",
 		Reference: "https://developer.apple.com/app-store/app-privacy-details/",
 	}
 	if view.BundleID != "com.example.testapp" {
 		t.Errorf("bundleId = %q, want com.example.testapp", view.BundleID)
 	}
 	if view.Supported {
-		t.Errorf("supported should be false in v4.3")
+		t.Errorf("supported should be false in v4.5")
 	}
-	if !strings.Contains(view.Reason, "v4.3") || !strings.Contains(view.Reason, "appPrivacyDetails") {
-		t.Errorf("reason should mention v4.3 and appPrivacyDetails: %q", view.Reason)
+	if !strings.Contains(view.Reason, "v4.5") || !strings.Contains(view.Reason, "appPrivacyDetails") {
+		t.Errorf("reason should mention v4.5 and appPrivacyDetails: %q", view.Reason)
 	}
 	if !strings.HasPrefix(view.Reference, "https://developer.apple.com/") {
 		t.Errorf("reference should be an apple.com URL: %q", view.Reference)

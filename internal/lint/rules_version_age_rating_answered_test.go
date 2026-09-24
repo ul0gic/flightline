@@ -51,7 +51,7 @@ func TestVersionAgeRatingAnswered_OfflineFullyAnsweredNoOp(t *testing.T) {
 	full := &config.AgeRatingSpec{
 		CartoonOrFantasyViolence:                  &none,
 		RealisticViolence:                         &none,
-		ProlongedGraphicSadisticRealisticViolence: &f,
+		ProlongedGraphicSadisticRealisticViolence: &none,
 		ProfanityOrCrudeHumor:                     &none,
 		MatureSuggestiveThemes:                    &none,
 		HorrorOrFearThemes:                        &none,

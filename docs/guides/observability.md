@@ -1,6 +1,6 @@
 # Observability: reports, reviews, and metrics from the terminal
 
-The observation half of Flightline reads everything App Store Connect knows about your app: sales, finance, subscriptions, customer reviews, analytics, TestFlight feedback, crash diagnostics, and performance metrics. Every command here is read-only, supports `--output json`, and is designed to be piped. The examples use Tideterm (`app.tideterm.ios`); substitute your own bundle ID.
+The observation half of Flightline reads selected App Store Connect data for your app: sales, finance, subscriptions, customer reviews, analytics, TestFlight feedback, crash diagnostics, and performance metrics. Every command here is read-only, supports `--output json`, and is designed to be piped. The examples use Tideterm (`app.tideterm.ios`); substitute your own bundle ID.
 
 ## Prerequisites
 
@@ -142,16 +142,20 @@ flightline analytics download app.tideterm.ios --instance INST-42 --out ./report
 `status` refreshes the request and every available report page from Apple before rendering. Pass `--refresh=false` only when an offline view of the local checkpoint is required:
 
 ```
-FIELD                VALUE
-BUNDLE_ID            app.tideterm.ios
-STATE_FILE           /Users/dev/.local/state/flightline/app.tideterm.ios/analytics.json
-REQUEST_ID           d5f0a9c2-...
-STATUS               reports_available
-SUBMITTED_AT         2026-07-02T14:03:11Z
-LAST_POLL_AT         2026-07-02T14:19:47Z
-REPORTS              12
-DOWNLOADED_SEGMENTS  0
+FIELD                         VALUE
+BUNDLE_ID                     app.tideterm.ios
+STATE_FILE                    /Users/dev/.local/state/flightline/app.tideterm.ios/analytics.json
+REQUEST_ID                    d5f0a9c2-...
+STATUS                        reports_available
+REPORT_DEFINITIONS_AVAILABLE  true
+DATA_READINESS                unchecked
+SUBMITTED_AT                  2026-07-02T14:03:11Z
+LAST_POLL_AT                   2026-07-02T14:19:47Z
+REPORT_DEFINITIONS            12
+DOWNLOADED_SEGMENTS           0
 ```
+
+`reports_available` preserves the existing status vocabulary and means report definitions exist. It does not establish downloadable data readiness. Status does not enumerate instances; `DATA_READINESS` remains `unchecked`. The JSON output from `list-instances` reports `dataReadiness` for each selected report as `available` or `none_available`.
 
 `list-instances` narrows with `--report-id`, `--category` (for example `APP_USAGE`, `COMMERCE`), or `--name-contains`. `download` requires `--instance` and writes one CSV per segment, named `<bundleId>-<instanceId>-segment<N>.csv`; `--out` takes a directory (created if missing) and refuses to clobber an existing file.
 
@@ -201,6 +205,14 @@ Watch for regressions Apple has flagged:
 ```bash
 flightline performance app app.tideterm.ios --output json | jq '.insights.regressions'
 ```
+
+## Performance overview
+
+`flightline performance overview <bundleId> --output json` reads Apple's app overview: categories, section datasets, recommended goals, insights, and signature summaries. `--device-type` filters the response. Empty results retain `categories: []`; present numeric zeros are preserved. Existing `performance app` and `performance build` metric output stays compatible. Current metric categories include STORAGE; overview recommended goals use their own `value` and `detail` fields.
+
+## Assigned app tags
+
+`flightline app-tags list <bundleId>` lists Apple-assigned tags and their visibility. `app-tags set-visibility <bundleId> <tagId> --visible-in-app-store=false --confirm` changes one assigned tag; an identical value makes no write. Missing visibility is unknown and blocks a write. Tags cannot be created arbitrarily, and this workflow does not use deprecated territory relationships.
 
 ## Composing it all
 

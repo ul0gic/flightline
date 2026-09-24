@@ -79,6 +79,7 @@ func (e *ChangeError) Unwrap() error { return e.Err }
 
 // ApplyResult summarizes one Apply run.
 type ApplyResult struct {
+	Planned []plan.Change `json:"planned,omitempty"`
 	Applied []plan.Change `json:"applied"`
 	Skipped []plan.Change `json:"skipped,omitempty"`
 	Errors  []ChangeError `json:"errors,omitempty"`
@@ -86,7 +87,7 @@ type ApplyResult struct {
 
 // applyCheckpointSchemaVersion gates forward-incompat changes to the
 // on-disk checkpoint shape.
-const applyCheckpointSchemaVersion = 2
+const applyCheckpointSchemaVersion = 3
 
 // applyCheckpoint is the on-disk shape of an in-progress apply.
 type applyCheckpoint struct {
@@ -115,6 +116,11 @@ func Apply(ctx context.Context, c *asc.Client, changes []plan.Change, opts Apply
 	if !opts.Confirm && !opts.DryRun {
 		return nil, errors.New("state: Apply: --confirm is required for non-dry-run writes")
 	}
+	changes = orderApplyChanges(changes)
+	if failures := ValidateChanges(changes); len(failures) > 0 {
+		res := &ApplyResult{Errors: failures}
+		return res, summarizeApplyErrors(res, len(changes))
+	}
 	opts, cp, err := prepareApplyCheckpoint(opts, changes)
 	if err != nil {
 		return nil, err
@@ -126,15 +132,23 @@ func Apply(ctx context.Context, c *asc.Client, changes []plan.Change, opts Apply
 		prog = func(plan.Change, string) {}
 	}
 
+	var failed []plan.Change
 	for _, ch := range changes {
+		if hasFailedDependency(ch, failed) {
+			res.Skipped = append(res.Skipped, ch)
+			failed = append(failed, ch)
+			prog(ch, "skipped: prerequisite failed")
+			continue
+		}
 		if opts.DryRun {
-			res.Applied = append(res.Applied, ch)
-			prog(ch, "dry-run")
+			res.Planned = append(res.Planned, ch)
+			prog(ch, "planned")
 			continue
 		}
 
 		// Continue past failures: one bad change must not strand the rest of the plan un-attempted.
 		if err := dispatch(ctx, c, opts.Context, ch); err != nil {
+			failed = append(failed, ch)
 			res.Errors = append(res.Errors, newChangeError(ch, err))
 			prog(ch, "error")
 			continue
@@ -250,8 +264,9 @@ func dispatch(ctx context.Context, c *asc.Client, actx ApplyContext, ch plan.Cha
 // dispatchEntry pairs a path predicate with its dispatcher. Table scanned in order; exact
 // matches must precede sibling prefixes (e.g. usesNonExemptEncryption before declaration/).
 type dispatchEntry struct {
-	match func(string) bool
-	fn    func(context.Context, *asc.Client, ApplyContext, plan.Change) error
+	match    func(string) bool
+	fn       func(context.Context, *asc.Client, ApplyContext, plan.Change) error
+	validate func(plan.Change) error
 }
 
 func eq(want string) func(string) bool { return func(p string) bool { return p == want } }
@@ -270,24 +285,34 @@ func anyOf(paths ...string) func(string) bool {
 }
 
 var dispatchTable = []dispatchEntry{
+	{eq("/spec/version/phasedRelease"), applyPhasedReleaseChange, ValidatePhasedReleaseChange},
+	{eq("/spec/contentRights"), applyRightsChange, ValidateRightsChange},
+	{eq("/spec/appEula"), applyRightsChange, ValidateRightsChange},
+	{isPreviewPath, applyPreviewChange, ValidatePreviewChange},
+	{isScreenshotOrderPath, applyScreenshotOrderChange, ValidateScreenshotOrderChange},
+	{prefix("/spec/appAvailability/"), applyAppAvailabilityChange, ValidateAppAvailabilityChange},
+	{isIAPCommercePath, applyIAPCommerceChange, ValidateIAPCommerceChange},
+	{prefix("/spec/testflight/metadata/"), applyBetaMetadataChange, ValidateBetaMetadataChange},
+	{isBetaGroupBuildsPath, applyBetaDistributionChange, ValidateBetaDistributionChange},
+	{prefix("/spec/accessibilityDeclarations/families/"), applyAccessibilityDeclaration, ValidateAccessibilityChange},
 	{anyOf(
 		"/spec/version/copyright",
 		"/spec/version/releaseType",
 		"/spec/version/earliestReleaseDate",
 		"/spec/version/downloadable",
-	), applyVersionField},
-	{eq("/spec/build/number"), applyBuildAttach},
-	{prefix("/spec/metadata/locales/"), applyMetadataField},
-	{prefix("/spec/screenshots/locales/"), applyScreenshotSet},
-	{prefix("/spec/iap/products/"), applyIAPField},
-	{prefix("/spec/ageRating/"), applyAgeRatingField},
-	{eq("/spec/exportCompliance/usesNonExemptEncryption"), applyEncryptionFlag},
-	{prefix("/spec/exportCompliance/declaration/"), applyEncryptionDeclaration},
-	{prefix("/spec/reviewerDemo/"), applyReviewerDemoField},
-	{prefix("/spec/categories/"), applyCategoriesField},
-	{prefix("/spec/pricing/"), applyPricingField},
-	{prefix("/spec/testflight/groups/"), applyTestFlightField},
-	{prefix("/spec/customProductPages/"), applyCustomProductPageField},
+	), applyVersionField, nil},
+	{eq("/spec/build/number"), applyBuildAttach, nil},
+	{prefix("/spec/metadata/locales/"), applyMetadataField, nil},
+	{prefix("/spec/screenshots/locales/"), applyScreenshotSet, nil},
+	{prefix("/spec/iap/products/"), applyIAPField, nil},
+	{prefix("/spec/ageRating/"), applyAgeRatingField, nil},
+	{eq("/spec/exportCompliance/usesNonExemptEncryption"), applyEncryptionFlag, nil},
+	{eq("/spec/exportCompliance/declaration"), applyEncryptionDeclaration, nil},
+	{prefix("/spec/reviewerDemo/"), applyReviewerDemoField, nil},
+	{prefix("/spec/categories/"), applyCategoriesField, nil},
+	{eq("/spec/pricing"), applyPricingField, nil},
+	{prefix("/spec/testflight/groups/"), applyTestFlightField, nil},
+	{prefix("/spec/customProductPages/"), applyCustomProductPageField, nil},
 }
 
 // errUnmapped is the typed error for changes the dispatch table
@@ -420,6 +445,10 @@ func applyEncryptionFlag(ctx context.Context, c *asc.Client, actx ApplyContext, 
 
 // ageRatingSchemaToWire maps schema leaf names to Apple's wire field names.
 var ageRatingSchemaToWire = map[string]string{
+	"ageRatingOverrideV2":            "ageRatingOverrideV2",
+	"koreaAgeRatingOverride":         "koreaAgeRatingOverride",
+	"gracRatingClassificationNumber": "gracRatingClassificationNumber",
+
 	"cartoonOrFantasyViolence":                  "violenceCartoonOrFantasy",
 	"realisticViolence":                         "violenceRealistic",
 	"prolongedGraphicSadisticRealisticViolence": "violenceRealisticProlongedGraphicOrSadistic",
@@ -625,7 +654,7 @@ func loadApplyCheckpoint(actx ApplyContext) (*applyCheckpoint, error) {
 		return nil, fmt.Errorf("state: parse checkpoint: %w", err)
 	}
 	if cp.SchemaVersion != applyCheckpointSchemaVersion {
-		return nil, fmt.Errorf("state: checkpoint at %s has unsupported schemaVersion %d", path, cp.SchemaVersion)
+		return nil, fmt.Errorf("state: checkpoint at %s has unsupported schemaVersion %d; inspect a fresh plan and rerun without --resume", path, cp.SchemaVersion)
 	}
 	if cp.BundleID != actx.BundleID || cp.Version != actx.Version || cp.Platform != actx.Platform {
 		return nil, errors.New("state: checkpoint coordinates do not match the requested apply")

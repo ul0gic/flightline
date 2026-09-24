@@ -109,12 +109,12 @@ var diagnosticsCmd = &cobra.Command{
 resource. Apple deduplicates crash and hang reports into signatures:
 same call stack, same crash, regardless of how many users hit it.
 
-Apple v4.3 only exposes diagnostic signatures scoped to a build:
+Apple v4.5 only exposes diagnostic signatures scoped to a build:
 
   - list <bundleId> --build <number>    : list signatures for a build
   - get <signatureId>                   : fetch the full log payload
 
-There is no app-wide aggregation API in v4.3; --build is required on list.`,
+There is no app-wide aggregation API in v4.5; --build is required on list.`,
 }
 
 var diagnosticsListCmd = &cobra.Command{
@@ -198,7 +198,7 @@ func runDiagnosticsList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Apple's API exposes no sort param for this collection in v4.3.
+	// Apple's API exposes no sort param for this collection in v4.5.
 	sort.SliceStable(views, func(i, j int) bool {
 		return views[i].Attributes.Weight > views[j].Attributes.Weight
 	})

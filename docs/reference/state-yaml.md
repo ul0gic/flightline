@@ -10,6 +10,8 @@ The schema URL is `https://flightline.dev/schemas/v1alpha1/state.schema.json`. F
 
 **This reference covers v1alpha1.** The `apiVersion` constant locks that. If a future release bumps to `v1beta1`, the diff will be explicit and documented.
 
+Apply checkpoints now use format 3 because parent/child and pricing/declaration operations changed. Older checkpoints are rejected by `--resume`; inspect a fresh plan before applying without `--resume`. Live state is fetched again so already completed operations are not blindly replayed.
+
 See [the state-as-code guide](../guides/state-as-code.md) for a 5-minute walkthrough.
 
 ---
@@ -203,7 +205,7 @@ Each device slot accepts 1 to 10 screenshots (`minItems: 1`, `maxItems: 10`).
 
 ## spec.iap
 
-In-app purchases keyed by `productId`. This section covers consumable, non-consumable, and non-renewing IAPs. Auto-renewable subscriptions live under `spec.testflight` (the subscription group surface), they are not represented here.
+In-app purchases keyed by `productId`. This section covers consumable, non-consumable, and non-renewing IAPs. Auto-renewable subscriptions use ASC subscription groups and are not represented in this state section; `spec.testflight` manages beta testing.
 
 ```yaml
 spec:
@@ -213,7 +215,6 @@ spec:
         type: NON_CONSUMABLE
         name: "Lifetime Access"
         familySharable: false
-        contentHosting: NON_HOSTED
         reviewNote: |
           Tap "Unlock Full Access" on the home screen.
         reviewScreenshot:
@@ -228,10 +229,10 @@ spec:
 
 | Field | Type | Required | Constraint | Gotcha |
 |-------|------|----------|------------|--------|
-| `type` | enum | yes | `CONSUMABLE`, `NON_CONSUMABLE`, `NON_RENEWING_SUBSCRIPTION` | `AUTO_RENEWABLE_SUBSCRIPTION` is not valid here, auto-renewing subs live in ASC's subscription group surface. |
-| `name` | string | no |, | Apple-facing reference name in ASC. Not shown to customers. |
+| `type` | enum | yes | `CONSUMABLE`, `NON_CONSUMABLE`, `NON_RENEWING_SUBSCRIPTION` | Immutable after creation. `AUTO_RENEWABLE_SUBSCRIPTION` belongs to ASC's subscription group surface. |
+| `name` | string | on create |, | Apple-facing reference name in ASC. Not shown to customers. |
 | `familySharable` | boolean | no |, | Whether Family Sharing is enabled for this IAP. |
-| `contentHosting` | enum | no | `HOSTED`, `NON_HOSTED` | Hosted: Apple hosts the downloadable content. Most IAPs are `NON_HOSTED`. |
+| `contentHosting` | enum | no | `HOSTED`, `NON_HOSTED` | Hosted: Apple hosts the downloadable content. This is observed, read-only state: unchanged fetched values are accepted; setting it on a new IAP or changing it fails local validation. |
 | `reviewNote` | string | no | maxLength 4000 | Instructions for the App Review team to exercise this IAP. Important for IAPs with non-obvious unlock paths. |
 | `reviewScreenshot` | object | no |, | Path to a screenshot showing the IAP unlock screen. See note below. |
 | `localizations` | map | no |, | Locale-keyed `{name, description}` pairs. See below. |
@@ -253,8 +254,8 @@ reviewScreenshot:
 
 | Field | Type | Required | maxLength | Gotcha |
 |-------|------|----------|-----------|--------|
-| `name` | string | no | 30 | Customer-visible IAP name. |
-| `description` | string | no | 45 | Customer-visible IAP description. Note the 45-char ceiling, much shorter than app metadata. |
+| `name` | string | on create | 30 | Customer-visible IAP name; sent with a new localization in one complete request. |
+| `description` | string | no | 45 | New or changed descriptions have a 45-character write limit. Longer observed values survive fetch/reload and remain valid when unchanged. |
 
 ---
 
@@ -281,7 +282,7 @@ spec:
 
 ### Frequency fields (enum)
 
-These fields accept `NONE`, `INFREQUENT_OR_MILD`, or `FREQUENT_OR_INTENSE`:
+These fields accept `NONE`, `INFREQUENT_OR_MILD`, `FREQUENT_OR_INTENSE`, `INFREQUENT`, or `FREQUENT`:
 
 | Field | Flightline name | Apple API field |
 |-------|-------------|-----------------|
@@ -300,7 +301,7 @@ These fields accept `NONE`, `INFREQUENT_OR_MILD`, or `FREQUENT_OR_INTENSE`:
 
 | Field | Type | Gotcha |
 |-------|------|--------|
-| `prolongedGraphicSadisticRealisticViolence` | boolean | Apple's API uses a frequency enum for this field; Flightline maps any non-`NONE` value fetched from Apple to `true`. Set `true` for apps with prolonged, graphic, sadistic violence. |
+| `prolongedGraphicSadisticRealisticViolence` | frequency enum | Preserves Apple's exact frequency value. Replace old boolean values with an explicit questionnaire answer; Flightline does not infer which frequency `true` meant. |
 | `gambling` | boolean | Gambling features (not just references, actual gambling mechanics). |
 | `unrestrictedWebAccess` | boolean | App provides unrestricted internet access (e.g., a web browser). |
 | `kidsAgeBand` | enum or null | `FIVE_AND_UNDER`, `SIX_TO_EIGHT`, `NINE_TO_ELEVEN`, or `null`. Set only for Kids category apps. |
@@ -310,33 +311,32 @@ These fields accept `NONE`, `INFREQUENT_OR_MILD`, or `FREQUENT_OR_INTENSE`:
 
 ## spec.exportCompliance
 
-Per-build encryption declaration. Every build submitted to Apple must have export compliance answered. Most apps that only use system TLS set `usesNonExemptEncryption: false` and are done.
+The build-level `usesNonExemptEncryption` answer and an optional App Encryption Declaration are separate managed operations. Supply the answers appropriate to your app; Flightline does not infer a classification.
 
 ```yaml
 spec:
+  build:
+    number: "42"
   exportCompliance:
-    usesNonExemptEncryption: false
+    usesNonExemptEncryption: true
+    declaration:
+      appDescription: "Description of the app and its encryption use."
+      containsProprietaryCryptography: false
+      containsThirdPartyCryptography: true
+      availableOnFrenchStore: false
 ```
 
-| Field | Type | Required | Gotcha |
-|-------|------|----------|--------|
-| `usesNonExemptEncryption` | boolean | no | `false` for apps that use only standard system TLS/HTTPS. `true` triggers the ECCN classification block below. |
-| `declaration` | object | no | Required only when `usesNonExemptEncryption: true` and the app needs full ECCN classification (rare). |
+`declaration` requires an explicit `spec.build.number` and all four attributes shown. Flightline compares the selected build's associated declaration, reuses a matching eligible declaration or creates one complete resource, then associates it with that build. A failed build attachment blocks dependent export operations. A failed declaration association remains an error; a subsequent apply reuses the created declaration instead of creating another.
 
-### declaration (ECCN classification)
+| Field | Type | Contract |
+|-------|------|----------|
+| `usesNonExemptEncryption` | boolean | Independently manages the selected build's encryption answer. |
+| `declaration.appDescription` | string | Required for declaration creation. |
+| `declaration.containsProprietaryCryptography` | boolean | Required declaration answer. |
+| `declaration.containsThirdPartyCryptography` | boolean | Required declaration answer. |
+| `declaration.availableOnFrenchStore` | boolean | Required declaration answer. |
 
-Only populate this if your app implements proprietary cryptographic algorithms beyond TLS.
-
-| Field | Type | Gotcha |
-|-------|------|--------|
-| `containsProprietaryCryptography` | boolean | Your own crypto implementation. |
-| `containsThirdPartyCryptography` | boolean | Third-party crypto beyond the OS. |
-| `availableOnFrenchStore` | boolean | French regulatory requirement. |
-| `usesEncryption` | boolean | Any encryption usage. |
-| `exempt` | boolean | Meets an EAR exemption. |
-| `eccn` | string | ECCN classification string (e.g. `5D002`). |
-| `documentName` | string | Name of the encryption documentation. |
-| `documentUrl` | URI | URL to the documentation. |
+Legacy declaration fields `usesEncryption`, `exempt`, `eccn`, `documentName`, and `documentUrl` fail local write-intent validation. Document upload, Apple review/approval, and classification assignment are separate lifecycle steps and are not performed by this state operation. The build association workflow is covered by local API fixtures; live qualification remains pending.
 
 ---
 
@@ -393,21 +393,23 @@ spec:
 
 ---
 
+Omitting either subcategory list leaves it unmanaged. An explicit empty list (`[]`) clears that list.
+
 ## spec.pricing
 
-Single base-territory price point. Per-territory overrides are a future L2 extension.
+The active base-territory price point. A change is one atomic territory/price-point pair; an omitted field is preserved from verified live state. An unpriced app requires both. Changing the base territory also requires an explicit matching price-point ID. Unrelated manual prices and future windows are preserved; ambiguous schedules fail before writing. Per-territory authoring remains a future L2 extension.
 
 ```yaml
 spec:
   pricing:
     baseTerritory: USA
-    appPricePointId: "FREE"
+    appPricePointId: "<APP_PRICE_POINT_ID>"
 ```
 
 | Field | Type | Required | Gotcha |
 |-------|------|----------|--------|
 | `baseTerritory` | string | no | ISO 3166-1 alpha-3 territory code (e.g. `USA`, `GBR`, `JPN`, `AUS`). Not alpha-2. |
-| `appPricePointId` | string | no | Apple's `appPricePoint` resource ID. Use `flightline price-points list` to enumerate. `"FREE"` is the free tier. Quote the value, bare `FREE` is not a YAML string. |
+| `appPricePointId` | string | no | Apple's app-specific `appPricePoint` resource ID for the selected territory. Use a real ID from ASC or a fetched state file; `FREE` is not a universal resource ID. |
 
 ---
 
@@ -438,10 +440,12 @@ Group keys match `^[A-Za-z0-9 _-]+$`. They are the human-readable names you assi
 
 | Field | Type | Required | Constraint | Gotcha |
 |-------|------|----------|------------|--------|
-| `isInternal` | boolean | no |, | Internal groups are your App Store Connect team members. External groups are outside testers. |
+| `isInternal` | boolean | on create | immutable | Internal groups are your App Store Connect team members. External groups are outside testers. |
 | `publicLink` | boolean | no |, | Enables Apple's public invite link for this group. Valid only for external groups. |
 | `publicLinkLimit` | integer | no | 1 to 10000 | Maximum testers via the public link. Requires `publicLink: true`. |
 | `testers` | array | no |, | Explicit tester list. Each entry requires at least `email`. |
+
+An omitted `testers` list leaves membership unmanaged. Explicit `testers: []` removes all managed group memberships. A new group and its declared testers are separate dependent changes; failure to create the group prevents tester operations.
 
 ### testflightTester fields
 
@@ -486,7 +490,7 @@ spec:
 
 **Device classes for CPPs.** CPPs support a subset of device classes: `APP_IPHONE_67`, `APP_IPHONE_69`, `APP_IPHONE_65`, `APP_IPHONE_61`, `APP_IPHONE_55`, `APP_IPAD_PRO_3GEN_129`, `APP_IPAD_PRO_3GEN_11`. TV, Watch, and Vision Pro device classes are not supported on CPPs.
 
-**Current limitation.** CPP screenshot binary uploads are not driven by `flightline apply`, the same as main screenshots. Use the dedicated Custom Product Page screenshot upload command directly.
+**Asset uploads.** `flightline apply` drives main and CPP screenshot uploads from managed local files. Main and CPP previews also have supported asset intent. See [uploading assets](../guides/uploading-assets.md) for checksum comparison, processing, and recovery.
 
 ---
 
@@ -494,7 +498,7 @@ spec:
 
 ### Privacy nutrition labels
 
-`spec.privacyLabels` does not exist in the v1alpha1 schema and is not planned for v1. Apple's App Store Connect API v4.3 does not expose the `appPrivacyDetails` resource, there are no read or write endpoints for privacy nutrition labels in the public API.
+`spec.privacyLabels` does not exist in the v1alpha1 schema and is not planned for v1. Apple's App Store Connect API v4.5 does not expose the `appPrivacyDetails` resource, there are no read or write endpoints for privacy nutrition labels in the public API.
 
 Flightline ships a `flightline privacy-labels get <bundleId>` stub that returns a typed diagnostic explaining the gap. The JSON contract has `supported: false` and a pointer to the portal.
 
@@ -542,6 +546,12 @@ Every locale you declare in `spec.metadata.locales` is managed. Fill the baselin
 
 The `seventeenPlus` boolean in `spec.ageRating` reflects Apple's computed rating from your questionnaire answers. You cannot set it directly, Flightline returns a typed error if this field appears in a change set. You may include it in the YAML as documentation of the current state (as written by `flightline fetch`), but changes to it are ignored with an error, not silently applied.
 
+### Rating overrides and GRAC classification
+
+`ageRatingOverrideV2` accepts NONE, NINE_PLUS, THIRTEEN_PLUS, SIXTEEN_PLUS, EIGHTEEN_PLUS, or UNRATED. `koreaAgeRatingOverride` accepts NONE, ALL, TWELVE_PLUS, FIFTEEN_PLUS, or NINETEEN_PLUS. `gracRatingClassificationNumber` preserves a user-supplied string. These optional fields are not required by the general questionnaire completeness rule. Flightline does not infer a regional classification or approval.
+
+The deprecated legacy `ageRatingOverride` remains available through the existing L1 setter for compatibility, with its own SEVENTEEN_PLUS enum; it is not part of new desired state. Use V2 for new state declarations.
+
 ### contestsAndGambling maps to Apple's "contests" field
 
 The schema uses `contestsAndGambling` for the frequency question about contests and gambling features. On Apple's wire API, this field is called `contests`. Flightline translates in both directions; you always use `contestsAndGambling` in your YAML.
@@ -552,9 +562,17 @@ If you omit `spec.screenshots` entirely, Flightline will not touch your screensh
 
 ### Version must be in editable state
 
-`flightline plan` and `flightline apply` require the version identified by `metadata.version` to be in an editable state in ASC (e.g., `PREPARE_FOR_SUBMISSION`, `DEVELOPER_REJECTED`). If the version is `READY_FOR_SALE` or under review, writes will fail with a 422 from Apple's API.
+Except for the narrowly scoped phased-release operations below, `flightline plan` and `flightline apply` require the version identified by `metadata.version` to be in an editable state in ASC (e.g., `PREPARE_FOR_SUBMISSION`, `DEVELOPER_REJECTED`). If the version is `READY_FOR_SALE` or under review, writes will fail with a 422 from Apple's API.
 
 ---
+
+## Accessibility declarations
+
+`spec.accessibilityDeclarations.families` maps device families (`IPHONE`, `IPAD`, `APPLE_TV`, `APPLE_WATCH`, `MAC`, `VISION`) to explicit support answers. Supported fields are `supportsAudioDescriptions`, `supportsCaptions`, `supportsDarkInterface`, `supportsDifferentiateWithoutColorAlone`, `supportsLargerText`, `supportsReducedMotion`, `supportsSufficientContrast`, `supportsVoiceControl`, and `supportsVoiceover`. Each is an optional boolean: omitted answers remain unmanaged; explicit `false` is preserved.
+
+Fetch selects the current draft for a family, or the published declaration if no draft exists. `state` is observed and read-only. Replaced history is available through `accessibility-declarations list`, outside desired state. An empty families map deletes nothing. Creating an absent family requires at least one explicit support answer; Flightline never infers accessibility support.
+
+Apply can create a draft or update explicit answers in an existing draft. A change to published answers fails locally: create a draft deliberately through the CLI first. Publishing and deleting a declaration require explicit CLI commands with `--confirm` and a fresh draft-state check; they are never automatic apply operations. These workflows are locally tested; Apple lifecycle acceptance requires live qualification.
 
 ## See also
 
@@ -562,3 +580,51 @@ If you omit `spec.screenshots` entirely, Flightline will not touch your screensh
 - [Schema source](../../schemas/flightline.schema.json), the JSON Schema 2020-12 contract
 - [Preflight in CI](../guides/preflight-in-ci.md), run live release checks as a deployment gate
 - `flightline --help`, `flightline fetch --help`, `flightline plan --help`, `flightline apply --help`
+
+## IAP commerce
+
+`spec.iap.products.<productId>.commerce.pricing` manages the current base price as a complete `baseTerritory` / `pricePointId` pair. Both are required together. The selected point must belong to that IAP and territory. Apply rereads the schedule, rejects a stale planned price, and preserves verified historical, future, and other-territory manual windows. Detailed windows remain available through `iap commerce pricing`; state projects the currently active base pair. Schedule replay is locally tested and awaits live qualification.
+
+`commerce.availability` accepts `availableInNewTerritories` and `availableTerritories`. Omitted components preserve observed settings. The territory list is a complete managed set when supplied; `[]` explicitly clears it. Initial configuration requires both components. Apply rejects concurrent changes to the observed availability set. Omitting `commerce` leaves commercial settings unmanaged.
+
+Offer-code definitions and issuance are explicit L1 actions under `iap offer-codes`, never state reconciliation. Custom codes use a private input file; one-time values download only to a new private CSV file. Promotional assets are not yet supported by state.
+
+## App availability
+
+`spec.appAvailability.territories` maps territory codes to optional `available` and `releaseDate` intent. Changes are limited to freshly observed active preorder territories. Omitted territories and fields remain unchanged; territory creation and ordinary released-app availability changes are not qualified.
+
+`availableInNewTerritories`, `preOrderEnabled`, `preOrderPublishDate`, and `contentStatuses` are observed, read-only fields. Unchanged fetched values round-trip. A release date must be a nonempty `YYYY-MM-DD`; omission preserves it and null clearing is not represented. Ending preorders is an explicit `app-availability preorders end --confirm` action that immediately releases the app, never an automatic apply step.
+
+## TestFlight metadata and build membership
+
+`spec.testflight.metadata.appLocalizations` maps locales to optional `description`, `feedbackEmail`, `marketingUrl`, `privacyPolicyUrl`, and `tvOsPrivacyPolicy`. `reviewDetails` manages beta review contact information, demo-account name/required status, and notes. It is separate from App Store reviewer information. Apple must already have created the beta review detail. Passwords are excluded from state; explicit L1 beta metadata commands support secret references.
+
+`metadata.builds` contains entries with an exact `build` selector (`number`, `version`, `platform`) and locale-keyed `localizations` containing `whatsNew`. Duplicate selectors are rejected. Fetch observes app-level beta metadata and the attached build; plan/apply/preflight also observe explicitly requested historical builds, without scanning every build's localizations.
+
+Each `spec.testflight.groups.<name>.builds` is an optional complete set of exact build selectors. Omission preserves membership; `[]` explicitly removes all builds. Fetch includes these managed sets only with `--include-beta-builds`; reconciliation reads memberships for groups that declare them. Existing tester-roster behavior is unchanged.
+
+Apply checks every proposed addition's fresh auto-notify policy before changing membership and requires it to be explicitly disabled. Use `testflight recruitment policy` for deliberate policy changes and `testflight recruitment notify --confirm` for notifications. Metadata writes reject conflicting concurrent changes. Invitation resend and recruitment-criteria writes remain unsupported; neither is triggered by fetching or applying state.
+
+## Preview videos and screenshot order
+
+`spec.previews.locales.<locale>.<previewType>` contains a complete managed array of preview files. Each item has `path`, optional `previewFrameTimeCode`, and an observed `sourceFileChecksum`. Omission leaves a preview type unmanaged; an explicit empty array clears that type. CPP localizations use the same arrays under `previews`. Local files hydrate their checksum on load; fetched checksum values survive serialization when local bytes are unavailable. A changed local file is a different asset even if its filename is unchanged. Frame omission preserves the existing frame selection for a matching asset.
+
+Preview reconciliation waits for processing after upload. A pending, failed, or unknown remote processing state prevents a successful state snapshot; inspect the asset and use the explicit preview wait command before planning again. A successful upload commit alone is not processing completion. CPP preview changes require a consistent editable target; Flightline rejects a plan observed from an approved version when it cannot verify that same preview set in an editable draft. Create and inspect the draft before reconciling those assets. Review attachments are explicit CLI operations and are not desired-state fields.
+
+Set `spec.screenshots.order: true` to use each declared screenshot array as its complete display order. CPP localizations opt in separately with `screenshotOrder: true`. Omitting the flag or setting it false retains unordered reconciliation. Relationship ordering follows collection reconciliation and is skipped if that dependency fails. Reordering existing matching assets changes linkage only; it does not upload their bytes again.
+
+## Content rights and custom EULA
+
+`spec.contentRights` accepts an explicit `DOES_NOT_USE_THIRD_PARTY_CONTENT` or `USES_THIRD_PARTY_CONTENT` declaration. Flightline does not infer legal rights from app metadata. Omission preserves the existing declaration.
+
+`spec.appEula` accepts `agreementText` and a complete `territories` array. Creating a custom agreement requires both nonempty text and territories. For an existing agreement, omitted components preserve the observed value. Fetched empty values may round-trip unchanged, but changing an agreement to empty text or an empty territory set is rejected. Removal is an explicit confirmed CLI action, not omission or empty state. Apply rereads the agreement, rejects a stale plan, and confirms the resulting value after a write.
+
+## Phased release
+
+`spec.version.phasedRelease.enabled: true` enables an absent phased release in `INACTIVE` state for an eligible update. Omit `state` on creation. Omission preserves existing rollout configuration; `enabled: false` and rollout deletion are unsupported.
+
+For an existing rollout, `state` may change between `ACTIVE` and `PAUSED` only when the exact version is Ready for Distribution. `INACTIVE` and `COMPLETE` round-trip as observed values and cannot be requested as transitions. `startDate`, `totalPauseDuration`, and `currentDayNumber` are observed fields: omit them from authored intent, or preserve fetched values unchanged. Apple remains authoritative on update eligibility when local history does not prove it.
+
+Phased intent permits observing a noneditable version for planning, but every resulting non-phased change is rejected before apply. It does not enable metadata edits on a distributed app. Phased transitions reread current rollout and version status before writing.
+
+Manual release is exclusively the confirmed `version-release` command for a `MANUAL` version in `PENDING_DEVELOPER_RELEASE`. It is never triggered by state apply. Completing a rollout immediately for all users is not selected state behavior.

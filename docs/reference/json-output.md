@@ -84,6 +84,10 @@ Each diagnostic has this shape; `ruleId` values are stable identifiers (see the 
 | `fixHint` | runtime rule findings | A concrete field, value, command, or manual action that resolves the finding |
 | `reference` | optional | The guideline or document behind the rule |
 
+## Apply previews
+
+`apply --dry-run` validates every planned dispatch and emits changes in `planned`; `applied` contains no changes. Table output uses status `planned`. Unsupported paths, operations, and local values fail before any mutation or checkpoint update. Preview still requires live reads and credentials; it cannot guarantee Apple will accept a later write.
+
 ## Example: apply with a partial failure
 
 `flightline apply state.yaml --confirm --output json` keeps successful changes and reports each failed change with a stable, redacted message:
@@ -164,7 +168,7 @@ Report commands carry the fetch parameters in the envelope plus both the raw row
 }
 ```
 
-`rows` passes through every column of Apple's report as camelCase fields (rows omit columns Apple left blank); `summary` folds them by date and currency, and amounts in different currencies are never summed together. Dates for which Apple has no report appear in `unavailableDates` without aborting the remaining window. Collection fields are always arrays, including when empty; they are never omitted or rendered as `null`. The async `analytics` commands follow the same pattern: `analytics status --output json` returns the request parameters (`bundleId`, `requestId`, `status`, `stateFile`) alongside the observed `reports` and `downloadedSegments` arrays.
+`rows` passes through every column of Apple's report as camelCase fields (rows omit columns Apple left blank); `summary` folds them by date and currency, and amounts in different currencies are never summed together. Dates for which Apple has no report appear in `unavailableDates` without aborting the remaining window. Collection fields are always arrays, including when empty; they are never omitted or rendered as `null`. The async `analytics` commands follow the same pattern: `analytics status --output json` returns the request parameters (`bundleId`, `requestId`, `status`, `stateFile`) alongside the observed `reports` and `downloadedSegments` arrays. Additive fields `reportDefinitionsAvailable` and `dataReadiness` distinguish definitions from instance availability: status reports `unchecked`, while `list-instances` reports `available` or `none_available` per selected report. The legacy status `reports_available` means definitions exist.
 
 ## TSV passthrough
 
@@ -204,3 +208,27 @@ flightline preflight app.tideterm.ios --version 2.1.0 --output json \
 - [Preflight rules](./preflight-rules.md), every stable `ruleId`
 - [CLI reference](./cli.md), command index; `flightline <group> --help` for flags
 - [Observability guide](../guides/observability.md), the report commands in workflow context
+
+## Asset and legal-declaration results
+
+`previews list` returns a `previews` array with preview type, set ID, and a typed preview containing its checksum and processing state. `review-attachments list` returns an `attachments` array. Both return empty arrays for an empty collection. Successful upload actions report the resource ID and final processing state; a nonzero command result must not be interpreted as processing success merely because byte transfer completed.
+
+`screenshots reorder` returns `bundleId`, `setId`, `screenshotIds`, and `changed`. An identical complete order returns `changed: false`. Rights updates similarly report whether a mutation occurred. `app-eula get` emits agreement text and a complete `territories` array; absence has no EULA ID and an empty territory array. It does not imply that no standard license terms apply.
+
+## Review responses
+
+`reviews responses get|create|delete` results include action, bundle and review IDs, response ID when present, response body/state when returned, and `changed`. A created response may be `PENDING_PUBLISH`; creation is not proof that it is already publicly visible. An absent response has no response ID. Identical-body creation is a no-op; a different body requires a separately confirmed deletion before creation. An uncertain write returns an error and inspection guidance, without retrying the write.
+
+## Release and webhook results
+
+Phased-release results report the observed phase and change outcome. State supports enable and eligible pause/resume only; manual version release is a separate confirmed action. An accepted release request does not prove distribution has completed.
+
+Webhook outputs contain allowlisted configuration and delivery fields. Endpoint output is limited to its origin; secrets, raw payloads, and arbitrary server error text are excluded. Secret rotation is represented only by a boolean outcome. Ping reports request creation, not delivery success. Redelivery requires a new delivery identity and a recognized delivery state; missing or uncertain results return an error without retrying the action.
+
+## Submission assembly and campaign results
+
+`submission-assembly plan|assemble|submit` identifies its `action` and exact ordered `planned` items. Each proposal has `relationship`, `type` and `id`; proposal creation performs no submission write. Assembly reports the draft `submissionId`, whether it was `created`, and newly attached items. Only a confirmed final-submit result sets `submitted: true`; plan and assembly keep it false. An uncertain outcome returns an error with inspection guidance, never a success claim or automatic retry.
+
+`events` returns typed events, localizations and media processing states. The selected event workflow requires one processed media resource per card/detail slot; mixed image/video resources in one slot require inspection rather than automatic selection. Event card/detail uploads have separate checkpoint identities; a committed upload still requires processing completion. Apple does not expose a source checksum for event media, so an occupied slot requires inspection or an explicit deletion before replacement.
+
+`experiments` manages v2 product page experiments and treatment localizations/assets. Creation is app-bound: the response does not claim an association with the selected version until observed. A stopped experiment cannot restart. Event and experiment commands are direct workflows, outside desired-state reconciliation.

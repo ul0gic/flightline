@@ -84,10 +84,20 @@ func TestRunApplyWithClient_DryRunReadsLiveStateWithoutMutations(t *testing.T) {
 		mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
+		case "/v1/appStoreVersions/VER1/appStoreVersionPhasedRelease":
+			w.WriteHeader(http.StatusNotFound)
+		case "/v1/apps/APP1":
+			_, _ = w.Write([]byte(`{"data":{"id":"APP1","type":"apps","attributes":{}}}`))
+		case "/v1/apps/APP1/endUserLicenseAgreement":
+			_, _ = w.Write([]byte(`{"data":null}`))
+		case "/v1/apps/APP1/appAvailabilityV2":
+			w.WriteHeader(http.StatusNotFound)
 		case "/v1/apps":
 			_, _ = w.Write([]byte(`{"data":[{"type":"apps","id":"APP1"}],"links":{}}`))
 		case "/v1/apps/APP1/appStoreVersions":
 			_, _ = w.Write([]byte(`{"data":[{"type":"appStoreVersions","id":"VER1","attributes":{"versionString":"1.0","platform":"IOS","appVersionState":"PREPARE_FOR_SUBMISSION"}}],"links":{}}`))
+		case "/v1/appStoreVersions/VER1/build", "/v1/appStoreVersions/VER1/appStoreReviewDetail", "/v1/apps/APP1/appPriceSchedule":
+			_, _ = w.Write([]byte(`{"data":null}`))
 		default:
 			_, _ = w.Write([]byte(`{"data":[],"links":{}}`))
 		}

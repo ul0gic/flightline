@@ -48,6 +48,10 @@
       "additionalProperties": false,
       "description": "Desired state. Each top-level child maps to one ASC surface. Omitted children are not managed by this state file.",
       "properties": {
+        "previews": {"$ref": "#/$defs/previewsSpec"},
+        "contentRights": {"enum": ["DOES_NOT_USE_THIRD_PARTY_CONTENT", "USES_THIRD_PARTY_CONTENT"]},
+        "appEula": {"$ref": "#/$defs/appEulaSpec"},
+        "appAvailability": {"$ref": "#/$defs/AppAvailabilitySpec"},
         "version":            { "$ref": "#/$defs/versionSpec" },
         "build":              { "$ref": "#/$defs/buildSpec" },
         "metadata":           { "$ref": "#/$defs/metadataSpec" },
@@ -59,7 +63,8 @@
         "categories":         { "$ref": "#/$defs/categoriesSpec" },
         "pricing":            { "$ref": "#/$defs/pricingSpec" },
         "testflight":         { "$ref": "#/$defs/testflightSpec" },
-        "customProductPages": { "$ref": "#/$defs/customProductPagesSpec" }
+        "customProductPages": { "$ref": "#/$defs/customProductPagesSpec" },
+        "accessibilityDeclarations": { "$ref": "#/$defs/accessibilityDeclarationsSpec" }
       }
     },
 
@@ -68,6 +73,7 @@
       "additionalProperties": false,
       "description": "App Store version configuration. See /v1/appStoreVersions in openapi.oas.json.",
       "properties": {
+        "phasedRelease": { "$ref": "#/$defs/phasedReleaseSpec" },
         "releaseType": {
           "description": "How the version releases once approved.",
           "enum": ["MANUAL", "AFTER_APPROVAL", "SCHEDULED"]
@@ -86,6 +92,18 @@
           "description": "Whether the build is downloadable (TestFlight or App Store).",
           "type": "boolean"
         }
+      }
+    },
+
+    "phasedReleaseSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "state": {"enum": ["INACTIVE", "ACTIVE", "PAUSED", "COMPLETE"]},
+        "startDate": {"type": "string", "format": "date-time"},
+        "totalPauseDuration": {"type": "integer", "minimum": 0},
+        "currentDayNumber": {"type": "integer", "minimum": 0}
       }
     },
 
@@ -139,6 +157,7 @@
       "additionalProperties": false,
       "description": "Per-locale, per-device-class screenshots. Flightline computes MD5 of each file and skips slots whose sourceFileChecksum already matches.",
       "properties": {
+        "order": {"type":"boolean","description":"When true, declared file order is authoritative after asset reconciliation."},
         "locales": {
           "type": "object",
           "patternProperties": {
@@ -197,6 +216,7 @@
       "additionalProperties": false,
       "required": ["type"],
       "properties": {
+        "commerce": {"$ref": "#/$defs/IAPCommerceSpec"},
         "type": {
           "enum": ["CONSUMABLE", "NON_CONSUMABLE", "NON_RENEWING_SUBSCRIPTION"],
           "description": "AUTO_RENEWABLE_SUBSCRIPTION lives in the subscription group surface, not here."
@@ -228,7 +248,7 @@
       "additionalProperties": false,
       "properties": {
         "name":        { "type": "string", "maxLength": 30 },
-        "description": { "type": "string", "maxLength": 45 }
+        "description": { "type": "string", "description": "Observed values are preserved; new or changed descriptions must meet Apple write limits." }
       }
     },
 
@@ -239,7 +259,7 @@
       "properties": {
         "cartoonOrFantasyViolence":         { "$ref": "#/$defs/ageRatingFrequency" },
         "realisticViolence":                { "$ref": "#/$defs/ageRatingFrequency" },
-        "prolongedGraphicSadisticRealisticViolence": { "type": "boolean" },
+        "prolongedGraphicSadisticRealisticViolence": { "$ref": "#/$defs/ageRatingFrequency" },
         "profanityOrCrudeHumor":            { "$ref": "#/$defs/ageRatingFrequency" },
         "matureSuggestiveThemes":           { "$ref": "#/$defs/ageRatingFrequency" },
         "horrorOrFearThemes":               { "$ref": "#/$defs/ageRatingFrequency" },
@@ -262,12 +282,15 @@
         "socialMediaAgeRestricted":         { "type": "boolean", "description": "True when social media capabilities are disabled for users under 13. Only meaningful when socialMedia is true; requires the Declared Age Range API to verify age." },
         "unrestrictedWebAccess":            { "type": "boolean" },
         "kidsAgeBand":                      { "enum": ["FIVE_AND_UNDER", "SIX_TO_EIGHT", "NINE_TO_ELEVEN", null] },
+        "ageRatingOverrideV2": { "type": "string", "enum": ["NONE", "NINE_PLUS", "THIRTEEN_PLUS", "SIXTEEN_PLUS", "EIGHTEEN_PLUS", "UNRATED"] },
+        "koreaAgeRatingOverride": { "type": "string", "enum": ["NONE", "ALL", "TWELVE_PLUS", "FIFTEEN_PLUS", "NINETEEN_PLUS"] },
+        "gracRatingClassificationNumber": { "type": "string" },
         "seventeenPlus":                    { "type": "boolean", "description": "Read-only. Apple derives the 17+ rating from the other questionnaire answers; this field cannot be set directly. Flightline returns an error if this appears in a change set. May appear in fetched state files as documentation of the current computed rating." }
       }
     },
 
     "ageRatingFrequency": {
-      "enum": ["NONE", "INFREQUENT_OR_MILD", "FREQUENT_OR_INTENSE"]
+      "enum": ["NONE", "INFREQUENT_OR_MILD", "FREQUENT_OR_INTENSE", "INFREQUENT", "FREQUENT"]
     },
 
     "exportComplianceSpec": {
@@ -284,6 +307,7 @@
           "additionalProperties": false,
           "description": "Required only when usesNonExemptEncryption=true and the app needs full ECCN classification.",
           "properties": {
+            "appDescription":                  { "type": "string", "minLength": 1 },
             "containsProprietaryCryptography": { "type": "boolean" },
             "containsThirdPartyCryptography":  { "type": "boolean" },
             "availableOnFrenchStore":          { "type": "boolean" },
@@ -351,6 +375,7 @@
       "additionalProperties": false,
       "description": "TestFlight configuration. Tester management is opt-in; only groups listed here are managed.",
       "properties": {
+        "metadata": {"$ref": "#/$defs/BetaMetadataSpec"},
         "groups": {
           "type": "object",
           "patternProperties": {
@@ -365,6 +390,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "builds": {"type": "array", "items": {"$ref": "#/$defs/BetaBuildSelector"}, "uniqueItems": true},
         "isInternal":      { "type": "boolean", "description": "Internal groups (your team) vs external (public/non-team testers)." },
         "publicLink":      { "type": "boolean", "description": "Whether Apple generates a public link for this external group." },
         "publicLinkLimit": { "type": "integer", "minimum": 1, "maximum": 10000 },
@@ -409,6 +435,8 @@
               "additionalProperties": false,
               "properties": {
                 "promotionalText": { "type": "string", "maxLength": 170 },
+                "screenshotOrder": {"type":"boolean"},
+                "previews": {"$ref": "#/$defs/previewTypes"},
                 "screenshots": {
                   "type": "object",
                   "patternProperties": {
@@ -423,6 +451,376 @@
             }
           },
           "additionalProperties": false
+        }
+      }
+    },
+
+    "accessibilityDeclarationSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "DRAFT",
+            "PUBLISHED"
+          ]
+        },
+        "supportsAudioDescriptions": {
+          "type": "boolean"
+        },
+        "supportsCaptions": {
+          "type": "boolean"
+        },
+        "supportsDarkInterface": {
+          "type": "boolean"
+        },
+        "supportsDifferentiateWithoutColorAlone": {
+          "type": "boolean"
+        },
+        "supportsLargerText": {
+          "type": "boolean"
+        },
+        "supportsReducedMotion": {
+          "type": "boolean"
+        },
+        "supportsSufficientContrast": {
+          "type": "boolean"
+        },
+        "supportsVoiceControl": {
+          "type": "boolean"
+        },
+        "supportsVoiceover": {
+          "type": "boolean"
+        }
+      }
+    },
+
+    "accessibilityDeclarationsSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "families": {
+          "type": "object",
+          "propertyNames": {
+            "enum": [
+              "IPHONE",
+              "IPAD",
+              "APPLE_TV",
+              "APPLE_WATCH",
+              "MAC",
+              "VISION"
+            ]
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/accessibilityDeclarationSpec"
+          }
+        }
+      }
+    },
+
+    "IAPCommerceSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pricing": {
+          "$ref": "#/$defs/IAPPriceSpec"
+        },
+        "availability": {
+          "$ref": "#/$defs/IAPAvailabilitySpec"
+        }
+      }
+    },
+
+    "IAPPriceSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "baseTerritory": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pricePointId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "baseTerritory",
+        "pricePointId"
+      ]
+    },
+
+    "IAPAvailabilitySpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "availableInNewTerritories": {
+          "type": "boolean"
+        },
+        "availableTerritories": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+
+    "AppAvailabilitySpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "availableInNewTerritories": {
+          "type": "boolean"
+        },
+        "territories": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/TerritoryAvailabilitySpec"
+          }
+        }
+      }
+    },
+
+    "TerritoryAvailabilitySpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "releaseDate": {
+          "type": "string",
+          "format": "date",
+          "minLength": 10
+        },
+        "preOrderEnabled": {
+          "type": "boolean"
+        },
+        "preOrderPublishDate": {
+          "type": "string"
+        },
+        "contentStatuses": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+
+    "BetaMetadataSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "appLocalizations": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/BetaAppLocalizationSpec"
+          }
+        },
+        "reviewDetails": {
+          "$ref": "#/$defs/BetaReviewDetailsSpec"
+        },
+        "builds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BetaBuildMetadataSpec"
+          }
+        }
+      }
+    },
+
+    "BetaAppLocalizationSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "feedbackEmail": {
+          "type": "string"
+        },
+        "marketingUrl": {
+          "type": "string"
+        },
+        "privacyPolicyUrl": {
+          "type": "string"
+        },
+        "tvOsPrivacyPolicy": {
+          "type": "string"
+        }
+      }
+    },
+
+    "BetaBuildLocalizationSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "whatsNew": {
+          "type": "string"
+        }
+      }
+    },
+
+    "BetaBuildSelector": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "number": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "platform": {
+          "type": "string",
+          "minLength": 1,
+          "enum": [
+            "IOS",
+            "MAC_OS",
+            "TV_OS",
+            "VISION_OS"
+          ]
+        }
+      },
+      "required": [
+        "number",
+        "version",
+        "platform"
+      ]
+    },
+
+    "BetaBuildMetadataSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "build": {
+          "$ref": "#/$defs/BetaBuildSelector"
+        },
+        "localizations": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/BetaBuildLocalizationSpec"
+          }
+        }
+      },
+      "required": [
+        "build"
+      ]
+    },
+
+    "BetaReviewDetailsSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contactFirstName": {
+          "type": "string"
+        },
+        "contactLastName": {
+          "type": "string"
+        },
+        "contactEmail": {
+          "type": "string"
+        },
+        "contactPhone": {
+          "type": "string"
+        },
+        "demoAccountName": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "demoAccountRequired": {
+          "type": "boolean"
+        }
+      }
+    },
+
+    "previewsSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "locales": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/previewTypes"
+          }
+        }
+      }
+    },
+
+    "previewTypes": {
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "IPHONE_67",
+          "IPHONE_61",
+          "IPHONE_65",
+          "IPHONE_58",
+          "IPHONE_55",
+          "IPHONE_47",
+          "IPHONE_40",
+          "IPHONE_35",
+          "IPAD_PRO_3GEN_129",
+          "IPAD_PRO_3GEN_11",
+          "IPAD_PRO_129",
+          "IPAD_105",
+          "IPAD_97",
+          "DESKTOP",
+          "APPLE_TV",
+          "APPLE_VISION_PRO"
+        ]
+      },
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/previewFile"
+        }
+      }
+    },
+
+    "previewFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sourceFileChecksum": {"type":"string","description":"Observed source checksum; recomputed from a readable local file."},
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previewFrameTimeCode": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "path"
+      ]
+    },
+
+    "appEulaSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "agreementText": {
+          "type": "string"
+        },
+        "territories": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     }

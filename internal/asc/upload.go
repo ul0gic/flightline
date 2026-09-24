@@ -20,8 +20,8 @@ import (
 )
 
 // UploadCheckpointSchemaVersion is the on-disk JSON schema version for upload checkpoints.
-// Bump on shape changes; the loader rejects unrecognised versions (forward-incompat by design).
-const UploadCheckpointSchemaVersion = 1
+// Bump on shape changes; the loader rejects every other version (no implicit migration).
+const UploadCheckpointSchemaVersion = 2
 
 // Bounds a single chunk read into memory against a runaway operation.length.
 const uploadDownloadCapBytes = 64 << 20
@@ -34,6 +34,12 @@ const (
 	AssetKindAppScreenshot AssetKind = iota + 1
 	AssetKindIAPReviewScreenshot
 	AssetKindAppPreview
+	AssetKindReviewAttachment
+	AssetKindIAPPromotionalImage
+	AssetKindAppEventCardScreenshot
+	AssetKindAppEventDetailsScreenshot
+	AssetKindAppEventCardVideo
+	AssetKindAppEventDetailsVideo
 )
 
 // String is the canonical name in checkpoint files; renames break checkpoint compat.
@@ -43,8 +49,20 @@ func (k AssetKind) String() string {
 		return "appScreenshot"
 	case AssetKindIAPReviewScreenshot:
 		return "iapReviewScreenshot"
+	case AssetKindReviewAttachment:
+		return "appStoreReviewAttachment"
+	case AssetKindIAPPromotionalImage:
+		return "inAppPurchaseImage"
 	case AssetKindAppPreview:
 		return "appPreview"
+	case AssetKindAppEventCardScreenshot:
+		return "appEventCardScreenshot"
+	case AssetKindAppEventDetailsScreenshot:
+		return "appEventDetailsScreenshot"
+	case AssetKindAppEventCardVideo:
+		return "appEventCardVideo"
+	case AssetKindAppEventDetailsVideo:
+		return "appEventDetailsVideo"
 	default:
 		return fmt.Sprintf("AssetKind(%d)", int(k))
 	}
@@ -55,6 +73,8 @@ type kindEndpoints struct {
 	resourceType   string
 	relationship   string
 	parentType     string
+	eventAssetType string
+	omitChecksum   bool
 }
 
 func (k AssetKind) endpoints() (kindEndpoints, error) {
@@ -80,8 +100,22 @@ func (k AssetKind) endpoints() (kindEndpoints, error) {
 			relationship:   "appPreviewSet",
 			parentType:     "appPreviewSets",
 		}, nil
+	case AssetKindReviewAttachment:
+		return kindEndpoints{collectionPath: "/v1/appStoreReviewAttachments", resourceType: "appStoreReviewAttachments", relationship: "appStoreReviewDetail", parentType: "appStoreReviewDetails"}, nil
+	case AssetKindIAPPromotionalImage:
+		return kindEndpoints{collectionPath: "/v1/inAppPurchaseImages", resourceType: "inAppPurchaseImages", relationship: "inAppPurchase", parentType: "inAppPurchases"}, nil
+	case AssetKindAppEventCardScreenshot, AssetKindAppEventDetailsScreenshot, AssetKindAppEventCardVideo, AssetKindAppEventDetailsVideo:
+		resource := "appEventScreenshots"
+		if k == AssetKindAppEventCardVideo || k == AssetKindAppEventDetailsVideo {
+			resource = "appEventVideoClips"
+		}
+		assetType := "EVENT_CARD"
+		if k == AssetKindAppEventDetailsScreenshot || k == AssetKindAppEventDetailsVideo {
+			assetType = "EVENT_DETAILS_PAGE"
+		}
+		return kindEndpoints{collectionPath: "/v1/" + resource, resourceType: resource, relationship: "appEventLocalization", parentType: "appEventLocalizations", eventAssetType: assetType, omitChecksum: true}, nil
 	default:
-		return kindEndpoints{}, fmt.Errorf("asc: unknown AssetKind %d (use AssetKindAppScreenshot, AssetKindIAPReviewScreenshot, or AssetKindAppPreview)", int(k))
+		return kindEndpoints{}, fmt.Errorf("asc: unknown AssetKind %d (unsupported upload resource)", int(k))
 	}
 }
 
@@ -103,7 +137,8 @@ type UploadOptions struct {
 }
 
 // UploadResult names the created Apple resource after a successful commit.
-// Checksum is the hex-encoded MD5 sent as sourceFileChecksum; persist alongside ID for idempotency checks.
+// Checksum is the local hex-encoded MD5; most asset types also send it as
+// sourceFileChecksum. Event assets omit that unsupported field on commit.
 type UploadResult struct {
 	ID       string
 	Type     string
@@ -111,11 +146,16 @@ type UploadResult struct {
 }
 
 // UploadCheckpoint is the on-disk shape of an in-progress upload (stable JSON contract).
-// FilePath/FileSize/Md5Hex pin the local source; a mismatched file returns ErrCheckpointMismatch instead of re-uploading wrong bytes.
+// FilePath is absolute. FilePath/FileSize/Md5Hex pin the local source, while
+// Kind/ResourceType/ParentType/ParentID bind the checkpoint to one ASC target.
+// A mismatched file returns ErrCheckpointMismatch instead of re-uploading wrong bytes.
 type UploadCheckpoint struct {
 	SchemaVersion  int       `json:"schemaVersion"`
 	AssetID        string    `json:"assetId"`
 	Kind           string    `json:"kind"`
+	ResourceType   string    `json:"resourceType"`
+	ParentType     string    `json:"parentType"`
+	ParentID       string    `json:"parentId"`
 	FilePath       string    `json:"filePath"`
 	FileSize       int64     `json:"fileSize"`
 	Md5Hex         string    `json:"md5Hex"`
@@ -166,8 +206,9 @@ type reserveRequestData struct {
 }
 
 type reserveRequestAttributes struct {
-	FileSize int64  `json:"fileSize"`
-	FileName string `json:"fileName"`
+	FileSize          int64  `json:"fileSize"`
+	FileName          string `json:"fileName"`
+	AppEventAssetType string `json:"appEventAssetType,omitempty"`
 }
 
 type reserveRequestRel struct {
@@ -192,7 +233,7 @@ type commitRequestData struct {
 
 type commitRequestAttributes struct {
 	Uploaded           bool   `json:"uploaded"`
-	SourceFileChecksum string `json:"sourceFileChecksum"`
+	SourceFileChecksum string `json:"sourceFileChecksum,omitempty"`
 }
 
 // Upload runs the reserve → PUT chunks → commit lifecycle for one asset.
@@ -216,6 +257,9 @@ func (c *Client) Upload(ctx context.Context, opts UploadOptions) (UploadResult, 
 		return persistCheckpoint(UploadCheckpoint{
 			AssetID:        plan.assetID,
 			Kind:           opts.Kind.String(),
+			ResourceType:   endpoints.resourceType,
+			ParentType:     endpoints.parentType,
+			ParentID:       opts.ParentID,
 			FilePath:       asset.Path,
 			FileSize:       asset.FileSize,
 			Md5Hex:         md5Hex,
@@ -287,12 +331,12 @@ func resolveUploadPlan(
 	}
 
 	if opts.ResumeFromCheckpoint {
-		cp, found, err := tryLoadCheckpointForAsset(asset.Path)
+		cp, found, err := tryLoadCheckpointForAsset(asset.Path, opts.Kind, endpoints, opts.ParentID)
 		if err != nil {
 			return uploadPlan{}, err
 		}
 		if found {
-			if err := validateCheckpointForReuse(cp, opts.Kind, asset.Path, md5Hex); err != nil {
+			if err := validateCheckpointForReuse(cp, opts.Kind, endpoints, opts.ParentID, asset, md5Hex); err != nil {
 				return uploadPlan{}, err
 			}
 			plan.assetID = cp.AssetID
@@ -321,15 +365,23 @@ func resolveUploadPlan(
 	return plan, nil
 }
 
-// validateCheckpointForReuse asserts a loaded checkpoint matches the caller's kind and file MD5.
-func validateCheckpointForReuse(cp UploadCheckpoint, kind AssetKind, path, md5Hex string) error {
+// validateCheckpointForReuse asserts a loaded checkpoint matches the caller's ASC target and local file.
+func validateCheckpointForReuse(cp UploadCheckpoint, kind AssetKind, endpoints kindEndpoints, parentID string, asset UploadAsset, md5Hex string) error {
 	if cp.Md5Hex != md5Hex {
 		return fmt.Errorf("%w: %s (checkpoint md5 %s, file md5 %s)",
-			ErrCheckpointMismatch, path, cp.Md5Hex, md5Hex)
+			ErrCheckpointMismatch, asset.Path, cp.Md5Hex, md5Hex)
 	}
 	if cp.Kind != kind.String() {
 		return fmt.Errorf("asc: Upload: checkpoint kind %q does not match requested kind %q",
 			cp.Kind, kind.String())
+	}
+	if cp.ResourceType != endpoints.resourceType || cp.ParentType != endpoints.parentType || cp.ParentID != parentID {
+		return fmt.Errorf("asc: Upload: checkpoint target %s/%s/%s does not match requested %s/%s/%s",
+			cp.ResourceType, cp.ParentType, cp.ParentID, endpoints.resourceType, endpoints.parentType, parentID)
+	}
+	if cp.FilePath != asset.Path || cp.FileSize != asset.FileSize {
+		return fmt.Errorf("%w: checkpoint source %s/%d does not match requested %s/%d",
+			ErrCheckpointMismatch, cp.FilePath, cp.FileSize, asset.Path, asset.FileSize)
 	}
 	return nil
 }
@@ -349,6 +401,11 @@ func normalizeAsset(a UploadAsset) (UploadAsset, error) {
 	if a.FileName == "" {
 		a.FileName = filepath.Base(a.Path)
 	}
+	absPath, err := filepath.Abs(a.Path)
+	if err != nil {
+		return UploadAsset{}, fmt.Errorf("resolve absolute path %s: %w", a.Path, err)
+	}
+	a.Path = absPath
 	return a, nil
 }
 
@@ -378,8 +435,9 @@ func reserveAsset(ctx context.Context, c *Client, ep kindEndpoints, parentID str
 		Data: reserveRequestData{
 			Type: ep.resourceType,
 			Attributes: reserveRequestAttributes{
-				FileSize: asset.FileSize,
-				FileName: asset.FileName,
+				FileSize:          asset.FileSize,
+				FileName:          asset.FileName,
+				AppEventAssetType: ep.eventAssetType,
 			},
 			Relationships: map[string]reserveRequestRel{
 				ep.relationship: {
@@ -415,8 +473,11 @@ func getReservedAsset(ctx context.Context, c *Client, ep kindEndpoints, assetID 
 	return reservedAssetView{ID: resp.Data.ID, Attributes: resp.Data.Attributes}, nil
 }
 
-// commitAsset PATCHes the resource with uploaded=true + the MD5 checksum.
+// commitAsset PATCHes uploaded=true and the checksum where supported.
 func commitAsset(ctx context.Context, c *Client, ep kindEndpoints, assetID, md5Hex string) error {
+	if ep.omitChecksum {
+		md5Hex = ""
+	}
 	body := commitRequest{
 		Data: commitRequestData{
 			Type: ep.resourceType,
@@ -588,7 +649,7 @@ func persistCheckpoint(cp UploadCheckpoint) error {
 }
 
 // loadCheckpoint returns (zero, fs.ErrNotExist) when none exists and
-// ErrCheckpointCorrupt for malformed or future-schema files.
+// ErrCheckpointCorrupt for malformed or schema-incompatible files.
 func loadCheckpoint(assetID string) (UploadCheckpoint, error) {
 	if assetID == "" {
 		return UploadCheckpoint{}, errors.New("asc: loadCheckpoint: assetID is required")
@@ -606,7 +667,7 @@ func loadCheckpoint(assetID string) (UploadCheckpoint, error) {
 	if err := json.Unmarshal(buf, &cp); err != nil {
 		return UploadCheckpoint{}, fmt.Errorf("%w: %s: %w", ErrCheckpointCorrupt, path, err)
 	}
-	if cp.SchemaVersion == 0 || cp.SchemaVersion > UploadCheckpointSchemaVersion {
+	if cp.SchemaVersion != UploadCheckpointSchemaVersion {
 		return UploadCheckpoint{}, fmt.Errorf(
 			"%w: %s: schemaVersion %d is unsupported (this build understands version %d)",
 			ErrCheckpointCorrupt, path, cp.SchemaVersion, UploadCheckpointSchemaVersion,
@@ -615,9 +676,44 @@ func loadCheckpoint(assetID string) (UploadCheckpoint, error) {
 	return cp, nil
 }
 
-// tryLoadCheckpointForAsset finds a checkpoint whose FilePath matches path. Indexed by path,
-// not asset ID: on resume the caller knows only the path; the asset ID lives in the checkpoint.
-func tryLoadCheckpointForAsset(path string) (UploadCheckpoint, bool, error) {
+type uploadCheckpointTarget struct {
+	kind         string
+	resourceType string
+	parentType   string
+	parentID     string
+}
+
+func newUploadCheckpointTarget(kind AssetKind, endpoints kindEndpoints, parentID string) uploadCheckpointTarget {
+	return uploadCheckpointTarget{kind: kind.String(), resourceType: endpoints.resourceType, parentType: endpoints.parentType, parentID: parentID}
+}
+
+func (target uploadCheckpointTarget) matches(cp UploadCheckpoint) bool {
+	return cp.Kind == target.kind && cp.ResourceType == target.resourceType && cp.ParentType == target.parentType && cp.ParentID == target.parentID
+}
+
+func checkpointMatchesPath(cp UploadCheckpoint, path string) bool {
+	cpPath, err := filepath.Abs(cp.FilePath)
+	return err == nil && cpPath == path
+}
+
+func loadCheckpointEntry(entry os.DirEntry) (UploadCheckpoint, bool, error) {
+	if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+		return UploadCheckpoint{}, false, nil
+	}
+	cp, err := loadCheckpoint(strings.TrimSuffix(entry.Name(), ".json"))
+	if err == nil {
+		return cp, true, nil
+	}
+	if errors.Is(err, ErrCheckpointCorrupt) {
+		return UploadCheckpoint{}, false, err
+	}
+	return UploadCheckpoint{}, false, nil
+}
+
+// tryLoadCheckpointForAsset finds one checkpoint for the exact local source and ASC target.
+// It never resumes an asset associated with a different parent; mismatched-target checkpoints
+// are left intact and the caller reserves a new asset. Multiple exact matches are ambiguous.
+func tryLoadCheckpointForAsset(path string, kind AssetKind, endpoints kindEndpoints, parentID string) (UploadCheckpoint, bool, error) {
 	root, err := uploadCacheRoot()
 	if err != nil {
 		return UploadCheckpoint{}, false, err
@@ -636,29 +732,36 @@ func tryLoadCheckpointForAsset(path string) (UploadCheckpoint, bool, error) {
 		return UploadCheckpoint{}, false, fmt.Errorf("asc: resolve absolute path %s: %w", path, err)
 	}
 
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
-			continue
-		}
-		assetID := strings.TrimSuffix(e.Name(), ".json")
-		cp, err := loadCheckpoint(assetID)
+	target := newUploadCheckpointTarget(kind, endpoints, parentID)
+	return selectUploadCheckpoint(entries, absPath, target)
+}
+
+func selectUploadCheckpoint(entries []os.DirEntry, absPath string, target uploadCheckpointTarget) (UploadCheckpoint, bool, error) {
+	var match *UploadCheckpoint
+	for _, entry := range entries {
+		cp, found, err := loadCheckpointEntry(entry)
 		if err != nil {
-			// Forward only typed corruption; an unrelated unreadable entry must not
-			// block resume of this asset.
-			if errors.Is(err, ErrCheckpointCorrupt) {
-				return UploadCheckpoint{}, false, err
-			}
+			return UploadCheckpoint{}, false, err
+		}
+		if !found || !checkpointMatchesPath(cp, absPath) {
 			continue
 		}
-		cpAbs, err := filepath.Abs(cp.FilePath)
-		if err != nil {
-			continue
-		}
-		if cpAbs == absPath {
+		if cp.Kind != target.kind {
 			return cp, true, nil
 		}
+		if !target.matches(cp) {
+			continue
+		}
+		if match != nil {
+			return UploadCheckpoint{}, false, fmt.Errorf("asc: Upload: multiple checkpoints match %s for %s/%s/%s", absPath, target.resourceType, target.parentType, target.parentID)
+		}
+		selected := cp
+		match = &selected
 	}
-	return UploadCheckpoint{}, false, nil
+	if match == nil {
+		return UploadCheckpoint{}, false, nil
+	}
+	return *match, true, nil
 }
 
 // removeCheckpoint deletes the checkpoint for assetID.

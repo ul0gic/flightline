@@ -46,11 +46,12 @@ type AgeRatingDeclarationAttributes struct {
 	ViolenceRealisticProlongedGraphicOrSadistic string `json:"violenceRealisticProlongedGraphicOrSadistic,omitempty"`
 
 	// Kids-band, override, and reviewer-info fields.
-	KidsAgeBand               string `json:"kidsAgeBand,omitempty"`
-	AgeRatingOverride         string `json:"ageRatingOverride,omitempty"`
-	AgeRatingOverrideV2       string `json:"ageRatingOverrideV2,omitempty"`
-	KoreaAgeRatingOverride    string `json:"koreaAgeRatingOverride,omitempty"`
-	DeveloperAgeRatingInfoURL string `json:"developerAgeRatingInfoUrl,omitempty"`
+	KidsAgeBand                    string `json:"kidsAgeBand,omitempty"`
+	AgeRatingOverride              string `json:"ageRatingOverride,omitempty"`
+	AgeRatingOverrideV2            string `json:"ageRatingOverrideV2,omitempty"`
+	KoreaAgeRatingOverride         string `json:"koreaAgeRatingOverride,omitempty"`
+	GracRatingClassificationNumber string `json:"gracRatingClassificationNumber,omitempty"`
+	DeveloperAgeRatingInfoURL      string `json:"developerAgeRatingInfoUrl,omitempty"`
 }
 
 // AppInfoAttributes is the subset of AppInfo.attributes needed to match an appInfo to a version lifecycle state.
