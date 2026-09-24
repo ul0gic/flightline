@@ -117,6 +117,18 @@ func TestPublicDocsKeepLifecycleAndPositioningClaimsPrecise(t *testing.T) {
 	}
 }
 
+func TestReadmeDoesNotContainEmDashes(t *testing.T) {
+	readme, err := os.ReadFile("../../README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, dash := range []string{"\u2014", "&mdash;", "&#8212;", "&#x2014;"} {
+		if strings.Contains(string(readme), dash) {
+			t.Error("README contains an em dash")
+		}
+	}
+}
+
 func TestDocsDoNotContainEmDashes(t *testing.T) {
 	err := filepath.WalkDir("../../docs", func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
